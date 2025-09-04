@@ -133,24 +133,26 @@ export function useProposal(id: string) {
   return useQuery({
     queryKey: proposalKeys.proposals.byId(id),
     queryFn: async () => {
-      logDebug('Fetching proposal', {
-        component: 'useProposal',
-        operation: 'queryFn',
-        proposalId: id,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
+      // Reduced logging - only in development
+      if (process.env.NODE_ENV === 'development') {
+        logDebug('Fetching proposal', {
+          component: 'useProposal',
+          operation: 'queryFn',
+          proposalId: id,
+        });
+      }
 
       const data = await proposalService.getProposal(id);
 
-      logInfo('Proposal fetched successfully', {
-        component: 'useProposal',
-        operation: 'queryFn',
-        proposalId: id,
-        loadTime: Date.now(),
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
+      // Reduced logging - only in development
+      if (process.env.NODE_ENV === 'development') {
+        logInfo('Proposal fetched successfully', {
+          component: 'useProposal',
+          operation: 'queryFn',
+          proposalId: id,
+          loadTime: Date.now(),
+        });
+      }
 
       return data;
     },
@@ -158,6 +160,7 @@ export function useProposal(id: string) {
     staleTime: 5000, // ✅ REDUCED: Short stale time for responsiveness
     gcTime: 120000,
     refetchOnWindowFocus: true, // ✅ ENABLED: Refetch on window focus
+    refetchOnMount: false, // ✅ DISABLED: Prevent redundant fetches on mount
     retry: 1,
   });
 }
@@ -337,6 +340,8 @@ export function useUpdateProposal() {
   const analytics = useOptimizedAnalytics();
 
   return useMutation({
+    // ✅ ADDED: Prevent multiple simultaneous updates
+    mutationKey: ['update-proposal'],
     mutationFn: async ({ id, proposal }: { id: string; proposal: ProposalUpdate }) => {
       logDebug('Updating proposal', {
         component: 'useUpdateProposal',
@@ -363,18 +368,26 @@ export function useUpdateProposal() {
     onSuccess: (data, { id, proposal }) => {
       // ✅ FIXED: Aggressive cache management strategy from MIGRATION_LESSONS.md
 
-      // 1. Immediate cache updates
+      // 1. Immediate cache updates - ensure data is immediately available
       queryClient.setQueryData(proposalKeys.proposals.byId(id), data);
 
-      // 2. Comprehensive invalidation
-      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all });
-      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.byId(id) });
-      queryClient.refetchQueries({ queryKey: proposalKeys.proposals.byId(id) });
+      // 2. Comprehensive invalidation with exact matches
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all, exact: true });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.byId(id), exact: true });
 
-      // 3. Invalidate related queries
+      // 3. Force refetch to ensure fresh data
+      queryClient.refetchQueries({ queryKey: proposalKeys.proposals.byId(id), exact: true });
+
+      // 4. Invalidate related queries with broader patterns
       queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.stats() });
       queryClient.invalidateQueries({
         queryKey: proposalKeys.proposals.list('', 20, 'createdAt', 'desc'),
+      });
+
+      // 5. Additional invalidation for any proposal-related queries
+      queryClient.invalidateQueries({
+        predicate: query => query.queryKey[0] === 'proposals',
+        exact: false,
       });
 
       // Track analytics

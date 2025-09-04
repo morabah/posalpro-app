@@ -50,7 +50,7 @@ import {
 import { WizardHeader } from './wizard/WizardHeader';
 import { WizardSidebar } from './wizard/WizardSidebar';
 // Icons now handled inside extracted components
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 // Step components
 import { BasicInformationStep } from './steps/BasicInformationStep';
@@ -141,6 +141,9 @@ export function ProposalWizard({
   const resetWizard = useProposalResetWizard();
   const initializeFromData = useProposalInitializeFromData();
 
+  // Prevent duplicate initialization
+  const hasInitializedRef = useRef(false);
+
   // Use specific step data selectors to avoid infinite re-renders
   const step1Data = useProposalStepData(1) as ProposalBasicInfo | undefined;
   const step2Data = useProposalStepData(2) as ProposalTeamData | undefined;
@@ -153,17 +156,20 @@ export function ProposalWizard({
     editMode && proposalId && typeof proposalId === 'string' ? proposalId : ''
   );
 
-  // Initialize wizard with existing data when in edit mode
+  // Initialize wizard with existing data when in edit mode (prevent duplicate initialization)
   useEffect(() => {
-    if (editMode && proposalData && !isLoadingProposal) {
-      logDebug('Initializing wizard with existing proposal data', {
-        component: 'ProposalWizard',
-        operation: 'initializeFromData',
-        proposalId,
-        editMode,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
+    if (editMode && proposalData && !isLoadingProposal && !hasInitializedRef.current) {
+      hasInitializedRef.current = true; // Mark as initialized
+
+      // Reduced logging - only in development
+      if (process.env.NODE_ENV === 'development') {
+        logDebug('ProposalWizard: Initializing with existing data', {
+          component: 'ProposalWizard',
+          operation: 'initializeFromData',
+          proposalId,
+          hasData: !!proposalData,
+        });
+      }
 
       try {
         // ✅ FIXED: Pass raw proposal data to store (store handles transformation internally)
@@ -174,8 +180,6 @@ export function ProposalWizard({
         analytics.trackOptimized('wizard_edit_mode_initialized', {
           proposalId,
           editMode,
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
         });
       } catch (error) {
         logError('Failed to initialize wizard with existing data', {
@@ -183,12 +187,18 @@ export function ProposalWizard({
           operation: 'initializeFromData',
           proposalId,
           error: error instanceof Error ? error.message : 'Unknown error',
-          userStory: 'US-3.1',
-          hypothesis: 'H4',
         });
       }
     }
-  }, [editMode, proposalData, isLoadingProposal, proposalId]); // ✅ FIXED: Removed unstable dependencies
+  }, [
+    editMode,
+    proposalData,
+    isLoadingProposal,
+    proposalId,
+    initializeFromData,
+    setCurrentStep,
+    analytics,
+  ]);
 
   // Visible steps based on plan type
   const visibleStepIds = useMemo(() => {
@@ -216,16 +226,37 @@ export function ProposalWizard({
     try {
       const payload = buildWizardPayload();
       await http.put(`/api/proposals/${proposalId}`, payload);
+      // ✅ IMPROVED: Add small delay to ensure cache invalidation completes
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       const { planOk, countOk, totalOk } = await (
         await import('./wizard/persistence')
       ).verifyPersistedProposal(proposalId, payload);
 
-      // Invalidate caches
+      // ✅ IMPROVED: Invalidate caches using aggressive strategy
       try {
-        const { qk } = await import('@/features/proposals/keys');
-        queryClient.removeQueries({ queryKey: qk.proposals.byId(proposalId) });
-        queryClient.invalidateQueries({ queryKey: qk.proposals.all });
-      } catch {}
+        const { proposalKeys } = await import('@/features/proposals');
+        // Use the same aggressive invalidation as useUpdateProposal
+        queryClient.setQueryData(proposalKeys.proposals.byId(proposalId), undefined);
+        queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all, exact: true });
+        queryClient.invalidateQueries({
+          queryKey: proposalKeys.proposals.byId(proposalId),
+          exact: true,
+        });
+        queryClient.refetchQueries({
+          queryKey: proposalKeys.proposals.byId(proposalId),
+          exact: true,
+        });
+      } catch (cacheError) {
+        // Fallback to old method if new keys fail
+        try {
+          const { qk } = await import('@/features/proposals/keys');
+          queryClient.removeQueries({ queryKey: qk.proposals.byId(proposalId) });
+          queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+        } catch (fallbackError) {
+          console.warn('Cache invalidation failed:', cacheError, fallbackError);
+        }
+      }
 
       if (planOk && countOk && totalOk) {
         toast.success('Update saved successfully');
@@ -250,16 +281,37 @@ export function ProposalWizard({
         const payload = buildWizardPayload();
         await http.put(`/api/proposals/${proposalId}`, payload);
 
+        // ✅ IMPROVED: Invalidate caches BEFORE verification to ensure fresh data
+        try {
+          const { proposalKeys } = await import('@/features/proposals');
+          // Use the same aggressive invalidation as useUpdateProposal
+          queryClient.setQueryData(proposalKeys.proposals.byId(proposalId), undefined);
+          queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all, exact: true });
+          queryClient.invalidateQueries({
+            queryKey: proposalKeys.proposals.byId(proposalId),
+            exact: true,
+          });
+          queryClient.refetchQueries({
+            queryKey: proposalKeys.proposals.byId(proposalId),
+            exact: true,
+          });
+        } catch (cacheError) {
+          // Fallback to direct import if feature export fails
+          try {
+            const { qk } = await import('@/features/proposals/keys');
+            queryClient.removeQueries({ queryKey: qk.proposals.byId(proposalId) });
+            queryClient.invalidateQueries({ queryKey: qk.proposals.all });
+          } catch (fallbackError) {
+            console.warn('Cache invalidation failed:', cacheError, fallbackError);
+          }
+        }
+
+        // ✅ IMPROVED: Add small delay to ensure cache invalidation completes
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         const { planOk, countOk, totalOk } = await (
           await import('./wizard/persistence')
         ).verifyPersistedProposal(proposalId, payload);
-
-        // Invalidate proposal caches to ensure detail page shows fresh data
-        try {
-          const { qk } = await import('@/features/proposals/keys');
-          queryClient.removeQueries({ queryKey: qk.proposals.byId(proposalId) });
-          queryClient.invalidateQueries({ queryKey: qk.proposals.all });
-        } catch {}
 
         if (planOk && countOk && totalOk) {
           toast.success('All changes saved');
@@ -785,7 +837,12 @@ export function ProposalWizard({
             <div className="lg:col-span-3">
               <Card className="p-6">
                 <CurrentStepComponent
-                  data={currentStepData}
+                  // For step 4 (ProductSelectionStep), use proposal products data in edit mode
+                  data={
+                    currentStep === 4 && editMode && proposalData?.products
+                      ? { products: proposalData.products }
+                      : currentStepData
+                  }
                   onNext={handleNext}
                   onBack={handleBack}
                   onSubmit={handleSubmit}

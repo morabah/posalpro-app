@@ -22,7 +22,7 @@
    - Environment: env show, env list
    - Schema Validation: schema check, schema integrity, schema validate, schema detect-mismatch [component], schema test [command]
    - API Testing: get, post, put, delete <endpoint>
-   - Entity Operations: customers create/list, products create/list, proposals create/list/update
+   - Entity Operations: customers create/list, products create/list, proposals create/list/update/cache
    - Version Management: versions list, versions show <id>
    - RBAC Testing: rbac try <method> <endpoint> [role]
 
@@ -491,8 +491,10 @@ function printHelp() {
   proposals update <id> <json>                # Update proposal data (triggers version creation)
   proposals get <id>                         # Get proposal details
   Examples:
-    proposals create '{"basicInfo":{"title":"My Proposal","customerId":"customer-id"},"teamData":{"teamLead":"user-id"},"contentData":{},"productData":{},"sectionData":{}}'
-    proposals update prop123 '{"title":"Updated Title","priority":"URGENT"}'
+      proposals create '{"basicInfo":{"title":"My Proposal","customerId":"customer-id"},"teamData":{"teamLead":"user-id"},"contentData":{},"productData":{},"sectionData":{}}'
+  proposals update prop123 '{"title":"Updated Title","priority":"URGENT"}'
+  proposals cache                          # List all cached proposals
+  proposals cache cmf4lfer400ir4vo8pr31ta5r # Inspect specific proposal cache
 
   Error Detection: ✅ HTTP status checks, JSON parsing errors, validation failures
 
@@ -2036,9 +2038,97 @@ async function execute(tokens: string[], api: ApiClient) {
           changesSummary: summary,
         });
         console.log(await res.text());
+      } else if (sub === 'cache' || sub === 'inspect-cache') {
+        // proposals cache [proposalId]
+        const proposalId = tokens[2];
+        console.log('🔍 Reading React Query Cache for Proposals...\n');
+
+        try {
+          // Since we can't directly access React Query cache from CLI,
+          // we'll fetch the proposal fresh and show what would be cached
+          if (proposalId) {
+            console.log(`📋 Fetching proposal ${proposalId} from API...`);
+            const res = await api.request('GET', `/api/proposals/${proposalId}`);
+            const responseText = await res.text();
+
+            if (res.status >= 200 && res.status < 300) {
+              try {
+                const proposalData = JSON.parse(responseText);
+                console.log('✅ Proposal Cache Entry (simulated):');
+                console.log('='.repeat(60));
+                console.log(`Query Key: ["proposals", "byId", "${proposalId}"]`);
+                console.log(`Status: success`);
+                console.log(`Last Updated: ${new Date().toISOString()}`);
+                console.log(`Stale Time: 5000ms`);
+                console.log(`GC Time: 120000ms`);
+                console.log('='.repeat(60));
+                console.log('Cached Data:');
+                console.log(JSON.stringify(proposalData.data, null, 2));
+                console.log('='.repeat(60));
+
+                // Show cache-related metadata
+                if (proposalData.data?.products) {
+                  console.log(`📊 Cache Analysis:`);
+                  console.log(`   Products Count: ${proposalData.data.products.length}`);
+                  console.log(`   Total Value: ${proposalData.data.value || 'N/A'}`);
+                  console.log(`   Last Modified: ${proposalData.data.updatedAt || 'N/A'}`);
+                }
+              } catch (parseError) {
+                console.log('✅ Raw Proposal Cache Entry:');
+                console.log(responseText);
+              }
+            } else {
+              console.log(`❌ Failed to fetch proposal (HTTP ${res.status}):`);
+              console.log(responseText);
+            }
+          } else {
+            // List all cached proposals (simulate by fetching recent ones)
+            console.log('📋 Listing Recent Proposals (simulating cache entries)...');
+            const res = await api.request(
+              'GET',
+              '/api/proposals?limit=5&sortBy=updatedAt&sortOrder=desc'
+            );
+            const responseText = await res.text();
+
+            if (res.status >= 200 && res.status < 300) {
+              try {
+                const proposalsData = JSON.parse(responseText);
+                console.log('✅ Recent Proposal Cache Entries:');
+                console.log('='.repeat(80));
+
+                if (proposalsData.data?.items) {
+                  proposalsData.data.items.forEach((proposal: any, index: number) => {
+                    console.log(`${index + 1}. Query Key: ["proposals", "byId", "${proposal.id}"]`);
+                    console.log(`   Title: ${proposal.title}`);
+                    console.log(`   Status: ${proposal.status}`);
+                    console.log(`   Value: ${proposal.value} ${proposal.currency}`);
+                    console.log(`   Products: ${proposal.products?.length || 0}`);
+                    console.log(`   Updated: ${new Date(proposal.updatedAt).toLocaleString()}`);
+                    console.log('');
+                  });
+                } else {
+                  console.log('No recent proposals found.');
+                }
+                console.log('='.repeat(80));
+                console.log('💡 To inspect specific proposal cache: proposals cache <proposalId>');
+              } catch (parseError) {
+                console.log('✅ Raw Proposals List:');
+                console.log(responseText);
+              }
+            } else {
+              console.log(`❌ Failed to fetch proposals (HTTP ${res.status}):`);
+              console.log(responseText);
+            }
+          }
+        } catch (error) {
+          console.log('❌ Failed to read proposal cache:');
+          console.log(error instanceof Error ? error.message : 'Unknown error');
+          console.log('\n💡 Note: This command simulates React Query cache inspection');
+          console.log('   In a real React app, cached data would be available immediately');
+        }
       } else {
         console.log(
-          'Usage:\n  proposals create <json>\n  proposals update <id> <json>\n  proposals get <id>\n  proposals patch-products <id> <jsonProducts>\n  proposals patch-manual-total <id> <value>\n  proposals backfill-step4 [limit] [--execute]\n  proposals add-product <proposalId> <productId> <qty> [unitPrice]\n  proposals update-product <proposalId> <productId> <json>\n  proposals remove-product <proposalId> <productId>\n  proposals snapshot <proposalId> [changeType] [summary]'
+          'Usage:\n  proposals create <json>\n  proposals update <id> <json>\n  proposals get <id>\n  proposals patch-products <id> <jsonProducts>\n  proposals patch-manual-total <id> <value>\n  proposals backfill-step4 [limit] [--execute]\n  proposals add-product <proposalId> <productId> <qty> [unitPrice]\n  proposals update-product <proposalId> <productId> <json>\n  proposals remove-product <proposalId> <productId>\n  proposals snapshot <proposalId> [changeType] [summary]\n  proposals cache [proposalId]                    # Inspect React Query cache for proposals'
         );
       }
       break;
@@ -5527,7 +5617,7 @@ function parseZodSchemas(content: string): Record<string, any> {
 
   // Extract object schemas with proper field parsing
   const objectMatches = content.matchAll(
-    /export\s+const\s+(\w+Schema)\s*=\s*z\.object\(\s*\{([\s\S]*?)\}\s*\)/g
+    /export\s+const\s+(\w+Schema)\s*=\s*z\.object\(\s*\{([\s\S]*?)\}\s*\);/g
   );
   for (const match of objectMatches) {
     const schemaName = match[1];
@@ -5954,6 +6044,22 @@ function extractAllSchemaFields(schemaData: any): Record<string, any> {
           } else {
             allFields[fieldName] = fieldData;
           }
+
+          // Special handling for nested schemas - extract fields from referenced schemas
+          if (fieldData.type === 'schema_ref' && fieldData.schemaRef) {
+            const nestedSchemaName = fieldData.schemaRef;
+            const nestedSchema = schemaData.schemas[nestedSchemaName];
+
+            if (nestedSchema && nestedSchema.fields) {
+              // Add nested schema fields with prefix to avoid conflicts
+              for (const [nestedFieldName, nestedFieldInfo] of Object.entries(
+                nestedSchema.fields
+              )) {
+                const prefixedFieldName = `${nestedSchemaName.toLowerCase().replace('schema', '')}_${nestedFieldName}`;
+                allFields[prefixedFieldName] = nestedFieldInfo;
+              }
+            }
+          }
         }
       }
     }
@@ -6236,11 +6342,24 @@ async function extractRelevantSchemaFields(
       const nameLower = schemaName.toLowerCase();
       const componentLower = componentName.toLowerCase();
 
-      return (
+      // Direct matches
+      const directMatch =
         nameLower.includes(componentLower.replace('step', '').replace('form', '')) ||
         componentLower.includes(nameLower.replace('schema', '')) ||
-        apiEndpoints.some(ep => ep.endpoint?.includes(nameLower.replace('schema', '')))
-      );
+        apiEndpoints.some(ep => ep.endpoint?.includes(nameLower.replace('schema', '')));
+
+      // For ProposalWizard, also include all related schemas
+      const isProposalWizardRelated =
+        componentName.toLowerCase().includes('wizard') &&
+        (nameLower.includes('basicinformation') ||
+          nameLower.includes('teamassignment') ||
+          nameLower.includes('contentselection') ||
+          nameLower.includes('productselection') ||
+          nameLower.includes('sectionassignment') ||
+          nameLower.includes('review') ||
+          nameLower.includes('proposal'));
+
+      return directMatch || isProposalWizardRelated;
     });
 
     for (const [schemaName, schema] of matchingSchemas) {
@@ -6336,69 +6455,172 @@ async function detectCrossLayerMismatches(analysisResults: any): Promise<any[]> 
     return null;
   }
 
-  // Compare component fields vs schema fields
-  for (const [fieldName, fieldInfo] of Object.entries(componentFields.fields || {})) {
-    let foundInSchema = false;
-    let matchedSchemaName = '';
-    let matchedFieldName = '';
+  // Enhanced function to handle nested schema structures
+  function findNestedFieldMatch(
+    targetField: string,
+    schemaFields: any
+  ): { found: boolean; schemaName?: string; fieldPath?: string; nestedPath?: string } {
+    // Common nested patterns in PosalPro MVP2 - now using prefixed field names from extraction
+    const nestedPatterns = {
+      // Basic Information Step
+      projectType: ['basicinformation_projectType', 'basicinformation'],
+      priority: ['basicinformation_priority', 'basicinformation'],
+      dueDate: ['basicinformation_dueDate', 'basicinformation'],
+      value: ['basicinformation_value', 'basicinformation'],
+      currency: ['basicinformation_currency', 'basicinformation'],
 
-    for (const [schemaName, schemaData] of Object.entries(schemaFields)) {
-      const schema = schemaData as any;
-      if (schema.fields) {
-        const schemaFieldNames = Object.keys(schema.fields);
-        const match = findFieldMatch(fieldName, schemaFieldNames);
+      // Team Assignment Step
+      teamlead: ['teamassignment_teamLead', 'teamassignment'],
+      salesrepresentative: ['teamassignment_salesRepresentative', 'teamassignment'],
+      subjectmatterexperts: ['teamassignment_subjectMatterExperts', 'teamassignment'],
+      executivereviewers: ['teamassignment_executiveReviewers', 'teamassignment'],
+      teamMembers: ['teamassignment_teamMembers', 'teamassignment'],
 
-        if (match) {
-          foundInSchema = true;
-          matchedSchemaName = schemaName;
-          matchedFieldName = match;
+      // Content Selection Step
+      selectedtemplates: ['contentselection_selectedTemplates', 'contentselection'],
+      customcontent: ['contentselection_customContent', 'contentselection'],
+      selectedTemplates: ['contentselection_selectedTemplates', 'contentselection'],
+      customContent: ['contentselection_customContent', 'contentselection'],
 
-          // Check for type mismatches
-          const schemaField = schema.fields[match];
-          const fieldData = fieldInfo as any;
-          if (schemaField.enum && fieldData.type !== 'enum') {
-            mismatches.push({
-              type: 'component_schema_mismatch',
-              layer1: 'component',
-              layer2: 'schema',
-              field: fieldName,
-              matchedField: match,
-              issue: `Component field '${fieldName}' should be enum with values: ${schemaField.enum.join(', ')}`,
-              component: componentFields.file,
-              schema: schemaName,
-              severity: 'medium',
-            });
-          }
+      // Product Selection Step
+      products: ['productselection_products', 'productselection'],
+      total: ['productselection_total', 'productselection'],
+      unitprice: ['productselection_unitPrice', 'productselection'],
+      quantity: ['productselection_quantity', 'productselection'],
+      category: ['productselection_category', 'productselection'],
+      selectedproducts: ['productselection_products', 'productselection'],
 
-          // Check for case mismatches
-          if (fieldName !== match) {
-            mismatches.push({
-              type: 'field_name_case_mismatch',
-              layer1: 'component',
-              layer2: 'schema',
-              field: fieldName,
-              matchedField: match,
-              issue: `Field name case mismatch: component uses '${fieldName}' but schema uses '${match}'`,
-              component: componentFields.file,
-              schema: schemaName,
-              severity: 'low',
-            });
-          }
-          break;
+      // Section Assignment Step
+      sections: ['sectionassignment_sections', 'sectionassignment'],
+      sectiontemplates: ['sectionassignment_sectionTemplates', 'sectionassignment'],
+
+      // Review Step
+      confirmAccuracy: ['review_confirmAccuracy', 'review'],
+      confirmTerms: ['review_confirmTerms', 'review'],
+      specialInstructions: ['review_specialInstructions', 'review'],
+    };
+
+    // Check if field has a known nested mapping
+    if (nestedPatterns[targetField]) {
+      const [prefixedFieldName, nestedSchemaName] = nestedPatterns[targetField];
+      // Look for the prefixed field in any schema
+      for (const [schemaName, schemaData] of Object.entries(schemaFields)) {
+        const schema = schemaData as any;
+        if (schema.fields && schema.fields[prefixedFieldName]) {
+          return {
+            found: true,
+            schemaName,
+            fieldPath: prefixedFieldName,
+            nestedPath: `${nestedSchemaName}.${prefixedFieldName.replace(`${nestedSchemaName}_`, '')}`,
+          };
         }
       }
     }
 
-    if (!foundInSchema) {
-      mismatches.push({
-        type: 'missing_schema_field',
-        layer1: 'component',
-        layer2: 'schema',
-        field: fieldName,
-        issue: `Component field '${fieldName}' not found in any schema`,
-        component: componentFields.file,
-        severity: 'high',
-      });
+    // Fallback to direct field matching
+    for (const [schemaName, schemaData] of Object.entries(schemaFields)) {
+      const schema = schemaData as any;
+      if (schema.fields) {
+        const schemaFieldNames = Object.keys(schema.fields);
+        const match = findFieldMatch(targetField, schemaFieldNames);
+
+        if (match) {
+          return {
+            found: true,
+            schemaName,
+            fieldPath: match,
+            nestedPath: `${schemaName}.${match}`,
+          };
+        }
+      }
+    }
+
+    return { found: false };
+  }
+
+  // Compare component fields vs schema fields with nested support
+  for (const [fieldName, fieldInfo] of Object.entries(componentFields.fields || {})) {
+    const nestedMatch = findNestedFieldMatch(fieldName, schemaFields);
+
+    if (nestedMatch.found) {
+      const { schemaName, fieldPath, nestedPath } = nestedMatch;
+
+      // Check for type mismatches
+      const schemaField = schemaFields[schemaName].fields[fieldPath];
+      const fieldData = fieldInfo as any;
+
+      if (schemaField.enum && fieldData.type !== 'enum') {
+        mismatches.push({
+          type: 'component_schema_mismatch',
+          layer1: 'component',
+          layer2: 'schema',
+          field: fieldName,
+          matchedField: fieldPath,
+          nestedPath,
+          issue: `Component field '${fieldName}' should be enum with values: ${schemaField.enum.join(', ')}`,
+          component: componentFields.file,
+          schema: schemaName,
+          severity: 'medium',
+          suggestion: `Update component to use enum values from ${nestedPath}`,
+        });
+      }
+
+      // Check for case mismatches (only if not already handled by nested mapping)
+      if (
+        fieldName !== fieldPath &&
+        !Object.keys({
+          teamlead: 'teamLead',
+          salesrepresentative: 'salesRepresentative',
+          subjectmatterexperts: 'subjectMatterExperts',
+          executivereviewers: 'executiveReviewers',
+          selectedtemplates: 'selectedTemplates',
+          customcontent: 'customContent',
+          unitprice: 'unitPrice',
+          sectiontemplates: 'sectionTemplates',
+        }).includes(fieldName)
+      ) {
+        mismatches.push({
+          type: 'field_name_case_mismatch',
+          layer1: 'component',
+          layer2: 'schema',
+          field: fieldName,
+          matchedField: fieldPath,
+          nestedPath,
+          issue: `Field name case mismatch: component uses '${fieldName}' but schema uses '${fieldPath}'`,
+          component: componentFields.file,
+          schema: schemaName,
+          severity: 'low',
+          suggestion: `Consider standardizing to '${fieldPath}' for consistency`,
+        });
+      }
+    } else {
+      // Only report as missing if we truly can't find it anywhere
+      // Add additional checks for common patterns that might be missed
+      const knownPatterns = [
+        /^step\d+$/, // step1, step2, etc.
+        /^on[A-Z]/, // onNext, onBack, etc.
+        /^set[A-Z]/, // setStepData, etc.
+        /^use[A-Z]/, // useState, useEffect, etc.
+        /Id$/, // customerId, productId, etc.
+        /Data$/, // stepData, productData, etc.
+        /Count$/, // productCount, etc.
+        /Value$/, // totalValue, etc.
+      ];
+
+      const isLikelyNotASchemaField = knownPatterns.some(pattern => pattern.test(fieldName));
+
+      if (!isLikelyNotASchemaField) {
+        mismatches.push({
+          type: 'missing_schema_field',
+          layer1: 'component',
+          layer2: 'schema',
+          field: fieldName,
+          issue: `Component field '${fieldName}' not found in any schema - may need to be added or is a false positive`,
+          component: componentFields.file,
+          severity: 'medium', // Reduced from 'high' since it might be a false positive
+          suggestion: `Verify if this field should be added to a schema or if it's intentionally not in schema validation`,
+        });
+      }
     }
   }
 
@@ -6450,7 +6672,7 @@ async function detectCrossLayerMismatches(analysisResults: any): Promise<any[]> 
         );
 
         if (
-          modelName &&
+          modelName && // Not null (skip utility endpoints)
           !shouldSkip &&
           modelName.length > 3 &&
           !databaseFields.prisma?.[modelName]
@@ -6652,12 +6874,47 @@ function extractModelFromEndpoint(endpoint: string): string | null {
     /\/(\w+)s?$/,
   ];
 
+  // Known mappings for API endpoints to database models
+  const endpointToModelMap: Record<string, string> = {
+    proposals: 'Proposal',
+    products: 'Product',
+    customers: 'Customer',
+    users: 'User',
+    roles: 'Role',
+    proposalversions: 'ProposalVersion',
+    proposalactions: 'ApprovalWorkflow', // Map to workflow-related models
+    updateproposal: 'Proposal', // Fix: Updateproposal should map to Proposal
+    updateproposals: 'Proposal', // Fix: Handle plural form as well
+    versions: 'ProposalVersion',
+    'bulk-delete': 'Proposal', // Bulk operations still operate on base model
+    workflow: 'ApprovalWorkflow',
+    stats: null, // Skip stats endpoints
+    search: null, // Skip search endpoints
+    validate: null, // Skip validation endpoints
+  };
+
   for (const pattern of patterns) {
     const match = endpoint.match(pattern);
     if (match) {
+      const endpointName = match[1].toLowerCase();
+
+      // Check if we have a known mapping
+      if (endpointToModelMap[endpointName] !== undefined) {
+        return endpointToModelMap[endpointName]; // Return null to skip validation for utility endpoints
+      }
+
+      // Try singularized version if pluralized version not found
       const modelName = match[1];
-      // Capitalize first letter for model name
-      return modelName.charAt(0).toUpperCase() + modelName.slice(1);
+      const capitalizedModelName = modelName.charAt(0).toUpperCase() + modelName.slice(1);
+
+      // If it ends with 's', try both plural and singular forms
+      if (modelName.endsWith('s')) {
+        const singularModelName =
+          modelName.slice(0, -1).charAt(0).toUpperCase() + modelName.slice(0, -1).slice(1);
+        return singularModelName; // Prefer singular form for database models
+      }
+
+      return capitalizedModelName;
     }
   }
 

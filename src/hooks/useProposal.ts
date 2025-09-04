@@ -55,11 +55,14 @@ export function useProposal(
       }
     },
     enabled: !!proposalId,
-    staleTime: options?.staleTime ?? 30000, // ✅ INCREASED: 30 seconds for better performance
-    gcTime: 120000, // 2 minutes
-    refetchOnWindowFocus: true, // ✅ ENABLED: Auto-refresh detail page when returning from wizard
-    refetchOnMount: options?.refetchOnMount ?? 'always', // ✅ OPTIMIZED: Use 'always' for consistent behavior
+    // ✅ STANDARDIZED CACHE CONFIG: Match features/proposals/hooks/useProposals.ts
+    staleTime: 5000, // Short stale time for responsiveness
+    gcTime: 120000,
+    refetchOnWindowFocus: true, // Enabled for freshness
+    refetchOnMount: false, // ✅ DISABLED: Prevent redundant fetches on mount
     retry: 1,
+    // Override with custom options if provided (options take precedence)
+    ...(options || {}),
   });
 }
 

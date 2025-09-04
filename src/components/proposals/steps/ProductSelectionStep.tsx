@@ -10,12 +10,12 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { useUpdateProposal, type WizardProposalUpdateData } from '@/features/proposals';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { logDebug, logError } from '@/lib/logger';
+import { logDebug, logError, logInfo } from '@/lib/logger';
 import { useProposalSetStepData, type ProposalProductData } from '@/lib/store/proposalStore';
 import { productService, type Product } from '@/services/productService';
 import { useQuery } from '@tanstack/react-query';
-import { useUpdateProposal, type WizardProposalUpdateData } from '@/features/proposals';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -42,23 +42,22 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   const [selectedProducts, setSelectedProducts] = useState<ProposalProductData['products']>(() => {
     const initialProducts = data?.products || [];
 
-    // ✅ ADDED: Debug logging to track initial product data
-    logDebug('ProductSelectionStep: Initializing with existing data', {
-      component: 'ProductSelectionStep',
-      operation: 'useState_initialization',
-      hasData: !!data,
-      initialProductsCount: initialProducts.length,
-      initialProducts: initialProducts.map(p => ({
-        id: p.id,
-        productId: p.productId,
-        name: p.name,
-        quantity: p.quantity,
-        unitPrice: p.unitPrice,
-        total: p.total,
-      })),
-      userStory: 'US-3.1',
-      hypothesis: 'H4',
-    });
+    // Reduced logging - only in development
+    if (process.env.NODE_ENV === 'development') {
+      logDebug('ProductSelectionStep: Initialized', {
+        component: 'ProductSelectionStep',
+        operation: 'initialization',
+        hasData: !!data,
+        initialProductsCount: initialProducts.length,
+        proposalId,
+        productsData: initialProducts.map(p => ({
+          id: p.id,
+          productId: p.productId,
+          name: p.name,
+          quantity: p.quantity,
+        })),
+      });
+    }
 
     return initialProducts;
   });
@@ -100,13 +99,13 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   // ✅ FIXED: Reset UI state when proposal changes to prevent stale data
   useEffect(() => {
     if (proposalId) {
-      logDebug('Resetting UI state for new proposal', {
-        component: 'ProductSelectionStep',
-        operation: 'reset_ui_state',
-        proposalId,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
+      if (process.env.NODE_ENV === 'development') {
+        logDebug('ProductSelectionStep: UI state reset', {
+          component: 'ProductSelectionStep',
+          operation: 'reset_ui_state',
+          proposalId,
+        });
+      }
 
       // Clear previous state when switching proposals
       setSearch('');
@@ -150,16 +149,14 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
       { search: debouncedSearch, sortBy, sortOrder, category },
     ],
     queryFn: async () => {
-      logDebug('Fetching products for proposal wizard', {
-        component: 'ProductSelectionStep',
-        operation: 'fetchProducts',
-        search: debouncedSearch,
-        sortBy,
-        sortOrder,
-        category,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
+      if (process.env.NODE_ENV === 'development') {
+        logDebug('ProductSelectionStep: Fetching products', {
+          component: 'ProductSelectionStep',
+          operation: 'fetchProducts',
+          search: debouncedSearch,
+          sortBy,
+        });
+      }
 
       try {
         const response = await productService.getProducts({
@@ -172,13 +169,13 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         });
 
         if (response?.items) {
-          logDebug('Products loaded successfully for proposal wizard', {
-            component: 'ProductSelectionStep',
-            operation: 'fetchProducts',
-            count: response.items.length,
-            userStory: 'US-3.1',
-            hypothesis: 'H4',
-          });
+          if (process.env.NODE_ENV === 'development') {
+            logDebug('ProductSelectionStep: Products loaded', {
+              component: 'ProductSelectionStep',
+              operation: 'fetchProducts',
+              count: response.items.length,
+            });
+          }
           return response.items;
         }
 
@@ -310,17 +307,16 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
           }
           const next = [...prev, newProduct];
 
-          // ✅ ADDED: Debug logging to track product addition post-dedupe
-          logDebug('ProductSelectionStep: Product added', {
-            component: 'ProductSelectionStep',
-            operation: 'handleAddProduct',
-            productId: product.id,
-            productName: product.name,
-            newProduct,
-            updatedProductsCount: next.length,
-            userStory: 'US-3.1',
-            hypothesis: 'H4',
-          });
+          // Reduced logging for product addition
+          if (process.env.NODE_ENV === 'development') {
+            logDebug('ProductSelectionStep: Product added', {
+              component: 'ProductSelectionStep',
+              operation: 'handleAddProduct',
+              productId: product.id,
+              productName: product.name,
+              updatedProductsCount: next.length,
+            });
+          }
 
           return next;
         });
@@ -376,7 +372,11 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
     return selectedProducts.reduce((sum, product) => sum + (product.total || 0), 0);
   }, [selectedProducts]);
 
-  // Persist current step data into the store and auto-save to database whenever selection changes
+  // Track last saved state to prevent unnecessary saves
+  const lastSavedDataRef = useRef<string>('');
+  const pendingSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Persist current step data into the store and auto-save to database with proper debouncing
   useEffect(() => {
     const freshTotal = selectedProducts.reduce((sum, p) => sum + p.unitPrice * p.quantity, 0);
     const stepData: ProposalProductData = {
@@ -384,13 +384,34 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
       totalValue: freshTotal,
     };
 
-    // Update store
+    // Update store immediately (local state)
     setStepData(4, stepData);
 
-    // Auto-save to database if proposalId is available and we have changes
+    // Only auto-save if we have a proposalId and actual changes
     if (proposalId && selectedProducts.length > 0) {
+      const currentDataString = JSON.stringify({
+        products: selectedProducts.map(p => ({
+          productId: p.productId,
+          quantity: p.quantity,
+          unitPrice: p.unitPrice,
+          total: p.total,
+          discount: p.discount || 0,
+        })),
+        totalValue: freshTotal,
+      });
+
+      // Skip if no actual changes
+      if (currentDataString === lastSavedDataRef.current) {
+        return;
+      }
+
+      // Clear any pending save
+      if (pendingSaveTimeoutRef.current) {
+        clearTimeout(pendingSaveTimeoutRef.current);
+      }
+
       const autoSaveData = {
-        value: freshTotal, // Update the proposal's estimated value
+        value: freshTotal,
         metadata: {
           productData: {
             products: selectedProducts.map(p => ({
@@ -407,46 +428,53 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         },
       };
 
-      logDebug('ProductSelectionStep: Auto-saving to database', {
-        component: 'ProductSelectionStep',
-        operation: 'autoSave',
-        proposalId,
-        productsCount: selectedProducts.length,
-        totalValue: freshTotal,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
+      // Reduced logging - only log in development and at info level
+      if (process.env.NODE_ENV === 'development') {
+        logDebug('ProductSelectionStep: Auto-save queued', {
+          component: 'ProductSelectionStep',
+          operation: 'autoSave_queued',
+          proposalId,
+          productsCount: selectedProducts.length,
+          totalValue: freshTotal,
+        });
+      }
 
-      // Use setTimeout to debounce auto-save operations
-      const timeoutId = setTimeout(() => {
+      // Increased debounce to 2 seconds to reduce server load
+      pendingSaveTimeoutRef.current = setTimeout(() => {
         updateProposalMutation.mutate(
           { id: proposalId, proposal: autoSaveData as WizardProposalUpdateData },
           {
             onSuccess: () => {
-              logDebug('ProductSelectionStep: Auto-save successful', {
-                component: 'ProductSelectionStep',
-                operation: 'autoSave_success',
-                proposalId,
-                totalValue: freshTotal,
-                userStory: 'US-3.1',
-                hypothesis: 'H4',
-              });
+              // Update last saved state only on success
+              lastSavedDataRef.current = currentDataString;
+              if (process.env.NODE_ENV === 'development') {
+                logInfo('ProductSelectionStep: Auto-save successful', {
+                  component: 'ProductSelectionStep',
+                  operation: 'autoSave_success',
+                  proposalId,
+                  totalValue: freshTotal,
+                });
+              }
             },
-            onError: (error) => {
+            onError: error => {
               logError('ProductSelectionStep: Auto-save failed', {
                 component: 'ProductSelectionStep',
                 operation: 'autoSave_error',
                 proposalId,
                 error: error instanceof Error ? error.message : 'Unknown error',
-                userStory: 'US-3.1',
-                hypothesis: 'H4',
               });
             },
           }
         );
-      }, 1000); // 1 second debounce
+        pendingSaveTimeoutRef.current = null;
+      }, 2000); // Increased to 2 seconds
 
-      return () => clearTimeout(timeoutId);
+      return () => {
+        if (pendingSaveTimeoutRef.current) {
+          clearTimeout(pendingSaveTimeoutRef.current);
+          pendingSaveTimeoutRef.current = null;
+        }
+      };
     }
   }, [selectedProducts, setStepData, proposalId, updateProposalMutation]);
 
@@ -461,20 +489,15 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
       totalValue: freshTotal, // ✅ FIXED: Use freshly calculated total
     };
 
-    // ✅ ADDED: Debug logging to track step data saving
-    logDebug('ProductSelectionStep: Saving step data', {
-      component: 'ProductSelectionStep',
-      operation: 'handleNext',
-      stepData,
-      productsCount: selectedProducts.length,
-      totalValue: freshTotal,
-      selectedProducts: selectedProducts.map(p => ({
-        id: p.id,
-        name: p.name,
-        unitPrice: p.unitPrice,
-        quantity: p.quantity,
-      })),
-    });
+    // Reduced logging for step navigation
+    if (process.env.NODE_ENV === 'development') {
+      logDebug('ProductSelectionStep: Step data saved', {
+        component: 'ProductSelectionStep',
+        operation: 'handleNext',
+        productsCount: selectedProducts.length,
+        totalValue: freshTotal,
+      });
+    }
 
     // ✅ FIXED: Use proper store setStepData with step number (4 for ProductSelectionStep)
     setStepData(4, stepData);

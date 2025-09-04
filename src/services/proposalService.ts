@@ -173,25 +173,27 @@ export class ProposalService {
 
   async getProposal(id: string): Promise<Proposal> {
     const start = performance.now();
-    logDebug('Fetching proposal', {
-      component: 'ProposalService',
-      operation: 'getProposal',
-      proposalId: id,
-      userStory: 'US-3.1',
-      hypothesis: 'H4',
-    });
+    // Reduced logging - only in development
+    if (process.env.NODE_ENV === 'development') {
+      logDebug('ProposalService: Fetching proposal', {
+        component: 'ProposalService',
+        operation: 'getProposal',
+        proposalId: id,
+      });
+    }
 
     try {
       const data = await http.get<Proposal>(`/api/proposals/${id}`);
 
-      logInfo('Proposal fetched successfully', {
-        component: 'ProposalService',
-        operation: 'getProposal',
-        proposalId: id,
-        loadTime: performance.now() - start,
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
+      // Reduced logging - only in development
+      if (process.env.NODE_ENV === 'development') {
+        logInfo('ProposalService: Proposal fetched successfully', {
+          component: 'ProposalService',
+          operation: 'getProposal',
+          proposalId: id,
+          loadTime: performance.now() - start,
+        });
+      }
 
       return data;
     } catch (error: unknown) {

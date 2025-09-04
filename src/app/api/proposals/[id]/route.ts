@@ -28,13 +28,14 @@ export const GET = createRoute(
     }
 
     try {
-      logInfo('Fetching proposal', {
-        proposalId: id,
-        component: 'IndividualProposalEndpoint',
-        operation: 'GET',
-        userStory: 'US-3.1',
-        hypothesis: 'H4',
-      });
+      // Reduced logging - only in development
+      if (process.env.NODE_ENV === 'development') {
+        logInfo('API: Fetching proposal', {
+          proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'GET',
+        });
+      }
 
       const proposal = await prisma.proposal.findUnique({
         where: { id },
@@ -93,6 +94,11 @@ export const GET = createRoute(
       // Transform null values to appropriate defaults before validation
       const transformedProposal = {
         ...proposal,
+        // ✅ FIX: Convert value from string to number
+        value:
+          proposal.value !== null && proposal.value !== undefined
+            ? Number(proposal.value)
+            : undefined,
         customer: proposal.customer
           ? {
               ...proposal.customer,
@@ -100,23 +106,42 @@ export const GET = createRoute(
             }
           : undefined,
         title: proposal.title || 'Untitled Proposal',
+        // ✅ FIX: Handle assignedTo array and convert to string (take first user)
+        assignedTo:
+          proposal.assignedTo && proposal.assignedTo.length > 0
+            ? proposal.assignedTo[0].id
+            : undefined,
         products: proposal.products
           ? proposal.products
               .filter((pp: any) => pp.product) // Remove orphaned ProposalProduct records
               .map((pp: any) => ({
                 ...pp,
+                // ✅ FIX: Convert numeric fields from strings to numbers
+                unitPrice:
+                  pp.unitPrice !== null && pp.unitPrice !== undefined ? Number(pp.unitPrice) : 0,
+                discount:
+                  pp.discount !== null && pp.discount !== undefined ? Number(pp.discount) : 0,
+                total: pp.total !== null && pp.total !== undefined ? Number(pp.total) : 0,
                 name: pp.product?.name || `Product ${pp.productId}`,
-                category: pp.product?.category || 'General',
+                // ✅ FIX: Convert category array to string (take first element)
+                category: Array.isArray(pp.product?.category)
+                  ? pp.product.category[0] || 'General'
+                  : pp.product?.category || 'General',
+                // ✅ FIX: Convert null configuration to empty object
+                configuration: pp.configuration || {},
               }))
           : [],
       };
 
-      logInfo('Proposal fetched successfully', {
-        proposalId: id,
-        component: 'IndividualProposalEndpoint',
-        operation: 'GET',
-        userId: user.id,
-      });
+      // Reduced logging - only in development
+      if (process.env.NODE_ENV === 'development') {
+        logInfo('API: Proposal fetched successfully', {
+          proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'GET',
+          userId: user.id,
+        });
+      }
 
       // Validate response against schema
       const validationResult = ProposalSchema.safeParse(transformedProposal);
@@ -172,14 +197,15 @@ export const PUT = createRoute(
     }
 
     try {
-      logInfo('Updating proposal', {
-        proposalId: id,
-        component: 'IndividualProposalEndpoint',
-        operation: 'PUT',
-        userStory: 'US-3.2',
-        hypothesis: 'H7',
-        userId: user.id,
-      });
+      // Reduced logging - only in development
+      if (process.env.NODE_ENV === 'development') {
+        logInfo('API: Updating proposal', {
+          proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'PUT',
+          userId: user.id,
+        });
+      }
 
       // Extract wizard-specific fields from the flat payload structure
       const {
@@ -369,6 +395,11 @@ export const PUT = createRoute(
       // Transform response data
       const transformedProposal = {
         ...proposal,
+        // ✅ FIX: Convert value from string to number
+        value:
+          proposal.value !== null && proposal.value !== undefined
+            ? Number(proposal.value)
+            : undefined,
         customer: proposal.customer
           ? {
               ...proposal.customer,
@@ -376,23 +407,42 @@ export const PUT = createRoute(
             }
           : undefined,
         title: proposal.title || 'Untitled Proposal',
+        // ✅ FIX: Handle assignedTo array and convert to string (take first user)
+        assignedTo:
+          proposal.assignedTo && proposal.assignedTo.length > 0
+            ? proposal.assignedTo[0].id
+            : undefined,
         products: proposal.products
           ? proposal.products
               .filter(pp => pp.product)
               .map(pp => ({
                 ...pp,
+                // ✅ FIX: Convert numeric fields from strings to numbers
+                unitPrice:
+                  pp.unitPrice !== null && pp.unitPrice !== undefined ? Number(pp.unitPrice) : 0,
+                discount:
+                  pp.discount !== null && pp.discount !== undefined ? Number(pp.discount) : 0,
+                total: pp.total !== null && pp.total !== undefined ? Number(pp.total) : 0,
                 name: pp.product?.name || `Product ${pp.productId}`,
-                category: pp.product?.category || 'General',
+                // ✅ FIX: Convert category array to string (take first element)
+                category: Array.isArray(pp.product?.category)
+                  ? pp.product.category[0] || 'General'
+                  : pp.product?.category || 'General',
+                // ✅ FIX: Convert null configuration to empty object
+                configuration: pp.configuration || {},
               }))
           : [],
       };
 
-      logInfo('Proposal updated successfully', {
-        proposalId: id,
-        component: 'IndividualProposalEndpoint',
-        operation: 'PUT',
-        userId: user.id,
-      });
+      // Reduced logging - only in development
+      if (process.env.NODE_ENV === 'development') {
+        logInfo('API: Proposal updated successfully', {
+          proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'PUT',
+          userId: user.id,
+        });
+      }
 
       const responsePayload = { ok: true, data: transformedProposal };
       return new Response(JSON.stringify(responsePayload), {
@@ -556,6 +606,11 @@ export const PATCH = createRoute(
       // Transform response data
       const transformedProposal = {
         ...updatedProposal,
+        // ✅ FIX: Convert value from string to number
+        value:
+          updatedProposal.value !== null && updatedProposal.value !== undefined
+            ? Number(updatedProposal.value)
+            : undefined,
         customer: updatedProposal.customer
           ? {
               ...updatedProposal.customer,
@@ -567,8 +622,19 @@ export const PATCH = createRoute(
               .filter(pp => pp.product)
               .map(pp => ({
                 ...pp,
+                // ✅ FIX: Convert numeric fields from strings to numbers
+                unitPrice:
+                  pp.unitPrice !== null && pp.unitPrice !== undefined ? Number(pp.unitPrice) : 0,
+                discount:
+                  pp.discount !== null && pp.discount !== undefined ? Number(pp.discount) : 0,
+                total: pp.total !== null && pp.total !== undefined ? Number(pp.total) : 0,
                 name: pp.product?.name || `Product ${pp.productId}`,
-                category: pp.product?.category || 'General',
+                // ✅ FIX: Convert category array to string (take first element)
+                category: Array.isArray(pp.product?.category)
+                  ? pp.product.category[0] || 'General'
+                  : pp.product?.category || 'General',
+                // ✅ FIX: Convert null configuration to empty object
+                configuration: pp.configuration || {},
               }))
           : [],
       };
