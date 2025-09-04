@@ -246,9 +246,7 @@ export class ErrorHandlingService {
           ? 'Authentication Required'
           : 'Access Denied';
       case 'DATA':
-        return errorCode.includes('3001')
-          ? 'Resource Not Found'
-          : 'Database Error';
+        return errorCode.includes('3001') ? 'Resource Not Found' : 'Database Error';
       case 'BUS':
         return 'Business Logic Error';
       case 'API':

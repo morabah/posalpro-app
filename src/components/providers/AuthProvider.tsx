@@ -295,17 +295,18 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
     [analytics, user?.id, roles]
   );
 
-  // Session monitoring and auto-refresh
+  // Session monitoring and auto-refresh - REDUCED FREQUENCY TO PREVENT RATE LIMITING
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const SESSION_WARNING_TIME = 5 * 60 * 1000; // 5 minutes before expiry
-    const SESSION_REFRESH_INTERVAL = 10 * 60 * 1000; // Refresh every 10 minutes
-    const ACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes of inactivity
+    const SESSION_WARNING_TIME = 15 * 60 * 1000; // 15 minutes before expiry (increased)
+    const SESSION_REFRESH_INTERVAL = 30 * 60 * 1000; // Refresh every 30 minutes (reduced)
+    const ACTIVITY_TIMEOUT = 60 * 60 * 1000; // 60 minutes of inactivity (increased)
 
-    // Auto-refresh session
+    // Auto-refresh session with throttling
     const refreshInterval = setInterval(() => {
       if (Date.now() - lastActivity < ACTIVITY_TIMEOUT) {
+        logDebug('Auto-refreshing session');
         refreshSession();
       }
     }, SESSION_REFRESH_INTERVAL);
@@ -523,7 +524,7 @@ export function AuthProvider({ children, session }: AuthProviderProps) {
     <SessionProvider
       session={session}
       refetchOnWindowFocus={false}
-      refetchInterval={10 * 60} // 10 minutes
+      refetchInterval={30 * 60} // 30 minutes (increased to match auto-refresh)
     >
       <AuthContextProvider>{children}</AuthContextProvider>
     </SessionProvider>
