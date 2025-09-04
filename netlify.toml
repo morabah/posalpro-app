@@ -10,8 +10,8 @@
 [build.environment]
   # Align with production environment
   NODE_VERSION = "20.19.1"
-  # Provide headroom for Next build while respecting CI memory budget
-  NODE_OPTIONS = "--max-old-space-size=1024"
+  # Increase memory for TypeScript compilation (2GB)
+  NODE_OPTIONS = "--max-old-space-size=2048"
   NETLIFY_LINT = "false"
   # Configure specific Next.js flags for Netlify
   NEXT_USE_NETLIFY_EDGE = "false"
@@ -30,7 +30,7 @@
 [context.production.environment]
   # Node & Next config
   NODE_VERSION = "20.19.1"
-  NODE_OPTIONS = "--max-old-space-size=1024"
+  NODE_OPTIONS = "--max-old-space-size=2048"
   NEXT_USE_NETLIFY_EDGE = "false"
   NEXT_TELEMETRY_DISABLED = "1"
 
