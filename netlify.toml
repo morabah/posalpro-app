@@ -9,7 +9,7 @@
 
 [build.environment]
   # Align with production environment
-  NODE_VERSION = "20.19.1"
+  NODE_VERSION = "22"
   # Increase memory for TypeScript compilation (2GB)
   NODE_OPTIONS = "--max-old-space-size=2048"
   NETLIFY_LINT = "false"
@@ -29,7 +29,7 @@
 # Explicit production-context overrides (non-secrets only)
 [context.production.environment]
   # Node & Next config
-  NODE_VERSION = "20.19.1"
+  NODE_VERSION = "22"
   NODE_OPTIONS = "--max-old-space-size=2048"
   NEXT_USE_NETLIFY_EDGE = "false"
   NEXT_TELEMETRY_DISABLED = "1"
