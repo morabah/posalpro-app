@@ -233,11 +233,40 @@ export class ErrorHandlingService {
   }
 
   /**
+   * Get human-readable error title based on error code
+   */
+  private getErrorTitle(errorCode: string): string {
+    const category = errorCode.split('_')[0];
+
+    switch (category) {
+      case 'VAL':
+        return 'Validation Error';
+      case 'AUTH':
+        return errorCode.includes('2000') || errorCode.includes('2001')
+          ? 'Authentication Required'
+          : 'Access Denied';
+      case 'DATA':
+        return errorCode.includes('3001')
+          ? 'Resource Not Found'
+          : 'Database Error';
+      case 'BUS':
+        return 'Business Logic Error';
+      case 'API':
+        return 'API Error';
+      case 'SYS':
+        return 'System Error';
+      default:
+        return 'An Error Occurred';
+    }
+  }
+
+  /**
    * Convert StandardError to ProblemDetails format
    */
   public convertToProblemDetails(standardError: StandardError, status?: number): ProblemDetails {
     const problemDetails: ProblemDetails = {
       type: getProblemTypeUri(standardError.code),
+      title: this.getErrorTitle(standardError.code),
       code: standardError.code,
       message: standardError.message,
       timestamp: standardError.timestamp,

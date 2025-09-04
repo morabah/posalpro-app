@@ -1,5 +1,5 @@
 import { CustomerFormExample } from '@/components/examples/CustomerFormExample';
-import { ProductFormExample } from '@/components/examples/ProductFormExample';
+// import { ProductFormExample } from '@/components/examples/ProductFormExample'; // Temporarily disabled due to TypeScript issues
 import { Card } from '@/components/ui/Card';
 
 export default function ValidationDemoPage() {
@@ -15,9 +15,9 @@ export default function ValidationDemoPage() {
         </div>
 
         {/* Demo Forms */}
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid lg:grid-cols-1 gap-8">
           <CustomerFormExample />
-          <ProductFormExample />
+          {/* <ProductFormExample /> {/* Temporarily disabled due to TypeScript issues */}
         </div>
 
         {/* Features Overview */}

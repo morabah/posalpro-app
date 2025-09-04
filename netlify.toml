@@ -1,5 +1,6 @@
 [build]
   command = "bash ./netlify-deploy.sh"
+  publish = ".next"
   # Let @netlify/plugin-nextjs handle the build output automatically
 
 [build.environment]
@@ -83,3 +84,9 @@
   to = "/.netlify/images"
   status = 200
 
+# ✅ CRITICAL: Essential catch-all redirect for Next.js App Router
+# This MUST be the LAST redirect rule - do not add any redirects after this
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
