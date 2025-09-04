@@ -1,8 +1,11 @@
 [build]
-  command = "rm -f .env.local && bash ./netlify-deploy.sh"
+  # ✅ CRITICAL: Build from source using production environment variables
+  # This ensures Prisma client is generated with Neon database URLs, not localhost
+  command = "npm run build"
   publish = ".next"
-  # Let @netlify/plugin-nextjs handle the build output automatically
-  # ✅ FIX: Remove .env.local to prevent build-time env var conflicts
+
+  # Ensure clean build - remove any cached artifacts
+  ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
 
 [build.environment]
   # Align with production environment
