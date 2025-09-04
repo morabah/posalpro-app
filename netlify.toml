@@ -1,0 +1,30 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # CRITICAL: Missing variables that fix the database error
+  DIRECT_URL = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul.gwc.azure.neon.tech/neondb?sslmode=require"
+  SESSION_ENCRYPTION_KEY = "5a5f2da8d602760003727d7f1f34adbc9ddfbba5fbea225c597d002e73b627a0"
+  API_KEY = "568b1a88f0aa1cc52f64257643fc74bab1a6b7851d649a65120080248027bb5f"
+
+  # Keep existing working variables
+  DATABASE_URL = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require&pgbouncer=true&connection_limit=1"
+  NEXTAUTH_SECRET = "451f4701894a2f66265997fc8b7dd50c3529c3482c4606299b269708ed7d0212"
+  NEXTAUTH_URL = "https://posalpro-mvp2.windsurf.build"
+  JWT_SECRET = "2031cd23e1b1641d299d8174858f3e6be0e86d4d7716c0c9ba2c99021f645a4a"
+  CSRF_SECRET = "7467d9c3b1b7f713dd0c4430b513a3498087be6968979c7f49a6a5d79bee3ead"
+  NODE_ENV = "production"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
