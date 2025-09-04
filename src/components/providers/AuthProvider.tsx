@@ -182,15 +182,16 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
   const refreshSession = useCallback(async (): Promise<void> => {
     try {
       await update();
-      analytics(
-        'session_refresh',
-        {
-          userId: user?.id,
-          timestamp: Date.now(),
-          component: 'AuthProvider',
-        },
-        'medium'
-      );
+      // DISABLED: Analytics to prevent 429 errors
+      // analytics(
+      //   'session_refresh',
+      //   {
+      //     userId: user?.id,
+      //     timestamp: Date.now(),
+      //     component: 'AuthProvider',
+      //   },
+      //   'medium'
+      // );
     } catch (error) {
       // ✅ STANDARDIZED ERROR HANDLING: Use ErrorHandlingService
       const standardError = errorHandlingService.processError(
@@ -207,21 +208,22 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       // Log the error for debugging
       errorHandlingService.processError(standardError);
     }
-  }, [update, analytics, errorHandlingService, user?.id]);
+  }, [update, errorHandlingService, user?.id]);
 
   const logout = useCallback(async (): Promise<void> => {
     try {
-      analytics(
-        'user_logout',
-        {
-          userId: user?.id,
-          sessionDuration: Date.now() - lastActivity,
-          timestamp: Date.now(),
-          component: 'AuthProvider',
-          userStory: 'US-2.3',
-        },
-        'medium'
-      );
+      // DISABLED: Analytics to prevent 429 errors
+      // analytics(
+      //   'user_logout',
+      //   {
+      //     userId: user?.id,
+      //     sessionDuration: Date.now() - lastActivity,
+      //     timestamp: Date.now(),
+      //     component: 'AuthProvider',
+      //     userStory: 'US-2.3',
+      //   },
+      //   'medium'
+      // );
 
       // Use centralized API client instead of direct fetch
       try {
@@ -260,16 +262,17 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
 
       // Log the error for debugging
       errorHandlingService.processError(standardError);
-      analytics(
-        'logout_error',
-        {
-          error: standardError.message,
-          errorCode: standardError.code,
-          timestamp: Date.now(),
-          component: 'AuthProvider',
-        },
-        'high'
-      );
+      // DISABLED: Analytics to prevent 429 errors
+      // analytics(
+      //   'logout_error',
+      //   {
+      //     error: standardError.message,
+      //     errorCode: standardError.code,
+      //     timestamp: Date.now(),
+      //     component: 'AuthProvider',
+      //   },
+      //   'high'
+      // );
     }
   }, [analytics, apiClient, errorHandlingService, lastActivity, user?.id]);
 
@@ -279,48 +282,49 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       const now = Date.now();
       setLastActivity(now);
 
-      analytics(
-        'user_activity',
-        {
-          activity,
-          userId: user?.id,
-          userRoles: roles,
-          timestamp: now,
-          metadata,
-          component: 'AuthProvider',
-        },
-        'low'
-      );
+      // DISABLED: Analytics to prevent 429 errors
+      // analytics(
+      //   'user_activity',
+      //   {
+      //     activity,
+      //     userId: user?.id,
+      //     userRoles: roles,
+      //     timestamp: now,
+      //     metadata,
+      //     component: 'AuthProvider',
+      //   },
+      //   'low'
+      // );
     },
     [analytics, user?.id, roles]
   );
 
-  // Session monitoring and auto-refresh - REDUCED FREQUENCY TO PREVENT RATE LIMITING
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const SESSION_WARNING_TIME = 15 * 60 * 1000; // 15 minutes before expiry (increased)
-    const SESSION_REFRESH_INTERVAL = 30 * 60 * 1000; // Refresh every 30 minutes (reduced)
-    const ACTIVITY_TIMEOUT = 60 * 60 * 1000; // 60 minutes of inactivity (increased)
-
-    // Auto-refresh session with throttling
-    const refreshInterval = setInterval(() => {
-      if (Date.now() - lastActivity < ACTIVITY_TIMEOUT) {
-        logDebug('Auto-refreshing session');
-        refreshSession();
-      }
-    }, SESSION_REFRESH_INTERVAL);
-
-    // Session warning (implement based on token expiry)
-    const warningTimeout = setTimeout(() => {
-      setSessionWarning(true);
-    }, SESSION_WARNING_TIME);
-
-    return () => {
-      clearInterval(refreshInterval);
-      clearTimeout(warningTimeout);
-    };
-  }, [isAuthenticated, lastActivity, refreshSession]);
+  // DISABLED: Session monitoring and auto-refresh to prevent 429 errors
+  // useEffect(() => {
+  //   if (!isAuthenticated) return;
+  //
+  //   const SESSION_WARNING_TIME = 15 * 60 * 1000; // 15 minutes before expiry (increased)
+  //   const SESSION_REFRESH_INTERVAL = 30 * 60 * 1000; // Refresh every 30 minutes (reduced)
+  //   const ACTIVITY_TIMEOUT = 60 * 60 * 1000; // 60 minutes of inactivity (increased)
+  //
+  //   // Auto-refresh session with throttling
+  //   const refreshInterval = setInterval(() => {
+  //     if (Date.now() - lastActivity < ACTIVITY_TIMEOUT) {
+  //       logDebug('Auto-refreshing session');
+  //       refreshSession();
+  //     }
+  //   }, SESSION_REFRESH_INTERVAL);
+  //
+  //   // Session warning (implement based on token expiry)
+  //   const warningTimeout = setTimeout(() => {
+  //     setSessionWarning(true);
+  //   }, SESSION_WARNING_TIME);
+  //
+  //   return () => {
+  //     clearInterval(refreshInterval);
+  //     clearTimeout(warningTimeout);
+  //   };
+  // }, [isAuthenticated, lastActivity, refreshSession]);
 
   // Track session start - ONLY ONCE per session
   useEffect(() => {
@@ -333,18 +337,19 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
 
     // Only track if this is a new session (no previous tracking or more than 1 hour ago)
     if (!lastTrackedSession || currentSessionTime - parseInt(lastTrackedSession) > 60 * 60 * 1000) {
-      analytics(
-        'session_start',
-        {
-          userId: user!.id,
-          userRoles: roles,
-          userDepartment: user.department,
-          timestamp: currentSessionTime,
-          component: 'AuthProvider',
-          userStory: 'US-2.3',
-        },
-        'medium'
-      );
+      // DISABLED: Analytics to prevent 429 errors
+      // analytics(
+      //   'session_start',
+      //   {
+      //     userId: user!.id,
+      //     userRoles: roles,
+      //     userDepartment: user.department,
+      //     timestamp: currentSessionTime,
+      //     component: 'AuthProvider',
+      //     userStory: 'US-2.3',
+      //   },
+      //   'medium'
+      // );
 
       // Store the session tracking timestamp
       localStorage.setItem(sessionKey, currentSessionTime.toString());
@@ -388,18 +393,19 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (status === 'authenticated' && user) {
       // Note: useOptimizedAnalytics doesn't have identify method, using track instead
-      analytics(
-        'user_identify',
-        {
-          userId: user.id,
-          email: user.email,
-          name: user.name,
-          department: user.department,
-          roles: roles.join(','),
-          permissions: permissions.length,
-        },
-        'medium'
-      );
+      // DISABLED: Analytics to prevent 429 errors
+      // analytics(
+      //   'user_identify',
+      //   {
+      //     userId: user.id,
+      //     email: user.email,
+      //     name: user.name,
+      //     department: user.department,
+      //     roles: roles.join(','),
+      //     permissions: permissions.length,
+      //   },
+      //   'medium'
+      // );
 
       // Only track state change once per session
       const stateChangeKey = `auth_state_tracked_${user.id}`;
@@ -407,31 +413,33 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       const currentTime = Date.now();
 
       if (!lastTrackedState || currentTime - parseInt(lastTrackedState) > 60 * 60 * 1000) {
-        analytics(
-          'authentication_state_change',
-          {
-            status: 'authenticated',
-            userId: user.id,
-            userRoles: roles,
-            timestamp: currentTime,
-            component: 'AuthProvider',
-            userStory: 'US-2.3',
-          },
-          'medium'
-        );
+        // DISABLED: Analytics to prevent 429 errors
+        // analytics(
+        //   'authentication_state_change',
+        //   {
+        //     status: 'authenticated',
+        //     userId: user.id,
+        //     userRoles: roles,
+        //     timestamp: currentTime,
+        //     component: 'AuthProvider',
+        //     userStory: 'US-2.3',
+        //   },
+        //   'medium'
+        // );
 
         localStorage.setItem(stateChangeKey, currentTime.toString());
       }
     } else if (status === 'unauthenticated') {
-      analytics(
-        'authentication_state_change',
-        {
-          status: 'unauthenticated',
-          timestamp: Date.now(),
-          component: 'AuthProvider',
-        },
-        'medium'
-      );
+      // DISABLED: Analytics to prevent 429 errors
+      // analytics(
+      //   'authentication_state_change',
+      //   {
+      //     status: 'unauthenticated',
+      //     timestamp: Date.now(),
+      //     component: 'AuthProvider',
+      //   },
+      //   'medium'
+      // );
     }
   }, [
     status,
@@ -524,7 +532,7 @@ export function AuthProvider({ children, session }: AuthProviderProps) {
     <SessionProvider
       session={session}
       refetchOnWindowFocus={false}
-      refetchInterval={30 * 60} // 30 minutes (increased to match auto-refresh)
+      refetchInterval={false} // Disable automatic polling to prevent 429 errors
     >
       <AuthContextProvider>{children}</AuthContextProvider>
     </SessionProvider>

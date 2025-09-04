@@ -231,12 +231,9 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
         throw new Error(result?.error || 'Authentication failed');
       }
 
-      const session = await getSession();
-      if (!session?.user) {
-        throw new Error('Session not found');
-      }
-
-      const roles = session.user.roles || [];
+      // Remove immediate getSession() call to prevent rapid successive requests
+      // Session will be available through the AuthProvider context
+      const roles = data.role ? [data.role] : [];
       const redirectPath = callbackUrl || getDefaultRedirect(roles);
       router.push(redirectPath);
 
