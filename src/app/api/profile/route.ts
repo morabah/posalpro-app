@@ -2,12 +2,12 @@ import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 // import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import {
-  createApiimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-ErrorResponse,
+  createApiErrorResponse,
   ErrorCodes,
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
+import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
 import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';

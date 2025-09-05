@@ -5,8 +5,8 @@ import { createRoute } from '@/lib/api/route';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logInfo } from '@/lib/logger';
 import { ProductRelationshipEngine } from '@/lib/services/productRelationshipEngine';
-import { toPrismaJson } froimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-m '@/lib/utils/prismaUtils';
+import { toPrismaJson } from '@/lib/utils/prismaUtils';
+import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
 import { RuleStatus } from '@prisma/client';
 import { z } from 'zod';
 

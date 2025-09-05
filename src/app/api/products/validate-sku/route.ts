@@ -12,8 +12,8 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import { logDebugimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-, logError, logInfo } from '@/lib/logger';
+import { logDebug, logError, logInfo } from '@/lib/logger';
+import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
