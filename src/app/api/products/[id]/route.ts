@@ -15,7 +15,7 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-port { logError, logInfo, logWarn } from '@/lib/logger';
+import { logError, logInfo, logWarn } from '@/lib/logger';
 import { securityAuditManager } from '@/lib/security/audit';
 import { apiRateLimiter } from '@/lib/security/hardening';
 import type { Prisma } from '@prisma/client';

@@ -6,9 +6,8 @@ import {
   ErrorCodes,
   ErrorHandlingService,
   StandardError,
-} from '@/li;
+} from '@/lib/errors';
 import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-b/errors';
 import { updateContentSchema } from '@/lib/validation/schemas';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';

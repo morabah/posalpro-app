@@ -7,9 +7,8 @@ import { logger } from '@/lib/logger';
 
 import { CustomerProposalsQuerySchema } from '@/features/customers/schemas';
 import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAut;
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-horization';
 // import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
