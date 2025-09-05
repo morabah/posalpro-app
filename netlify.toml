@@ -25,12 +25,12 @@
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)
   ANALYTICS_ENABLED = "true"
-  API_BASE_URL = "https://posalpro-mvp2.windsurf.build/api"
+  API_BASE_URL = "https://posalpro.netlify.app/api"
 
   # Keep existing working variables
   DATABASE_URL = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require&pgbouncer=true&connection_limit=1"
   NEXTAUTH_SECRET = "451f4701894a2f66265997fc8b7dd50c3529c3482c4606299b269708ed7d0212"
-  NEXTAUTH_URL = "https://posalpro-mvp2.windsurf.build"
+  NEXTAUTH_URL = "https://posalpro.netlify.app"
   JWT_SECRET = "2031cd23e1b1641d299d8174858f3e6be0e86d4d7716c0c9ba2c99021f645a4a"
   CSRF_SECRET = "7467d9c3b1b7f713dd0c4430b513a3498087be6968979c7f49a6a5d79bee3ead"
 
@@ -58,7 +58,7 @@
 
   # Safe toggles
   ANALYTICS_ENABLED = "true"
-  API_BASE_URL = "https://posalpro-mvp2.windsurf.build/api"
+  API_BASE_URL = "https://posalpro.netlify.app/api"
 
   # Prisma engine settings
   PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
