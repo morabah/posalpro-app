@@ -1,10 +1,30 @@
-import { createRoute } from '@/lib/api/route';
 import { logError } from '@/lib/logger';
-import { generateOpenAPISpec } from '@/lib/openapi/generator';
 
-export const GET = createRoute({ requireAuth: false, apiVersion: '1' }, async () => {
+// Simple OpenAPI route without environment dependencies
+export const GET = async () => {
   try {
-    const doc = await generateOpenAPISpec();
+    // Basic OpenAPI spec without environment dependencies
+    const doc = {
+      openapi: '3.0.3',
+      info: {
+        title: 'PosalPro MVP2 API',
+        version: '1.0.0',
+        description: 'Proposal management API'
+      },
+      servers: [{ url: '/api' }],
+      paths: {
+        '/auth/login': {
+          post: {
+            summary: 'User login',
+            responses: {
+              200: { description: 'Login successful' },
+              401: { description: 'Invalid credentials' }
+            }
+          }
+        }
+      }
+    };
+
     return new Response(JSON.stringify(doc, null, 2), {
       status: 200,
       headers: {
@@ -19,5 +39,4 @@ export const GET = createRoute({ requireAuth: false, apiVersion: '1' }, async ()
       headers: { 'Content-Type': 'application/json' },
     });
   }
-});
-
+};
