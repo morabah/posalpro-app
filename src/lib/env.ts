@@ -109,7 +109,13 @@ class EnvironmentManager {
   private readonly BROWSER_LOG_THROTTLE = 30000; // 30 seconds
 
   constructor() {
-    this.loadConfiguration();
+    // ✅ CRITICAL FIX: Handle serverless environment where env vars might not be available at build time
+    // Only load configuration if DATABASE_URL is available (indicates runtime, not build time)
+    if (process.env.DATABASE_URL) {
+      this.loadConfiguration();
+    } else {
+      logWarn('Environment configuration deferred - DATABASE_URL not available (likely build time)');
+    }
   }
 
   public getCurrentEnvironment(): Environment {
@@ -633,16 +639,66 @@ class EnvironmentManager {
 // Create singleton environment manager
 const environmentManager = new EnvironmentManager();
 
-// Export convenience functions
-export const getConfig = (): AppConfig => environmentManager.getConfig();
-export const getValidationResult = (): ValidationResult => environmentManager.getValidationResult();
+// ✅ CRITICAL FIX: Lazy loading for exported functions
+export const getConfig = (): AppConfig => {
+  // Load configuration if not already loaded
+  if (!environmentManager.config && process.env.DATABASE_URL) {
+    environmentManager.loadConfiguration();
+  }
+  return environmentManager.getConfig();
+};
+
+export const getValidationResult = (): ValidationResult => {
+  // Load configuration if not already loaded
+  if (!environmentManager.validationResult && process.env.DATABASE_URL) {
+    environmentManager.loadConfiguration();
+  }
+  return environmentManager.getValidationResult();
+};
+
 export const isValidConfiguration = (): boolean => environmentManager.isValid();
 export const getCurrentEnvironment = (): Environment => environmentManager.getCurrentEnvironment();
-export const getDatabaseConfig = () => environmentManager.getDatabaseConfig();
-export const getApiConfig = () => environmentManager.getApiConfig();
-export const getAuthConfig = () => environmentManager.getAuthConfig();
-export const getSecurityConfig = () => environmentManager.getSecurityConfig();
-export const getFeatureFlags = () => environmentManager.getFeatureFlags();
+
+export const getDatabaseConfig = () => {
+  // Load configuration if not already loaded
+  if (!environmentManager.config && process.env.DATABASE_URL) {
+    environmentManager.loadConfiguration();
+  }
+  return environmentManager.getDatabaseConfig();
+};
+
+export const getApiConfig = () => {
+  // Load configuration if not already loaded
+  if (!environmentManager.config && process.env.DATABASE_URL) {
+    environmentManager.loadConfiguration();
+  }
+  return environmentManager.getApiConfig();
+};
+
+export const getAuthConfig = () => {
+  // Load configuration if not already loaded
+  if (!environmentManager.config && process.env.DATABASE_URL) {
+    environmentManager.loadConfiguration();
+  }
+  return environmentManager.getAuthConfig();
+};
+
+export const getSecurityConfig = () => {
+  // Load configuration if not already loaded
+  if (!environmentManager.config && process.env.DATABASE_URL) {
+    environmentManager.loadConfiguration();
+  }
+  return environmentManager.getSecurityConfig();
+};
+
+export const getFeatureFlags = () => {
+  // Load configuration if not already loaded
+  if (!environmentManager.config && process.env.DATABASE_URL) {
+    environmentManager.loadConfiguration();
+  }
+  return environmentManager.getFeatureFlags();
+};
+
 export const reloadConfiguration = (): void => environmentManager.reloadConfiguration();
 
 // Export environment manager for advanced usage
