@@ -8,8 +8,8 @@ import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { assertApiKey } from '@/server/api/apiKeyGuard';
 import { logWarn } from '@/lib/logger';
+import { assertApiKey } from '@/server/api/apiKeyGuard';
 import { getServerSession, Session } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -71,9 +71,9 @@ export async function GET(request: NextRequest) {
         performanceBaselines: [],
         componentTraceability: [],
         healthScore: 0,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       },
-      message: 'Analytics data not available during build process'
+      message: 'Analytics data not available during build process',
     });
   }
 
@@ -93,6 +93,8 @@ export async function GET(request: NextRequest) {
     if (!prisma) {
       throw new Error('Failed to load Prisma client');
     }
+    // Type assertion for TypeScript
+    const prismaClient = prisma;
 
     // Parse query parameters
     const { searchParams } = new URL(request.url);

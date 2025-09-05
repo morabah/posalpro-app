@@ -33,12 +33,14 @@ export async function GET(request: NextRequest) {
     if (!prisma) {
       throw new Error('Failed to load Prisma client');
     }
+    // Type assertion for TypeScript
+    const prismaClient = prisma;
 
     const { searchParams } = new URL(request.url);
     const limit = Math.min(parseInt(searchParams.get('limit') || '10', 10), 50);
 
     const [events, recentProposals] = await Promise.all([
-      prisma.hypothesisValidationEvent.findMany({
+      prismaClient.hypothesisValidationEvent.findMany({
         orderBy: { timestamp: 'desc' },
         take: limit,
         select: {
@@ -49,7 +51,7 @@ export async function GET(request: NextRequest) {
           userId: true,
         },
       }),
-      prisma.proposal.findMany({
+      prismaClient.proposal.findMany({
         orderBy: { updatedAt: 'desc' },
         take: limit,
         select: { id: true, title: true, status: true, updatedAt: true },
