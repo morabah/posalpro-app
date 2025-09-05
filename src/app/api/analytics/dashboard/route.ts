@@ -113,11 +113,11 @@ export async function GET(request: NextRequest) {
       componentTraceability,
       recentActivity,
     ] = await Promise.all([
-      getHypothesisMetrics(validatedQuery.hypothesis, dateFilter),
-      getUserStoryMetrics(dateFilter),
-      getPerformanceBaselines(validatedQuery.hypothesis, validatedQuery.environment),
-      getComponentTraceabilityMetrics(),
-      getRecentActivity(dateFilter),
+      getHypothesisMetrics(prismaClient, validatedQuery.hypothesis, dateFilter),
+      getUserStoryMetrics(prismaClient, dateFilter),
+      getPerformanceBaselines(prismaClient, validatedQuery.hypothesis, validatedQuery.environment),
+      getComponentTraceabilityMetrics(prismaClient),
+      getRecentActivity(prismaClient, dateFilter),
     ]);
 
     // Calculate overall analytics health score
@@ -191,7 +191,7 @@ function getDateFilter(timeRange: string) {
 /**
  * Get hypothesis validation metrics
  */
-async function getHypothesisMetrics(hypothesis?: string, dateFilter?: Date | null) {
+async function getHypothesisMetrics(prismaClient: any, hypothesis?: string, dateFilter?: Date | null) {
   try {
     const where: Record<string, unknown> = {};
     if (hypothesis) {
@@ -257,7 +257,7 @@ async function getHypothesisMetrics(hypothesis?: string, dateFilter?: Date | nul
 /**
  * Get user story metrics
  */
-async function getUserStoryMetrics(dateFilter?: Date | null) {
+async function getUserStoryMetrics(prismaClient: any, dateFilter?: Date | null) {
   try {
     const where: Record<string, unknown> = {};
     if (dateFilter) {
@@ -306,7 +306,7 @@ async function getUserStoryMetrics(dateFilter?: Date | null) {
 /**
  * Get performance baselines
  */
-async function getPerformanceBaselines(hypothesis?: string, environment?: string) {
+async function getPerformanceBaselines(prismaClient: any, hypothesis?: string, environment?: string) {
   try {
     // Since performanceBaseline might not be available yet, return mock data
     const mockBaselines = [
@@ -371,7 +371,7 @@ async function getPerformanceBaselines(hypothesis?: string, environment?: string
 /**
  * Get component traceability metrics
  */
-async function getComponentTraceabilityMetrics() {
+async function getComponentTraceabilityMetrics(prismaClient: any) {
   try {
     // Since componentTraceability might not be available yet, return mock data
     const mockComponents = [
@@ -421,7 +421,7 @@ async function getComponentTraceabilityMetrics() {
 /**
  * Get recent activity summary
  */
-async function getRecentActivity(dateFilter?: Date | null) {
+async function getRecentActivity(prismaClient: any, dateFilter?: Date | null) {
   try {
     const where = dateFilter ? { timestamp: { gte: dateFilter } } : {};
 
