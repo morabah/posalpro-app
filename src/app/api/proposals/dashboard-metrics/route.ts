@@ -6,7 +6,7 @@ hitecture
  */
 
 import { createRoute } from '@/lib/api/route';
-// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import prisma from '@/lib/db/prisma';
 import { logInfo } from '@/lib/logger';
 
 // ====================

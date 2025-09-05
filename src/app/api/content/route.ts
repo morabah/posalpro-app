@@ -6,7 +6,7 @@ import { logDebug, logError, logInfo, logWarn } from '@/lib/logger'; /**
 
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import prisma from '@/lib/db/prisma';
 import { createApiErrorResponse, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';

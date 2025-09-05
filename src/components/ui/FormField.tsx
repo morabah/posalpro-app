@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import React from 'react';
+import React, { forwardRef } from 'react';
 
 // ✅ Form Field Props Interface
 export interface FormFieldProps {
@@ -9,9 +9,9 @@ export interface FormFieldProps {
   label?: string;
   placeholder?: string;
   type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'textarea';
-  value: any;
-  onChange: (value: any) => void;
-  onBlur?: () => void;
+  value?: any; // Optional for RHF/uncontrolled compatibility
+  onChange?: (value: any | React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; // Supports both value and event signatures
+  onBlur?: (...args: any[]) => void; // Updated for React Hook Form compatibility
   error?: string;
   touched?: boolean;
   required?: boolean;
@@ -24,119 +24,135 @@ export interface FormFieldProps {
   validationClass?: string;
 }
 
-// ✅ Text Input Component
-export function FormField({
-  name,
-  label,
-  placeholder,
-  type = 'text',
-  value,
-  onChange,
-  onBlur,
-  error,
-  touched = false,
-  required = false,
-  disabled = false,
-  className,
-  inputClassName,
-  labelClassName,
-  errorClassName,
-  icon,
-  validationClass,
-}: FormFieldProps) {
-  const hasError = error && touched;
-  const fieldId = `field-${name}`;
-
-  const baseInputClasses = cn(
-    'w-full border-b bg-transparent focus:outline-none transition-colors duration-200',
-    'placeholder:text-gray-400',
+// ✅ Text Input Component with forwardRef for RHF compatibility
+export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, FormFieldProps>(
+  (
     {
-      'border-red-500 focus:border-red-500': hasError,
-      'border-gray-300 focus:border-blue-500': !hasError,
-      'opacity-50 cursor-not-allowed': disabled,
+      name,
+      label,
+      placeholder,
+      type = 'text',
+      value,
+      onChange,
+      onBlur,
+      error,
+      touched = false,
+      required = false,
+      disabled = false,
+      className,
+      inputClassName,
+      labelClassName,
+      errorClassName,
+      icon,
+      validationClass,
     },
-    validationClass,
-    inputClassName
-  );
+    ref
+  ) => {
+    const hasError = error && touched;
+    const fieldId = `field-${name}`;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    if (disabled) return;
+    const baseInputClasses = cn(
+      'w-full border-b bg-transparent focus:outline-none transition-colors duration-200',
+      'placeholder:text-gray-400',
+      {
+        'border-red-500 focus:border-red-500': hasError,
+        'border-gray-300 focus:border-blue-500': !hasError,
+        'opacity-50 cursor-not-allowed': disabled,
+      },
+      validationClass,
+      inputClassName
+    );
 
-    let newValue: any = e.target.value;
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      if (disabled) return;
 
-    // Handle number type
-    if (type === 'number') {
-      newValue = e.target.value ? parseFloat(e.target.value) : undefined;
-    }
+      // If no value prop is provided, assume React Hook Form/uncontrolled usage.
+      // Pass through the raw event so libraries expecting e.target.name/value work.
+      if (typeof value === 'undefined') {
+        onChange?.(e);
+        return;
+      }
 
-    onChange(newValue);
-  };
+      // Controlled usage: derive the new value and pass it up.
+      let newValue: any = e.target.value;
+      if (type === 'number') {
+        newValue = e.target.value !== '' ? parseFloat(e.target.value) : undefined;
+      }
+      onChange?.(newValue);
+    };
 
-  const handleBlur = () => {
-    if (onBlur) {
-      onBlur();
-    }
-  };
+    const handleBlur = (...args: any[]) => {
+      if (onBlur) {
+        onBlur(...args);
+      }
+    };
 
-  return (
-    <div className={cn('space-y-1', className)}>
-      {/* Label */}
-      {label && (
-        <label
-          htmlFor={fieldId}
-          className={cn(
-            'block text-sm font-medium text-gray-700',
-            { 'text-red-600': hasError },
-            labelClassName
+    return (
+      <div className={cn('space-y-1', className)}>
+        {/* Label */}
+        {label && (
+          <label
+            htmlFor={fieldId}
+            className={cn(
+              'block text-sm font-medium text-gray-700',
+              { 'text-red-600': hasError },
+              labelClassName
+            )}
+          >
+            {label}
+            {required && <span className="text-red-500 ml-1">*</span>}
+          </label>
+        )}
+
+        {/* Input Container */}
+        <div className="relative">
+          {/* Icon */}
+          {icon && (
+            <div className="absolute left-0 top-1/2 transform -translate-y-1/2 text-gray-400">
+              {icon}
+            </div>
           )}
-        >
-          {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
-        </label>
-      )}
 
-      {/* Input Container */}
-      <div className="relative">
-        {/* Icon */}
-        {icon && (
-          <div className="absolute left-0 top-1/2 transform -translate-y-1/2 text-gray-400">
-            {icon}
-          </div>
-        )}
+          {/* Input/Textarea */}
+          {type === 'textarea' ? (
+            <textarea
+              ref={ref as React.RefObject<HTMLTextAreaElement>}
+              id={fieldId}
+              name={name}
+              // Avoid forcing controlled mode when value is undefined (RHF compatibility)
+              value={value !== undefined ? value : undefined}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              placeholder={placeholder}
+              disabled={disabled}
+              className={cn(baseInputClasses, 'resize-none min-h-[80px]', { 'pl-8': icon })}
+              rows={3}
+            />
+          ) : (
+            <input
+              ref={ref as React.RefObject<HTMLInputElement>}
+              id={fieldId}
+              name={name}
+              type={type}
+              // Avoid forcing controlled mode when value is undefined (RHF compatibility)
+              value={value !== undefined ? value : undefined}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              placeholder={placeholder}
+              disabled={disabled}
+              className={cn(baseInputClasses, { 'pl-8': icon })}
+            />
+          )}
+        </div>
 
-        {/* Input/Textarea */}
-        {type === 'textarea' ? (
-          <textarea
-            id={fieldId}
-            name={name}
-            value={value || ''}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            placeholder={placeholder}
-            disabled={disabled}
-            className={cn(baseInputClasses, 'resize-none min-h-[80px]', { 'pl-8': icon })}
-            rows={3}
-          />
-        ) : (
-          <input
-            id={fieldId}
-            name={name}
-            type={type}
-            value={value || ''}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            placeholder={placeholder}
-            disabled={disabled}
-            className={cn(baseInputClasses, { 'pl-8': icon })}
-          />
-        )}
+        {/* Error Message */}
+        {hasError && <p className={cn('text-sm text-red-600', errorClassName)}>{error}</p>}
       </div>
+    );
+  }
+);
 
-      {/* Error Message */}
-      {hasError && <p className={cn('text-sm text-red-600', errorClassName)}>{error}</p>}
-    </div>
-  );
-}
+FormField.displayName = 'FormField';
 
 // ✅ Form Field with Icon Component
 export function FormFieldWithIcon({ icon, ...props }: FormFieldProps & { icon: React.ReactNode }) {

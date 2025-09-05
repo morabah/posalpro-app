@@ -1,7 +1,7 @@
 import { RuleSchema } from '@/features/products/schemas';
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import prisma from '@/lib/db/prisma';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logInfo } from '@/lib/logger';
 import { ProductRelationshipEngine } from '@/lib/services/productRelationshipEngine';

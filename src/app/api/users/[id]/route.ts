@@ -5,8 +5,8 @@
  */
 
 import { authOptions } from '@/lib/auth';
-// import prisma from '@/lib/db/prisma'; // Replacimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-ed with dynamic imports
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,
@@ -14,10 +14,10 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
+import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 /**
  * Component Traceability Matrix:
@@ -38,6 +38,7 @@ const ActivityQuerySchema = z.object({
     .string()
     .optional()
     .transform(val => val === 'true'),
+  fields: z.string().optional(), // Selective Hydration (Performance Optimization)
 });
 
 /**
@@ -74,57 +75,60 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const queryParams = Object.fromEntries(searchParams);
     const validatedQuery = ActivityQuerySchema.parse(queryParams);
 
+    // Get user role and permission context for granular security
+    const userRoles = session.user.roles || ['Business Development Manager']; // Array of user roles
+    const userPermissions = session.user.permissions || []; // Array of user permissions
+    const userRole = userRoles[0]; // Primary role for backward compatibility
+
+    // Parse requested fields with selective hydration and security context
+    const { select: userSelect, optimizationMetrics } = parseFieldsParam(
+      validatedQuery.fields || undefined,
+      'user',
+      {
+        userRole,
+        userRoles,
+        userPermissions,
+        userId: session.user.id,
+        targetUserId: id, // For individual user access, we can check if user is accessing their own data
+      }
+    );
+
+    // Always include essential fields needed for response processing
+    const essentialFields = {
+      id: true,
+      name: true,
+      email: true,
+      department: true,
+      status: true,
+      lastLogin: true,
+      createdAt: true,
+      communicationPrefs: { select: { timezone: true, language: true } },
+      preferences: { select: { theme: true, language: true, analyticsConsent: true } },
+      roles: { select: { role: { select: { name: true, description: true, level: true } } } },
+      _count: {
+        select: {
+          createdProposals: true,
+          assignedProposals: true,
+          createdContent: true,
+          hypothesisEvents: true,
+        },
+      },
+      analyticsProfile: {
+        select: {
+          performanceMetrics: true,
+          hypothesisContributions: true,
+          lastAssessment: true,
+        },
+      },
+    };
+
+    // Merge essential fields with user-selected fields
+    const finalSelect = { ...userSelect, ...essentialFields };
+
     // Check if user exists and is accessible
     const user = await prisma.user.findUnique({
       where: { id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        department: true,
-        status: true,
-        lastLogin: true,
-        createdAt: true,
-        roles: {
-          select: {
-            role: {
-              select: {
-                name: true,
-                description: true,
-                level: true,
-              },
-            },
-          },
-        },
-        preferences: {
-          select: {
-            theme: true,
-            language: true,
-            analyticsConsent: true,
-          },
-        },
-        communicationPrefs: {
-          select: {
-            timezone: true,
-            language: true,
-          },
-        },
-        analyticsProfile: {
-          select: {
-            performanceMetrics: true,
-            hypothesisContributions: true,
-            lastAssessment: true,
-          },
-        },
-        _count: {
-          select: {
-            createdProposals: true,
-            assignedProposals: true,
-            createdContent: true,
-            hypothesisEvents: true,
-          },
-        },
-      },
+      select: finalSelect,
     });
 
     if (!user) {

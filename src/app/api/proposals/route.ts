@@ -9,7 +9,7 @@ bility: US-3.1, US-3.2, H4
  */
 
 import { createRoute } from '@/lib/api/route';
-// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { assertIdempotent } from '@/server/api/idempotency';
 

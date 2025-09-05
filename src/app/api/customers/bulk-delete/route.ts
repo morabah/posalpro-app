@@ -7,7 +7,7 @@
 
 import { CustomerBulkDeleteSchema } from '@/features/customers/schemas';
 import { createRoute } from '@/lib/api/route';
-// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
 
 // ====================

@@ -12,11 +12,82 @@
  */
 export function getPrismaSelect(
   entityType: keyof typeof FIELD_CONFIGS,
-  requestedFields?: string[]
+  requestedFields?: string[],
+  options?: {
+    userRole?: string;
+    userRoles?: string[]; // Array of user roles for granular control
+    userPermissions?: string[]; // Array of user permissions
+    userId?: string;
+    targetUserId?: string;
+  }
 ): Record<string, unknown> {
   const config = FIELD_CONFIGS[entityType];
 
   const select: Record<string, unknown> = {};
+
+  // Helper function to check field access based on granular role/permission requirements
+  const hasFieldAccess = (field: string): boolean => {
+    // Check field-specific permission requirements
+    if (config.security?.fieldPermissionMap?.[field]) {
+      const requiredPermissions = config.security.fieldPermissionMap[field];
+      const userPermissions = options?.userPermissions || [];
+      const hasRequiredPermission = requiredPermissions.some(perm =>
+        userPermissions.includes(perm)
+      );
+      if (!hasRequiredPermission) {
+        return false;
+      }
+    }
+
+    // Check restricted fields (takes precedence over fieldRoleMap for security)
+    if (config.security?.restrictedFields?.includes(field)) {
+      const userRoles = options?.userRoles || (options?.userRole ? [options.userRole] : []);
+      const isAdmin =
+        userRoles.includes('System Administrator') || userRoles.includes('Administrator');
+      if (!isAdmin) {
+        return false;
+      }
+    } else {
+      // Only check field-specific role requirements if field is not restricted
+      if (config.security?.fieldRoleMap?.[field]) {
+        const allowedRoles = config.security.fieldRoleMap[field];
+        const userRoles = options?.userRoles || (options?.userRole ? [options.userRole] : []);
+        const hasRequiredRole = allowedRoles.some(role => userRoles.includes(role));
+        if (!hasRequiredRole) {
+          return false;
+        }
+      }
+    }
+
+    // Check self-access-only fields
+    if (config.security?.selfAccessOnly?.includes(field)) {
+      if (options?.userId !== options?.targetUserId) {
+        const userRoles = options?.userRoles || (options?.userRole ? [options.userRole] : []);
+        const isAdmin =
+          userRoles.includes('System Administrator') || userRoles.includes('Administrator');
+        if (!isAdmin) {
+          return false;
+        }
+      }
+    }
+
+    // Check legacy minRole requirement (only for fields without specific role/permission/restricted/selfAccessOnly requirements)
+    if (
+      config.security?.minRole &&
+      !config.security?.fieldRoleMap?.[field] &&
+      !config.security?.fieldPermissionMap?.[field] &&
+      !config.security?.restrictedFields?.includes(field) &&
+      !config.security?.selfAccessOnly?.includes(field)
+    ) {
+      const userRoles = options?.userRoles || (options?.userRole ? [options.userRole] : []);
+      const hasMinRole = userRoles.includes(config.security.minRole);
+      if (!hasMinRole) {
+        return false;
+      }
+    }
+
+    return true;
+  };
 
   const fieldsToSelect = requestedFields?.length
     ? requestedFields
@@ -25,9 +96,19 @@ export function getPrismaSelect(
       : config.allowedFields;
 
   fieldsToSelect.forEach(field => {
+    // Check if field is in allowed fields
     if (config.allowedFields.includes(field)) {
+      // Check granular field access based on roles/permissions
+      const accessResult = hasFieldAccess(field);
+      if (!accessResult) {
+        return;
+      }
       select[field] = true;
-    } else if (config.relations && field in config.relations) {
+    } else {
+    }
+
+    // Check relations
+    if (config.relations && field in config.relations) {
       const relationConfig = config.relations[field];
       if (typeof relationConfig === 'object' && 'select' in relationConfig) {
         select[field] = relationConfig;
@@ -63,6 +144,8 @@ interface FieldConfig {
     minRole?: string | null;
     restrictedFields?: string[];
     selfAccessOnly?: string[];
+    fieldRoleMap?: Record<string, string[]>; // Field -> allowed roles mapping
+    fieldPermissionMap?: Record<string, string[]>; // Field -> required permissions mapping
   };
 }
 
@@ -82,6 +165,54 @@ const FIELD_CONFIGS: Record<string, FieldConfig> = {
       'lastLogin',
       'createdAt',
       'updatedAt',
+      'tenantId',
+      'roles',
+      'analyticsProfile',
+      'permissions',
+      'preferences',
+      'sessions',
+      'lastActivityAt',
+      'loginCount',
+      'failedLoginAttempts',
+      'accountLockedUntil',
+      'mfaEnabled',
+      'passwordLastChanged',
+      'profilePictureUrl',
+      'bio',
+      'timezone',
+      'language',
+      'phone',
+      'jobTitle',
+      'managerId',
+      'employeeId',
+      'hireDate',
+      'terminationDate',
+      'performanceRating',
+      'skills',
+      'certifications',
+      'emergencyContact',
+      'address',
+      // Sensitive fields (restricted by security config)
+      'password',
+      'salt',
+      'resetToken',
+      'resetTokenExpiry',
+      'emailVerificationToken',
+      'failedLoginAttempts',
+      'accountLockedUntil',
+      'passwordLastChanged',
+      // Additional fields for granular role testing
+      'performanceRating',
+      'skills',
+      'certifications',
+      'employeeId',
+      'hireDate',
+      'terminationDate',
+      'jobTitle',
+      'managerId',
+      'salary',
+      'performanceReviews',
+      'disciplinaryActions',
     ],
     relations: {
       createdProposals: ['id', 'title', 'status', 'createdAt'],
@@ -100,6 +231,39 @@ const FIELD_CONFIGS: Record<string, FieldConfig> = {
     security: {
       requiresAuth: true,
       minRole: 'Business Development Manager',
+      restrictedFields: [
+        'password',
+        'salt',
+        'resetToken',
+        'resetTokenExpiry',
+        'emailVerificationToken',
+        'accessibilityConfig',
+        'communicationPrefs',
+        'temporaryAccess',
+        'securityEvents',
+        'failedLoginAttempts',
+        'accountLockedUntil',
+        'passwordLastChanged',
+        'emergencyContact',
+      ],
+      selfAccessOnly: ['analyticsProfile', 'preferences', 'sessions'],
+      fieldRoleMap: {
+        performanceRating: ['Sales Manager', 'System Administrator', 'Administrator'],
+        skills: ['Sales Manager', 'System Administrator', 'Administrator'],
+        certifications: ['Sales Manager', 'System Administrator', 'Administrator'],
+        employeeId: ['HR Manager', 'System Administrator', 'Administrator'],
+        hireDate: ['HR Manager', 'System Administrator', 'Administrator'],
+        terminationDate: ['HR Manager', 'System Administrator', 'Administrator'],
+        emergencyContact: ['HR Manager', 'System Administrator', 'Administrator'],
+        failedLoginAttempts: ['Security Administrator', 'System Administrator', 'Administrator'],
+        accountLockedUntil: ['Security Administrator', 'System Administrator', 'Administrator'],
+        mfaEnabled: ['Security Administrator', 'System Administrator', 'Administrator'],
+      },
+      fieldPermissionMap: {
+        salary: ['hr:read_sensitive', 'admin:full_access'],
+        performanceReviews: ['hr:read_performance', 'admin:full_access'],
+        disciplinaryActions: ['hr:read_disciplinary', 'admin:full_access'],
+      },
     },
   },
 
@@ -337,17 +501,25 @@ export function parseFields(
  */
 export function parseFieldsParam(
   fieldsParam: string | undefined,
-  entityType: keyof typeof FIELD_CONFIGS
+  entityType: keyof typeof FIELD_CONFIGS,
+  options?: {
+    userRole?: string;
+    userRoles?: string[];
+    userPermissions?: string[];
+    userId?: string;
+    targetUserId?: string;
+  }
 ) {
   const startTime = performance.now();
 
   // Parse the requested fields
   const requestedFields = fieldsParam ? fieldsParam.split(',') : [];
 
-  // Get the select object for Prisma
+  // Get the select object for Prisma with security options
   const select = getPrismaSelect(
     entityType,
-    requestedFields.length > 0 ? requestedFields : undefined
+    requestedFields.length > 0 ? requestedFields : undefined,
+    options
   );
 
   // Calculate optimization metrics

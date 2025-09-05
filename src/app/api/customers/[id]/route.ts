@@ -10,7 +10,7 @@ H6
 
 import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import prisma from '@/lib/db/prisma';
 import { errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
 

@@ -7,7 +7,7 @@ cs
 
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { ProductBulkDeleteSchema } from '@/features/products/schemas';
 

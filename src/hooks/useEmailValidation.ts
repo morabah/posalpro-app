@@ -57,7 +57,8 @@ export function useEmailValidation(options: UseEmailValidationOptions = {}) {
   const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
 
   const validateEmailFormat = useCallback((email: string): string | null => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    // Stricter TLD check: require 2+ alpha characters to avoid invalid calls like test@a.c
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/;
     if (!email) return 'Email is required';
     if (!emailRegex.test(email)) return 'Invalid email format';
     if (email.length > 254) return 'Email must be 254 characters or less';

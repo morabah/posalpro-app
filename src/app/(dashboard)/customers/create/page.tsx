@@ -22,10 +22,9 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { StandardError } from '@/lib/errors/StandardError';
 import { logDebug, logError, logInfo } from '@/lib/logger';
+import { toast } from 'sonner';
 // RBAC handled by createRoute wrapper in API routes
-import type { CustomerEditData } from '@/lib/validation/customerValidation';
-import { customerValidationSchema } from '@/lib/validation/customerValidation';
-import { ApiResponse } from '@/types/api';
+import { CreateCustomerData } from '@/lib/validation/schemas/customer';
 import { ArrowLeftIcon, UserPlusIcon } from '@heroicons/react/24/outline';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useSession } from 'next-auth/react';
@@ -35,12 +34,55 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 interface CustomerResponse {
   id: string;
   name: string;
   email: string;
 }
+
+// Type alias for form data
+type CustomerFormData = CreateCustomerData;
+
+// Simplified customer creation schema for the form
+const customerCreationSchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Company name is required')
+    .max(200, 'Company name must be less than 200 characters'),
+  email: z.string().email('Please enter a valid email address').optional(),
+  phone: z.string().min(1, 'Phone number is required'),
+  website: z.string().url('Please enter a valid website URL').optional().or(z.literal('')),
+  address: z.string().max(200, 'Address must be less than 200 characters').optional(),
+  industry: z
+    .enum([
+      'technology',
+      'healthcare',
+      'finance',
+      'manufacturing',
+      'retail',
+      'education',
+      'government',
+      'nonprofit',
+      'real_estate',
+      'transportation',
+      'energy',
+      'telecommunications',
+      'media',
+      'consulting',
+      'agriculture',
+      'automotive',
+      'aerospace',
+      'construction',
+      'other',
+    ])
+    .default('technology'),
+  revenue: z.number().min(0, 'Revenue must be a positive number').optional(),
+  companySize: z.enum(['startup', 'small', 'medium', 'large', 'enterprise']).default('small'),
+  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).default('STANDARD'),
+  tags: z.array(z.string()).default([]),
+});
 
 // ✅ SEO METADATA: Page metadata component
 function CustomerCreationMetadata() {
@@ -143,8 +185,8 @@ function CustomerCreationPageComponent() {
     watch,
     setValue,
     trigger,
-  } = useForm<CustomerEditData>({
-    resolver: zodResolver(customerValidationSchema as any),
+  } = useForm<z.infer<typeof customerCreationSchema>>({
+    resolver: zodResolver(customerCreationSchema),
     mode: 'onChange',
     defaultValues: {
       name: '',
@@ -152,9 +194,9 @@ function CustomerCreationPageComponent() {
       phone: '',
       website: '',
       address: '',
-      industry: '',
+      industry: 'technology',
       revenue: undefined,
-      companySize: '',
+      companySize: 'small',
       tier: 'STANDARD',
       tags: [],
     },
@@ -200,9 +242,9 @@ function CustomerCreationPageComponent() {
   }, [analytics]);
 
   // ✅ Handle form submission with React Hook Form
-  const onSubmit = async (data: CustomerEditData) => {
-    // Check email validation status
-    if (emailValidation.isValidating) {
+  const onSubmit = async (data: z.infer<typeof customerCreationSchema>) => {
+    // Check email validation status only if an email was provided
+    if (data.email && emailValidation.isValidating) {
       handleAsyncError(
         new StandardError({
           message: 'Please wait for email validation to complete',
@@ -216,7 +258,7 @@ function CustomerCreationPageComponent() {
       return;
     }
 
-    if (!emailValidation.isValid || emailValidation.exists) {
+    if (data.email && (!emailValidation.isValid || emailValidation.exists)) {
       handleAsyncError(
         new StandardError({
           message: emailValidation.error || 'Email validation failed',
@@ -245,15 +287,18 @@ function CustomerCreationPageComponent() {
         formData: { name: data.name, email: data.email },
       });
 
-      const response = await apiClient.post<ApiResponse<CustomerResponse>>('/api/customers', data);
+      // Accept both ApiResponse { success, data } and minimal { ok, data } shapes
+      const response: any = await apiClient.post('/api/customers', data);
+      const isSuccess = response?.success === true || response?.ok === true;
+      const payload = response?.data ?? response;
 
-      if (response.success) {
+      if (isSuccess && payload?.id) {
         logInfo('Customer creation: Success', {
           component: 'CustomerCreationPage',
           operation: 'customer_create_success',
           userStory: 'US-2.1',
           hypothesis: 'H4',
-          customerId: response.data!.id,
+          customerId: payload.id,
         });
 
         // ✅ ANALYTICS: Track successful creation
@@ -263,14 +308,27 @@ function CustomerCreationPageComponent() {
             userStory: 'US-2.1',
             hypothesis: 'H4',
             component: 'CustomerCreationPage',
-            customerId: response.data!.id,
-            customerName: response.data!.name,
+            customerId: payload.id,
+            customerName: payload.name,
           },
           'high'
         );
 
+        // ✅ SUCCESS MESSAGE: Show success toast
+        toast.success(`${payload.name} has been created successfully!`, {
+          description: 'Customer created and ready for use',
+          duration: 4000,
+        });
+
         // Navigate to the newly created customer
-        router.push(`/customers/${response.data!.id}`);
+        router.push(`/customers/${payload.id}`);
+      } else {
+        // Defensive: handle unexpected response shape
+        throw new StandardError({
+          message: 'Unexpected response from server while creating customer',
+          code: ErrorCodes.API.INVALID_RESPONSE,
+          metadata: { component: 'CustomerCreationPage', operation: 'customer_create' },
+        });
       }
     } catch (error) {
       logError('Customer creation: Failed', {
@@ -386,8 +444,6 @@ function CustomerCreationPageComponent() {
                           {...register('name')}
                           name="name"
                           label="Company Name"
-                          value={watch('name') || ''}
-                          onBlur={() => register('name').onBlur}
                           error={errors.name?.message}
                           touched={!!touchedFields.name}
                           required
@@ -396,16 +452,14 @@ function CustomerCreationPageComponent() {
                         />
 
                         <FormField
-                          {...register('email')}
+                          {...register('email', {
+                            onChange: e => {
+                              emailValidation.handleEmailChange(e.target.value);
+                            },
+                          })}
                           name="email"
                           label="Email Address"
                           type="email"
-                          value={watch('email') || ''}
-                          onChange={e => {
-                            register('email').onChange(e);
-                            emailValidation.handleEmailChange(e.target.value);
-                          }}
-                          onBlur={() => register('email').onBlur}
                           error={
                             errors.email?.message ||
                             emailValidation.error ||
@@ -422,8 +476,6 @@ function CustomerCreationPageComponent() {
                           name="phone"
                           label="Phone Number"
                           type="tel"
-                          value={watch('phone') || ''}
-                          onBlur={() => register('phone').onBlur}
                           error={errors.phone?.message}
                           touched={!!touchedFields.phone}
                           placeholder="+1 (555) 123-4567"
@@ -437,8 +489,6 @@ function CustomerCreationPageComponent() {
                           {...register('industry')}
                           name="industry"
                           label="Industry"
-                          value={watch('industry') || ''}
-                          onBlur={() => register('industry').onBlur}
                           error={errors.industry?.message}
                           touched={!!touchedFields.industry}
                           placeholder="Technology, Healthcare, Finance, etc."
@@ -449,8 +499,6 @@ function CustomerCreationPageComponent() {
                           {...register('address')}
                           name="address"
                           label="Address"
-                          value={watch('address') || ''}
-                          onBlur={() => register('address').onBlur}
                           error={errors.address?.message}
                           touched={!!touchedFields.address}
                           placeholder="Enter full address"
@@ -462,8 +510,6 @@ function CustomerCreationPageComponent() {
                           name="website"
                           label="Website"
                           type="url"
-                          value={watch('website') || ''}
-                          onBlur={() => register('website').onBlur}
                           error={errors.website?.message}
                           touched={!!touchedFields.website}
                           placeholder="https://example.com"
@@ -481,8 +527,6 @@ function CustomerCreationPageComponent() {
                         name="revenue"
                         label="Annual Revenue"
                         type="number"
-                        value={watch('revenue') || ''}
-                        onBlur={() => register('revenue').onBlur}
                         error={errors.revenue?.message}
                         touched={!!touchedFields.revenue}
                         placeholder="0"
@@ -493,8 +537,6 @@ function CustomerCreationPageComponent() {
                         {...register('companySize')}
                         name="companySize"
                         label="Company Size"
-                        value={watch('companySize') || ''}
-                        onBlur={() => register('companySize').onBlur}
                         error={errors.companySize?.message}
                         touched={!!touchedFields.companySize}
                         placeholder="Select company size"

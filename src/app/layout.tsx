@@ -9,6 +9,7 @@ import '@/styles/globals.css';
 import { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { QueryProvider } from '@/components/providers/QueryProvider';
+import { Toaster } from 'sonner';
 
 // ✅ CRITICAL: Font optimization for LCP improvement
 // Following Lesson #30: Performance Optimization - Font Loading
@@ -192,6 +193,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <QueryProvider>
           {children}
         </QueryProvider>
+        <Toaster position="top-right" richColors />
       </body>
     </html>
   );

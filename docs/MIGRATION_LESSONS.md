@@ -4,6 +4,117 @@
 
 ---
 
+## 🔧 **Zod Parsing Error Fix (Latest)**
+
+**Problem**: `o["sync"===s.mode?"parse":"parseAsync"] is not a function` when
+using custom validation schemas with zodResolver.
+
+**Root Cause**: Using custom validation objects instead of proper Zod schemas
+with zodResolver.
+
+**Solution**:
+
+```typescript
+// ❌ WRONG: Custom validation schema
+resolver: zodResolver(customValidationSchema as any)
+
+// ✅ CORRECT: Proper Zod schema
+const schema = z.object({...})
+resolver: zodResolver(schema)
+```
+
+**Apply to**: Any module using zodResolver with custom validation schemas.
+
+**Prevention**: Always use Zod schemas directly, never custom validation
+objects.
+
+---
+
+## 🔧 **Form Target Error Fix (Latest)**
+
+**Problem**: `TypeError: undefined is not an object (evaluating 'target.name')`
+when using FormField with React Hook Form.
+
+**Root Cause**: FormField was calling onChange(newValue) with a primitive, but
+React Hook Form's register expects the raw event (e) with e.target.name.
+FormField also forced controlled mode by setting value='' when undefined,
+fighting RHF's uncontrolled registration.
+
+**Solution**:
+
+```typescript
+// ✅ Event compatibility: Pass raw event for RHF uncontrolled usage
+const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  if (disabled) return;
+
+  // For uncontrolled/RHF usage (value undefined), pass raw event
+  if (value === undefined && onChange) {
+    onChange(e); // ✅ RHF can read e.target.name
+    return;
+  }
+
+  // For controlled usage, derive and pass new value
+  let newValue: any = e.target.value;
+  if (type === 'number') {
+    newValue = e.target.value ? parseFloat(e.target.value) : undefined;
+  }
+  if (onChange) {
+    onChange(newValue);
+  }
+};
+
+// ✅ Avoid forced controlled mode: Only set value when provided
+<input
+  value={value} // ✅ Only sets value when actually provided
+  onChange={handleChange}
+  // ... other props
+/>
+```
+
+**Component Usage**:
+
+```typescript
+// ✅ RHF Uncontrolled (Recommended)
+<FormField
+  {...register('name')}
+  // No value/onChange props - let RHF handle it
+/>
+
+// ✅ RHF with Custom onChange
+<FormField
+  {...register('email', {
+    onChange: (e) => emailValidation.handleEmailChange(e.target.value)
+  })}
+/>
+
+// ✅ Controlled (Legacy)
+<FormField
+  value={formValue}
+  onChange={(newValue) => setFormValue(newValue)}
+/>
+```
+
+**Apply to**: Any FormField component used with React Hook Form register.
+
+**Prevention**: Use uncontrolled mode with RHF register, pass raw events for
+custom handlers, avoid forced controlled mode.
+
+**Enhancement**: Added forwardRef for complete RHF compatibility - enables focus
+management, validation, and native element parity.
+
+**Database Enum Fix**: Updated form tier values to match Prisma CustomerTier
+enum (STANDARD, PREMIUM, ENTERPRISE, VIP) instead of incorrect lowercase values.
+
+**Success UX Enhancement**: Added toast success message and auto-redirect to
+customer detail page after creation, matching proposal creation UX patterns.
+Fixed missing Toaster provider setup in root layout.
+
+**Customer Profile Zod Fix**: Updated CustomerProfileClient to use proper
+CustomerUpdateSchema instead of legacy customerValidationSchema as any,
+eliminating Zod parsing errors in customer detail pages.
+
+---
+
 ## 🔧 **Hydration Mismatch Error Resolution**
 
 **Problem**: SSR/client className differences in responsive components.

@@ -6,8 +6,8 @@
 
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-// import prisma from '@/lib/db/prisma'; // Replaced with dynamic import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-imports
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,
@@ -18,6 +18,7 @@ import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import {
   buildCursorPaginationQuery,
   decidePaginationStrategy,
+  getPrismaSelect,
   parseFieldsParam,
   processCursorResults,
 } from '@/lib/utils/selectiveHydration';
@@ -76,6 +77,10 @@ const CommunicationPreferencesUpdateSchema = z.object({
   channels: z.record(z.any()).optional(),
   frequency: z.record(z.any()).optional(),
   categories: z.record(z.any()).optional(),
+});
+
+const UserUpdateQuerySchema = z.object({
+  fields: z.string().optional(), // Comma-separated list of fields to update
 });
 
 /**
@@ -142,10 +147,21 @@ export async function GET(request: NextRequest) {
     // 🚀 PERFORMANCE OPTIMIZATION: Start timing
     const queryStartTime = Date.now();
 
-    // Parse requested fields with selective hydration
+    // Parse requested fields with selective hydration and security context
+    const userRoles = session.user.roles || ['Business Development Manager']; // Array of user roles
+    const userPermissions = session.user.permissions || []; // Array of user permissions
+    const userRole = userRoles[0]; // Primary role for backward compatibility
+
     const { select: userSelect, optimizationMetrics } = parseFieldsParam(
       validatedQuery.fields || undefined,
-      'user'
+      'user',
+      {
+        userRole,
+        userRoles,
+        userPermissions,
+        userId: session.user.id,
+        // For list endpoints, we don't have a specific target user, so security will be more restrictive
+      }
     );
 
     let users: unknown[];
@@ -315,6 +331,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Parse query parameters for field-specific updates
+    const { searchParams } = new URL(request.url);
+    const queryParams = Object.fromEntries(searchParams);
+    const validatedQuery = UserUpdateQuerySchema.parse(queryParams);
+
     // Parse and validate request body
     const body = await request.json();
     const { userPreferences = {}, communicationPreferences = {}, ...basicUserData } = body;
@@ -323,14 +344,37 @@ export async function PUT(request: NextRequest) {
     const validatedCommPreferences =
       CommunicationPreferencesUpdateSchema.parse(communicationPreferences);
 
+    // Get user roles and permissions for field access control
+    const userRoles = session.user.roles || ['Business Development Manager'];
+    const userPermissions = session.user.permissions || [];
+    const userRole = userRoles[0]; // Primary role for backward compatibility
+
     // Use transaction to update multiple related tables
     const result = await prisma.$transaction(async prisma => {
       // Update basic user data if provided
       let updatedUser;
       if (Object.keys(basicUserData).length > 0) {
-        const allowedFields = ['name', 'department'];
+        // Get allowed fields for user updates from centralized configuration
+        // Use requested fields if specified, otherwise use default allowed fields
+        const requestedFields = validatedQuery.fields
+          ? validatedQuery.fields.split(',')
+          : undefined;
+        const allowedUpdateSelect = getPrismaSelect('user', requestedFields, {
+          userRole,
+          userRoles,
+          userPermissions,
+          userId: session.user.id,
+          targetUserId: session.user.id, // User updating their own profile
+        });
+
+        // Extract field names from the select object (exclude relations and only include boolean true values)
+        const allowedUpdateFields = Object.keys(allowedUpdateSelect).filter(
+          key => typeof allowedUpdateSelect[key] === 'boolean' && allowedUpdateSelect[key] === true
+        );
+
+        // Filter the incoming data based on allowed fields
         const filteredData = Object.fromEntries(
-          Object.entries(basicUserData).filter(([key]) => allowedFields.includes(key))
+          Object.entries(basicUserData).filter(([key]) => allowedUpdateFields.includes(key))
         );
 
         if (Object.keys(filteredData).length > 0) {

@@ -17,13 +17,12 @@ import { FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import { useCustomer } from '@/features/customers/hooks';
 import type { Customer } from '@/features/customers/schemas';
+import { CustomerUpdateSchema } from '@/features/customers/schemas';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logDebug, logError, logInfo } from '@/lib/logger';
-import type { CustomerEditData } from '@/lib/validation/customerValidation';
-import { customerValidationSchema } from '@/lib/validation/customerValidation';
 import {
   BuildingOfficeIcon,
   CalendarIcon,
@@ -43,6 +42,7 @@ import { useRouter } from 'next/navigation';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { z } from 'zod';
 
 // ✅ TYPES
 enum CustomerTier {
@@ -112,8 +112,8 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
     setValue,
     trigger,
     reset,
-  } = useForm<CustomerEditData>({
-    resolver: zodResolver(customerValidationSchema as any),
+  } = useForm<z.infer<typeof CustomerUpdateSchema>>({
+    resolver: zodResolver(CustomerUpdateSchema),
     mode: 'onBlur',
     defaultValues: {
       name: '',
@@ -121,7 +121,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       phone: '',
       website: '',
       address: '',
-      industry: '',
+      industry: undefined,
       revenue: undefined,
       companySize: '',
       tier: 'STANDARD',
@@ -187,7 +187,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         phone: customer.phone ?? '',
         website: customer.website ?? '',
         address: customer.address ?? '',
-        industry: customer.industry ?? '',
+        industry: customer.industry ?? undefined,
         revenue: customer.revenue ?? undefined,
         companySize: customer.companySize ?? '',
         tier: customer.tier ?? 'STANDARD',
@@ -199,7 +199,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
   // ✅ Initialize edit data when entering edit mode
   const handleEditToggle = useCallback(() => {
     if (!isEditing && customer) {
-      const initialData: CustomerEditData = {
+      const initialData: z.infer<typeof CustomerUpdateSchema> = {
         name: customer.name,
         industry: customer.industry ?? undefined,
         address: customer.address ?? undefined,
@@ -221,7 +221,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         phone: '',
         website: '',
         address: '',
-        industry: '',
+        industry: undefined,
         revenue: undefined,
         companySize: '',
         tier: 'STANDARD',
@@ -232,7 +232,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
 
   // ✅ REACT QUERY: Update customer mutation
   const { mutateAsync: saveCustomer, isPending: isSaving } = useMutation({
-    mutationFn: async (data: CustomerEditData): Promise<Customer> => {
+    mutationFn: async (data: z.infer<typeof CustomerUpdateSchema>): Promise<Customer> => {
       // Basic validation for required fields
       if (!data.name?.trim()) {
         throw new Error('Company name is required');
@@ -340,7 +340,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
   });
 
   // ✅ FORM SUBMISSION HANDLER
-  const onSubmit = async (data: CustomerEditData) => {
+  const onSubmit = async (data: z.infer<typeof CustomerUpdateSchema>) => {
     try {
       await saveCustomer(data);
       setIsEditing(false);
@@ -465,8 +465,6 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                     {...register('name')}
                     name="name"
                     label=""
-                    value={watch('name') || ''}
-                    onBlur={() => register('name').onBlur}
                     error={errors.name?.message}
                     touched={!!touchedFields.name}
                     required
@@ -481,8 +479,6 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                       {...register('industry')}
                       name="industry"
                       label=""
-                      value={watch('industry') || ''}
-                      onBlur={() => register('industry').onBlur}
                       error={errors.industry?.message}
                       touched={!!touchedFields.industry}
                       className="border-b bg-transparent focus:outline-none"
@@ -497,8 +493,6 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                       name="companySize"
                       label=""
                       type="text"
-                      value={watch('companySize') || ''}
-                      onBlur={() => register('companySize').onBlur}
                       error={errors.companySize?.message}
                       touched={!!touchedFields.companySize}
                       className="w-20"
@@ -516,8 +510,6 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                       name="revenue"
                       label=""
                       type="number"
-                      value={watch('revenue') || ''}
-                      onBlur={() => register('revenue').onBlur}
                       error={errors.revenue?.message}
                       touched={!!touchedFields.revenue}
                       className="w-32"
@@ -627,8 +619,6 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                         {...register('name')}
                         name="name"
                         label=""
-                        value={watch('name') || ''}
-                        onBlur={() => register('name').onBlur}
                         error={errors.name?.message}
                         touched={!!touchedFields.name}
                         required
@@ -647,8 +637,6 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                         {...register('address')}
                         name="address"
                         label=""
-                        value={watch('address') || ''}
-                        onBlur={() => register('address').onBlur}
                         error={errors.address?.message}
                         touched={!!touchedFields.address}
                         className="flex-1"
@@ -667,8 +655,6 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                         name="phone"
                         label=""
                         type="tel"
-                        value={watch('phone') || ''}
-                        onBlur={() => register('phone').onBlur}
                         error={errors.phone?.message}
                         touched={!!touchedFields.phone}
                         className="flex-1"
@@ -687,8 +673,6 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                         name="email"
                         label=""
                         type="email"
-                        value={watch('email') || ''}
-                        onBlur={() => register('email').onBlur}
                         error={errors.email?.message}
                         touched={!!touchedFields.email}
                         required
@@ -708,8 +692,6 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                         name="website"
                         label=""
                         type="url"
-                        value={watch('website') || ''}
-                        onBlur={() => register('website').onBlur}
                         error={errors.website?.message}
                         touched={!!touchedFields.website}
                         className="flex-1"

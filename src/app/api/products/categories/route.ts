@@ -4,12 +4,12 @@ import { recordError, recordLatency } from '@/lib/observability/metricsStore';
  * PosalPro MVP2 - Product Categories API Routes
  * Enhanced category management with analytics tracking
  * Component Traceability: US-3.1, US-3.2, H3
- *import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-/
+ */
 
+import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 

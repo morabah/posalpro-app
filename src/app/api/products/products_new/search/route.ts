@@ -7,7 +7,7 @@ BAC, and analytics
 
 import { ProductQuickSearchApiSchema } from '@/features/products/schemas';
 import { createRoute } from '@/lib/api/route';
-// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
 
 // ====================
