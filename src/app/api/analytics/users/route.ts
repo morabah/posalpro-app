@@ -242,7 +242,7 @@ export async function GET(request: NextRequest) {
     };
 
     // Track analytics access for hypothesis validation
-    await trackAnalyticsAccessEvent(session.user.id, 'user_analytics', analytics.summary);
+    await trackAnalyticsAccessEvent(prisma, session.user.id, 'user_analytics', analytics.summary);
 
     return NextResponse.json({
       success: true,
@@ -301,6 +301,7 @@ export async function GET(request: NextRequest) {
  * Track analytics access event for hypothesis validation
  */
 async function trackAnalyticsAccessEvent(
+  prisma: any,
   userId: string,
   analyticsType: string,
   summary: AnalyticsSummary
