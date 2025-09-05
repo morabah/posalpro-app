@@ -90,6 +90,9 @@ export async function GET(request: NextRequest) {
 
     // Dynamic import of Prisma to avoid build-time initialization
     const { default: prisma } = await import('@/lib/db/prisma');
+    if (!prisma) {
+      throw new Error('Failed to load Prisma client');
+    }
 
     // Parse query parameters
     const { searchParams } = new URL(request.url);
