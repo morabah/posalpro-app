@@ -5,9 +5,10 @@
  * Hypothesis: H7 (Deadline Management - 40% improvement)
  */
 
-import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
+// Dynamic imports to avoid build-time database connections
+// import { authOptions } from '@/lib/auth';
+// import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+// import prisma from '@/lib/db/prisma';
 import { createApiErrorResponse, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
@@ -49,10 +50,15 @@ const ApprovalQueueQuerySchema = z.object({
  */
 export async function GET(request: NextRequest) {
   // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
-  const isBuildTime = process.env.NETLIFY_BUILD_TIME === 'true' ||
-                     (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL);
+  // Build-time or no-DB fallback to allow static build to complete
+  const IS_BUILD_OR_NO_DB =
+    process.env.NEXT_PHASE === 'phase-production-build' ||
+    process.env.NETLIFY_BUILD_TIME === 'true' ||
+    process.env.BUILD_MODE === 'static' ||
+    !process.env.DATABASE_URL;
 
-  if (isBuildTime) {
+  // Always return early if no database URL (covers most build scenarios)
+  if (!process.env.DATABASE_URL) {
     return NextResponse.json({
       data: {
         items: [],
@@ -64,6 +70,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Dynamic imports to avoid build-time database connections
+    const { validateApiPermission } = await import('@/lib/auth/apiAuthorization');
+    const { authOptions } = await import('@/lib/auth');
+
     await validateApiPermission(request, { resource: 'workflows', action: 'read' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -73,6 +83,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const queryParams = Object.fromEntries(searchParams);
     const validatedQuery = ApprovalQueueQuerySchema.parse(queryParams);
+
+    // Dynamic import of Prisma to avoid build-time initialization
+    const { default: prisma } = await import('@/lib/db/prisma');
 
     // Build complex query to get approval queue items
     const where: any = {
