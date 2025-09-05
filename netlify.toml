@@ -49,6 +49,7 @@
   BUILD_MODE = "static"
   REDIS_URL = "redis://disabled:6379"
   USE_REDIS = "false"
+  NEXT_PUBLIC_APP_URL = "https://posalpro.netlify.app"
 
 # Explicit production-context overrides (non-secrets only)
 [context.production.environment]
