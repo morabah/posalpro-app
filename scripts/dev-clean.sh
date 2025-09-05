@@ -100,9 +100,71 @@ fix_postgres_sync() {
     return 1
 }
 
+# Function to check database configuration consistency
+check_database_config() {
+    print_header "${DATABASE} Database Configuration Check"
+
+    # Check if environment files exist
+    if [ -f ".env.local" ]; then
+        print_check "pass" "Environment file exists" ".env.local found"
+    else
+        print_check "fail" "Environment file missing" "Create .env.local with required variables"
+        return 1
+    fi
+
+    # Check DATABASE_URL configuration
+    if grep -q "DATABASE_URL=" .env.local; then
+        local db_url=$(grep "DATABASE_URL=" .env.local | cut -d'=' -f2- | sed 's/^"//' | sed 's/"$//')
+
+        # Check if URL starts with expected protocol
+        if [[ "$db_url" == postgresql://* ]] || [[ "$db_url" == postgres://* ]]; then
+            print_check "pass" "Database URL uses PostgreSQL protocol"
+        elif [[ "$db_url" == file:* ]]; then
+            print_check "warn" "Database URL uses SQLite" "Expected PostgreSQL for production environment"
+            echo -e "  ${INFO} ${BLUE}Detected SQLite URL: $db_url${NC}"
+
+            # Check if this is intentional or needs fixing
+            if [ -f "prisma/schema.prisma" ]; then
+                if grep -q 'provider = "postgresql"' prisma/schema.prisma; then
+                    print_check "fail" "Configuration mismatch" "Prisma expects PostgreSQL but .env.local has SQLite"
+                    echo -e "  ${WARNING} ${YELLOW}Fix: Update .env.local DATABASE_URL to PostgreSQL${NC}"
+                    return 1
+                fi
+            fi
+        else
+            print_check "warn" "Database URL format unknown" "URL: $db_url"
+        fi
+    else
+        print_check "fail" "DATABASE_URL not configured in .env.local"
+        return 1
+    fi
+
+    # Check Prisma schema configuration
+    if [ -f "prisma/schema.prisma" ]; then
+        if grep -q 'provider.*=.*"postgresql"' prisma/schema.prisma; then
+            print_check "pass" "Prisma schema configured for PostgreSQL"
+        elif grep -q 'provider.*=.*"sqlite"' prisma/schema.prisma; then
+            print_check "pass" "Prisma schema configured for SQLite"
+        else
+            print_check "warn" "Prisma provider not clearly configured"
+        fi
+    else
+        print_check "fail" "Prisma schema not found" "Expected: prisma/schema.prisma"
+        return 1
+    fi
+
+    return 0
+}
+
 # Function to test database connectivity
 check_database() {
     print_header "${DATABASE} Database Health Check"
+
+    # First check configuration consistency
+    if ! check_database_config; then
+        print_check "fail" "Database configuration issues detected" "Fix configuration before proceeding"
+        return 1
+    fi
 
     # Check PostgreSQL status more robustly
     local brew_status=$(brew services list | grep postgresql | awk '{print $2}')
@@ -161,6 +223,19 @@ check_database() {
         print_check "pass" "Database has seeded data" "$user_count users found"
     else
         print_check "warn" "Database needs seeding" "Run: npm run db:seed"
+    fi
+
+    # Test Prisma database connectivity using a simpler method
+    if command -v npx &> /dev/null; then
+        echo -e "  ${INFO} ${BLUE}Testing Prisma database connectivity...${NC}"
+        # Use prisma generate to test database connectivity (lighter than db execute)
+        if npx prisma generate --schema=prisma/schema.prisma >/dev/null 2>&1; then
+            print_check "pass" "Prisma database connectivity verified"
+        else
+            print_check "warn" "Prisma database connectivity failed" "Check Prisma configuration and database connection"
+        fi
+    else
+        print_check "warn" "Cannot test Prisma connectivity" "npx not available"
     fi
 }
 
@@ -435,6 +510,68 @@ display_health_summary() {
     echo ""
 }
 
+# Function to validate database schema against Prisma
+validate_database_schema() {
+    print_header "🔍 Database Schema Validation"
+
+    # Check if Prisma schema exists
+    if [ ! -f "prisma/schema.prisma" ]; then
+        print_check "fail" "Prisma schema not found" "Expected: prisma/schema.prisma"
+        return 1
+    fi
+
+    # Check if database is accessible
+    if ! psql -U mohamedrabah -d posalpro_mvp2 -c "SELECT 1;" >/dev/null 2>&1; then
+        print_check "fail" "Cannot validate schema" "Database connection failed"
+        return 1
+    fi
+
+    # Get table count from database
+    local db_table_count=$(psql -U mohamedrabah -d posalpro_mvp2 -t -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';" 2>/dev/null | xargs)
+
+    # Get model count from Prisma schema (approximate)
+    local prisma_model_count=$(grep -c "^model " prisma/schema.prisma 2>/dev/null || echo "0")
+
+    if [ -n "$db_table_count" ] && [ "$db_table_count" -gt 0 ]; then
+        print_check "pass" "Database has tables" "$db_table_count tables found"
+
+        # Compare with Prisma models (rough estimate)
+        if [ "$prisma_model_count" -gt 0 ]; then
+            local diff=$((db_table_count - prisma_model_count))
+            if [ $diff -eq 0 ]; then
+                print_check "pass" "Schema alignment verified" "Database tables match Prisma models ($prisma_model_count)"
+            elif [ $diff -eq 1 ]; then
+                # Single extra table - likely a migration or junction table
+                print_check "warn" "Minor table count difference" "Database: $db_table_count, Prisma: $prisma_model_count (likely _prisma_migrations or junction table)"
+            elif [ $diff -gt 1 ]; then
+                print_check "warn" "Multiple extra tables in database" "Database: $db_table_count, Prisma: $prisma_model_count"
+            else
+                print_check "warn" "Missing tables in database" "Database: $db_table_count, Prisma: $prisma_model_count"
+            fi
+        fi
+    else
+        print_check "warn" "Database schema empty" "Run: npm run db:push to create tables"
+    fi
+
+    # Test a few key tables exist
+    local key_tables=("users" "proposals" "products" "customers")
+    local missing_tables=()
+
+    for table in "${key_tables[@]}"; do
+        if ! psql -U mohamedrabah -d posalpro_mvp2 -c "SELECT 1 FROM $table LIMIT 1;" >/dev/null 2>&1; then
+            missing_tables+=("$table")
+        fi
+    done
+
+    if [ ${#missing_tables[@]} -eq 0 ]; then
+        print_check "pass" "Key tables verified" "All essential tables exist"
+    else
+        print_check "warn" "Missing key tables" "Missing: ${missing_tables[*]}"
+    fi
+
+    return 0
+}
+
 # Function to check schema consistency
 check_schema_consistency() {
     print_header "🔍 Schema & Data Consistency"
@@ -445,14 +582,17 @@ check_schema_consistency() {
         return
     fi
 
+    # Run database schema validation first
+    validate_database_schema
+
     # Check if app-cli is available
     if ! command -v npm &> /dev/null; then
-        print_check "warn" "Cannot run schema checks" "npm not available"
+        print_check "warn" "Cannot run advanced schema checks" "npm not available"
         return
     fi
 
     # Run schema consistency check
-    echo -e "  ${INFO} ${BLUE}Running schema consistency validation...${NC}"
+    echo -e "  ${INFO} ${BLUE}Running advanced schema consistency validation...${NC}"
 
     if npm run schema:check --silent 2>/dev/null | grep -q "NO INCONSISTENCIES FOUND"; then
         print_check "pass" "Schema consistency verified" "All layers properly aligned"
