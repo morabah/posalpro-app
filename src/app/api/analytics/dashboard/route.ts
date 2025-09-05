@@ -14,6 +14,7 @@ import { assertApiKey } from '@/server/api/apiKeyGuard';
 import { getServerSession, Session } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { shouldSkipDatabase, getBuildTimeResponse } from '@/lib/buildGuard';
 
 // Ensure this route is not statically evaluated during build
 export const dynamic = 'force-dynamic';
@@ -67,29 +68,9 @@ export async function GET(request: NextRequest) {
   let session: Session | null = null;
 
   // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
-  // Build-time or no-DB fallback to allow static build to complete
-  const IS_BUILD_OR_NO_DB =
-    process.env.NEXT_PHASE === 'phase-production-build' ||
-    process.env.NETLIFY_BUILD_TIME === 'true' ||
-    process.env.BUILD_MODE === 'static' ||
-    !process.env.DATABASE_URL;
-
-  if (IS_BUILD_OR_NO_DB) {
-    logWarn('Analytics dashboard accessed during build time - returning empty data');
-    const now = new Date().toISOString();
-    return NextResponse.json({
-      success: true,
-      data: {
-        hypothesisMetrics: [],
-        userStoryMetrics: [],
-        performanceBaselines: [],
-        componentTraceability: [],
-        healthScore: 0,
-        lastUpdated: now,
-        recentActivity: [],
-      },
-      message: 'Build-time placeholder analytics (no DB)',
-    });
+  if (shouldSkipDatabase()) {
+    logWarn('Analytics dashboard: Build-time detected - returning placeholder data');
+    return NextResponse.json(getBuildTimeResponse('Build-time placeholder analytics (no DB)'));
   }
 
   try {
