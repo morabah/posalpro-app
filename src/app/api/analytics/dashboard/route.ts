@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
   const IS_BUILD_OR_NO_DB =
     process.env.NEXT_PHASE === 'phase-production-build' ||
     process.env.NETLIFY_BUILD_TIME === 'true' ||
+    process.env.BUILD_MODE === 'static' ||
     !process.env.DATABASE_URL;
 
   if (IS_BUILD_OR_NO_DB) {

@@ -45,6 +45,8 @@
   SKIP_PRISMA_GENERATE = "true"
   # Build-time indicator for API routes
   NETLIFY_BUILD_TIME = "true"
+  # Force build-time mode to prevent database connections
+  BUILD_MODE = "static"
 
 # Explicit production-context overrides (non-secrets only)
 [context.production.environment]
