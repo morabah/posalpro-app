@@ -10,7 +10,10 @@ const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {
   // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
-  if (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL) {
+  const isBuildTime = process.env.NETLIFY_BUILD_TIME === 'true' ||
+                     (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL);
+
+  if (isBuildTime) {
     logWarn('Analytics insights accessed without database configuration - returning empty data');
     return NextResponse.json({
       data: {

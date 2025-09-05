@@ -76,8 +76,10 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
   // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
-  // When Next.js collects page data during build, environment variables might not be available
-  if (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL) {
+  const isBuildTime = process.env.NETLIFY_BUILD_TIME === 'true' ||
+                     (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL);
+
+  if (isBuildTime) {
     logWarn('Analytics users accessed without database configuration - returning empty data');
     return NextResponse.json({
       data: {
