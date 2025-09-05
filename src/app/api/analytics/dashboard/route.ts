@@ -10,6 +10,7 @@ import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { assertApiKey } from '@/server/api/apiKeyGuard';
+import { logWarn } from '@/lib/logger';
 import { getServerSession, Session } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
