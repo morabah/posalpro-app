@@ -4,8 +4,9 @@
  * Component Traceability: US-5.1, US-5.2, H5, H8
  */
 
-import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/db/prisma';
+// Dynamic imports to avoid build-time database connections
+// import { authOptions } from '@/lib/auth';
+// import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,
@@ -76,14 +77,16 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
   // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
-  // Build-time or no-DB fallback to allow static build to complete
-  const IS_BUILD_OR_NO_DB =
+  // Use multiple detection methods for reliable build-time detection
+  const IS_BUILD_TIME =
     process.env.NEXT_PHASE === 'phase-production-build' ||
     process.env.NETLIFY_BUILD_TIME === 'true' ||
     process.env.BUILD_MODE === 'static' ||
-    !process.env.DATABASE_URL;
+    !process.env.DATABASE_URL ||
+    process.env.NODE_ENV === 'production' && !process.env.NETLIFY;
 
-  if (IS_BUILD_OR_NO_DB) {
+  // Always return early if no database URL (covers most build scenarios)
+  if (!process.env.DATABASE_URL) {
     logWarn('Analytics users accessed without database configuration - returning empty data');
     return NextResponse.json({
       data: {
@@ -96,6 +99,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Dynamic imports to avoid build-time database connections
+    const { validateApiPermission } = await import('@/lib/auth/apiAuthorization');
+    const { authOptions } = await import('@/lib/auth');
+
     await validateApiPermission(request, { resource: 'analytics', action: 'read' });
     // Authentication check
     const session = await getServerSession(authOptions);
@@ -120,6 +127,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const queryParams = Object.fromEntries(searchParams);
     const validatedQuery = UserAnalyticsSchema.parse(queryParams);
+
+    // Dynamic import of Prisma to avoid build-time initialization
+    const { default: prisma } = await import('@/lib/db/prisma');
 
     // Build date filters with proper typing
     const dateFilters: Prisma.DateTimeFilter = {};
