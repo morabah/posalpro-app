@@ -5,7 +5,8 @@
  */
 
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
 import { logInfo as structuredLogInfo } from '@/lib/log';
 import { logError, logInfo } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
