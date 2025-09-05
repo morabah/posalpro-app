@@ -4,8 +4,9 @@
  * Hypothesis: H4 (Cross-Department Coordination)
  */
 
-import { proposalKeys } from '@/features/proposals';
+import { proposalKeys, type ProposalCreateData } from '@/features/proposals';
 import { logDebug, logError, logInfo } from '@/lib/logger';
+import type { ProposalUpdate } from '@/services/proposalService';
 import { proposalService } from '@/services/proposalService';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -70,7 +71,7 @@ export function useCreateProposal() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: ProposalCreateData) => {
       logDebug('Creating proposal', {
         component: 'useCreateProposal',
         operation: 'createProposal',
@@ -126,7 +127,7 @@ export function useUpdateProposal() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+    mutationFn: async ({ id, data }: { id: string; data: ProposalUpdate }) => {
       logDebug('Updating proposal', {
         component: 'useUpdateProposal',
         operation: 'updateProposal',

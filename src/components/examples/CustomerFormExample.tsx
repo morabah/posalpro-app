@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { FormActions, FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import { useFormValidation } from '@/hooks/useFormValidation';
+import { logDebug } from '@/lib/logger';
 import { customerValidationSchema } from '@/lib/validation/customerValidation';
 import {
   BuildingOfficeIcon,
@@ -44,12 +45,12 @@ export function CustomerFormExample() {
     const errors = validation.validateAll();
 
     if (Object.keys(errors).length > 0) {
-      console.log('Validation errors:', errors);
+      logDebug('Validation errors', { errors });
       return;
     }
 
     // Form is valid, proceed with submission
-    console.log('Form data:', validation.formData);
+    logDebug('Form data', { formData: validation.formData });
     // Here you would typically call your API
   };
 

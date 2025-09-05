@@ -46,19 +46,23 @@ export function HttpClientExample() {
 
       // Use the centralized HTTP client directly
       const response = await get('/api/health');
-      console.log('Health check response:', response);
+      logDebug('Health check response', { response });
 
       // Example POST request
       const postResponse = await post('/api/example', {
         message: 'Hello from HTTP client',
         timestamp: new Date().toISOString(),
       });
-      console.log('POST response:', postResponse);
+      logDebug('POST response', { postResponse });
     } catch (error) {
-      logError('Direct API call failed', error instanceof Error ? error : new Error(String(error)), {
-        component: 'HttpClientExample',
-        operation: 'directApiCall',
-      });
+      logError(
+        'Direct API call failed',
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          component: 'HttpClientExample',
+          operation: 'directApiCall',
+        }
+      );
     }
   };
 
@@ -79,11 +83,15 @@ export function HttpClientExample() {
 
       setNewProductName('');
     } catch (error) {
-      logError('Failed to create product', error instanceof Error ? error : new Error(String(error)), {
-        component: 'HttpClientExample',
-        operation: 'createProduct',
-        productName: newProductName,
-      });
+      logError(
+        'Failed to create product',
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          component: 'HttpClientExample',
+          operation: 'createProduct',
+          productName: newProductName,
+        }
+      );
     }
   };
 
@@ -91,11 +99,15 @@ export function HttpClientExample() {
     try {
       await deleteProduct.mutateAsync(id);
     } catch (error) {
-      logError('Failed to delete product', error instanceof Error ? error : new Error(String(error)), {
-        component: 'HttpClientExample',
-        operation: 'deleteProduct',
-        productId: id,
-      });
+      logError(
+        'Failed to delete product',
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          component: 'HttpClientExample',
+          operation: 'deleteProduct',
+          productId: id,
+        }
+      );
     }
   };
 

@@ -509,7 +509,7 @@ export function ProposalWizard({
         const stepData = useProposalStore.getState().stepData;
 
         // ✅ ADDED: Debug logging to track raw step data from store
-        console.log('[WIZARD DEBUG] Raw step data from store:', {
+        logDebug('Raw step data from store', {
           component: 'ProposalWizard',
           operation: 'handleSubmit_raw_store_data',
           stepDataKeys: Object.keys(stepData),

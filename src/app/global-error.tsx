@@ -6,8 +6,8 @@
 
 'use client';
 
+import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { logError } from '@/lib/logger';
-import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 
 /**
  * Global Error Boundary for Next.js App Router
@@ -23,16 +23,21 @@ export default function GlobalError({
   // Log the error using structured logging
   try {
     const errorHandlingService = ErrorHandlingService.getInstance();
-    errorHandlingService.processError(error, 'Global error boundary triggered', ErrorCodes.SYSTEM.UNKNOWN, {
-      component: 'GlobalErrorBoundary',
-      operation: 'global_error',
-      digest: error.digest,
-      userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
-      url: typeof window !== 'undefined' ? window.location.href : 'unknown',
-      errorMessage: error.message,
-      errorStack: error.stack,
-      errorName: error.name,
-    });
+    errorHandlingService.processError(
+      error,
+      'Global error boundary triggered',
+      ErrorCodes.SYSTEM.UNKNOWN,
+      {
+        component: 'GlobalErrorBoundary',
+        operation: 'global_error',
+        digest: error.digest,
+        userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
+        url: typeof window !== 'undefined' ? window.location.href : 'unknown',
+        errorMessage: error.message,
+        errorStack: error.stack,
+        errorName: error.name,
+      }
+    );
 
     logError('Global error boundary triggered', error, {
       component: 'GlobalErrorBoundary',
@@ -44,7 +49,7 @@ export default function GlobalError({
     });
   } catch (loggingError) {
     // Fallback logging if structured logging fails
-    console.error('Failed to log global error:', loggingError);
+    logError('Failed to log global error', loggingError);
   }
   return (
     <html lang="en">
@@ -168,11 +173,7 @@ export default function GlobalError({
         <div className="error-container">
           {/* Error Icon */}
           <div className="error-icon">
-            <svg
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -203,29 +204,19 @@ export default function GlobalError({
 
           {/* Action Buttons */}
           <div className="button-group">
-            <button
-              onClick={reset}
-              className="btn-primary"
-            >
+            <button onClick={reset} className="btn-primary">
               Try Again
             </button>
-            <button
-              onClick={() => window.location.href = '/dashboard'}
-              className="btn-secondary"
-            >
+            <button onClick={() => (window.location.href = '/dashboard')} className="btn-secondary">
               Go to Dashboard
             </button>
           </div>
 
           {/* Help Text */}
           <div className="help-text">
-            <p>
-              If the problem persists, please refresh the page or contact support.
-            </p>
+            <p>If the problem persists, please refresh the page or contact support.</p>
           </div>
         </div>
-
-
       </body>
     </html>
   );

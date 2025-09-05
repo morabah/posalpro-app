@@ -13,6 +13,7 @@
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug } from '@/lib/logger';
 import { adminService } from '@/services/adminService';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminQueryKeys, qk } from '../keys';
@@ -27,7 +28,7 @@ export function useAdminUsers(params: UsersQuery) {
   return useQuery({
     queryKey: qk.admin.users.list(params),
     queryFn: async (): Promise<UsersListResponse> => {
-      console.log('🔍 useAdminUsers - queryFn called with params:', params);
+      logDebug('useAdminUsers queryFn called', { params });
 
       analytics(
         'admin_users_fetch_started',

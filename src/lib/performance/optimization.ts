@@ -125,109 +125,6 @@ export class PerformanceMonitor {
   }
 }
 
-// Caching utilities
-export class CacheManager {
-  private cache: Map<string, { data: any; timestamp: number; ttl: number }> = new Map();
-  private maxSize: number;
-
-  constructor(maxSize: number = 100) {
-    this.maxSize = maxSize;
-  }
-
-  set(key: string, data: any, ttl: number = 300000): void {
-    // Default 5 minutes
-    // Implement LRU eviction
-    if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey) {
-        this.cache.delete(oldestKey);
-      }
-    }
-
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-      ttl,
-    });
-  }
-
-  get(key: string): any | null {
-    const item = this.cache.get(key);
-
-    if (!item) {
-      return null;
-    }
-
-    // Check if expired
-    if (Date.now() - item.timestamp > item.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    // Move to end for LRU
-    this.cache.delete(key);
-    this.cache.set(key, item);
-
-    return item.data;
-  }
-
-  clear(): void {
-    this.cache.clear();
-  }
-
-  size(): number {
-    return this.cache.size;
-  }
-
-  // Cache statistics
-  getStats(): { size: number; hitRate: number; missRate: number } {
-    // This would be implemented with proper hit/miss tracking in production
-    return {
-      size: this.cache.size,
-      hitRate: 0.85, // Mock data
-      missRate: 0.15, // Mock data
-    };
-  }
-}
-
-// API response caching hook
-export function useApiCache(key: string, fetcher: () => Promise<any>, ttl: number = 300000) {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  const cacheManager = useMemo(() => new CacheManager(), []);
-
-  const fetchData = useCallback(async () => {
-    // Check cache first
-    const cachedData = cacheManager.get(key);
-    if (cachedData) {
-      setData(cachedData);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = await fetcher();
-      cacheManager.set(key, result, ttl);
-      setData(result);
-    } catch (err) {
-      const normalized = err instanceof Error ? err : new Error(String(err));
-      setError(normalized);
-    } finally {
-      setLoading(false);
-    }
-  }, [key, fetcher, ttl, cacheManager]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  return { data, loading, error, refetch: fetchData };
-}
-
 // Bundle optimization utilities
 export class BundleOptimizer {
   static measureBundleSize(): Promise<number> {
@@ -476,7 +373,6 @@ export class PerformanceReporter {
 
 export default {
   PerformanceMonitor,
-  CacheManager,
   BundleOptimizer,
   MemoryMonitor,
   PerformanceReporter,

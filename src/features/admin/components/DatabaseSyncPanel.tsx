@@ -11,13 +11,17 @@
 
 'use client';
 
-console.log('[DEBUG] DatabaseSyncPanel module loading');
+logDebug('DatabaseSyncPanel module loading');
 
 import { useAuth } from '@/components/providers/AuthProvider';
 import { Button } from '@/components/ui/forms/Button';
-import { useAdminDatabaseStatus, useAdminDatabaseSync, useAdminDatabaseConnectivity } from '@/features/admin/hooks';
+import {
+  useAdminDatabaseConnectivity,
+  useAdminDatabaseStatus,
+  useAdminDatabaseSync,
+} from '@/features/admin/hooks';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
+import { ErrorHandlingService } from '@/lib/errors';
 import { logDebug } from '@/lib/logger';
 import {
   ArrowPathIcon,
@@ -92,25 +96,34 @@ export default function DatabaseSyncPanel({
   onSyncComplete,
   onConflictDetected,
 }: DatabaseSyncPanelProps) {
-  console.log('[DEBUG] DatabaseSyncPanel component rendering');
+  logDebug('DatabaseSyncPanel component rendering');
 
   const { user, isAuthenticated, isLoading } = useAuth();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
-  console.log('[DEBUG] DatabaseSyncPanel auth state:', {
+  logDebug('DatabaseSyncPanel auth state', {
     isAuthenticated,
     isLoading,
     userId: user?.id,
   });
 
   // Feature-based hooks
-  console.log('[DEBUG] DatabaseSyncPanel initializing hooks');
+  logDebug('DatabaseSyncPanel initializing hooks');
 
-  const { data: dbStatus, isLoading: dbStatusLoading, error: dbStatusError, refetch: refetchDbStatus } = useAdminDatabaseStatus();
+  const {
+    data: dbStatus,
+    isLoading: dbStatusLoading,
+    error: dbStatusError,
+    refetch: refetchDbStatus,
+  } = useAdminDatabaseStatus();
   const { sync: syncDatabase, isSyncing, error: syncError } = useAdminDatabaseSync();
-  const { data: connectivity, isLoading: connectivityLoading, error: connectivityError } = useAdminDatabaseConnectivity();
+  const {
+    data: connectivity,
+    isLoading: connectivityLoading,
+    error: connectivityError,
+  } = useAdminDatabaseConnectivity();
 
-  console.log('[DEBUG] DatabaseSyncPanel hooks initialized:', {
+  logDebug('DatabaseSyncPanel hooks initialized', {
     dbStatusLoading,
     dbStatusError: !!dbStatusError,
     syncError: !!syncError,
@@ -187,9 +200,7 @@ export default function DatabaseSyncPanel({
         const result = await syncDatabase();
 
         if (result) {
-          showToast(
-            `Synchronization completed successfully! ${result.itemsSynced} items synced.`
-          );
+          showToast(`Synchronization completed successfully! ${result.itemsSynced} items synced.`);
 
           // Add to sync records
           const successRecord: SyncRecord = {
@@ -241,13 +252,7 @@ export default function DatabaseSyncPanel({
         showToast(`Sync failed: ${errorMessage}`, 'error');
       }
     },
-    [
-      syncDatabase,
-      onSyncComplete,
-      refetchDbStatus,
-      analytics,
-      errorHandlingService,
-    ]
+    [syncDatabase, onSyncComplete, refetchDbStatus, analytics, errorHandlingService]
   );
 
   // Status indicator component

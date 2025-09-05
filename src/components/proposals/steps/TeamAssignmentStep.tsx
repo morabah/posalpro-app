@@ -169,7 +169,8 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
     });
 
     const reps = usersData.filter((user: User) => {
-      console.log(`[DEBUG] Checking user ${user.name || user.email} for SME role:`, {
+      logDebug('Checking user for SME role', {
+        userName: user.name || user.email,
         roles: user.role ? [user.role] : [],
         role: user.role,
       });
@@ -182,21 +183,21 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       );
     });
 
-    console.log(
-      '[DEBUG] Sales reps found:',
-      reps.length,
-      reps.map(u => u.name)
-    );
+    logDebug('Sales reps found', {
+      count: reps.length,
+      names: reps.map(u => u.name),
+    });
     return reps;
   }, [usersData]);
 
   const executives = useMemo<User[]>(() => {
     if (!usersData) return [];
-    console.log('[DEBUG] UserType.EXECUTIVE:', UserType.EXECUTIVE);
-    console.log('[DEBUG] Filtering for executives from', usersData.length, 'users');
+    logDebug('UserType.EXECUTIVE', { value: UserType.EXECUTIVE });
+    logDebug('Filtering for executives', { userCount: usersData.length });
 
     const execs = usersData.filter((user: User) => {
-      console.log(`[DEBUG] Checking user ${user.name || user.email} for Executive role:`, {
+      logDebug('Checking user for Executive role', {
+        userName: user.name || user.email,
         roles: user.role ? [user.role] : [],
         role: user.role,
       });
@@ -208,11 +209,10 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       );
     });
 
-    console.log(
-      '[DEBUG] Executives found:',
-      execs.length,
-      execs.map(u => u.name)
-    );
+    logDebug('Executives found', {
+      count: execs.length,
+      names: execs.map(u => u.name),
+    });
     return execs;
   }, [usersData]);
 
