@@ -642,7 +642,7 @@ const environmentManager = new EnvironmentManager();
 // ✅ CRITICAL FIX: Lazy loading for exported functions
 export const getConfig = (): AppConfig => {
   // Load configuration if not already loaded
-  if (!environmentManager.config && process.env.DATABASE_URL) {
+  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
     environmentManager.loadConfiguration();
   }
   return environmentManager.getConfig();
@@ -650,7 +650,7 @@ export const getConfig = (): AppConfig => {
 
 export const getValidationResult = (): ValidationResult => {
   // Load configuration if not already loaded
-  if (!environmentManager.validationResult && process.env.DATABASE_URL) {
+  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
     environmentManager.loadConfiguration();
   }
   return environmentManager.getValidationResult();
@@ -661,7 +661,7 @@ export const getCurrentEnvironment = (): Environment => environmentManager.getCu
 
 export const getDatabaseConfig = () => {
   // Load configuration if not already loaded
-  if (!environmentManager.config && process.env.DATABASE_URL) {
+  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
     environmentManager.loadConfiguration();
   }
   return environmentManager.getDatabaseConfig();
@@ -669,7 +669,7 @@ export const getDatabaseConfig = () => {
 
 export const getApiConfig = () => {
   // Load configuration if not already loaded
-  if (!environmentManager.config && process.env.DATABASE_URL) {
+  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
     environmentManager.loadConfiguration();
   }
   return environmentManager.getApiConfig();
@@ -677,7 +677,7 @@ export const getApiConfig = () => {
 
 export const getAuthConfig = () => {
   // Load configuration if not already loaded
-  if (!environmentManager.config && process.env.DATABASE_URL) {
+  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
     environmentManager.loadConfiguration();
   }
   return environmentManager.getAuthConfig();
@@ -685,7 +685,7 @@ export const getAuthConfig = () => {
 
 export const getSecurityConfig = () => {
   // Load configuration if not already loaded
-  if (!environmentManager.config && process.env.DATABASE_URL) {
+  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
     environmentManager.loadConfiguration();
   }
   return environmentManager.getSecurityConfig();
@@ -693,7 +693,7 @@ export const getSecurityConfig = () => {
 
 export const getFeatureFlags = () => {
   // Load configuration if not already loaded
-  if (!environmentManager.config && process.env.DATABASE_URL) {
+  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
     environmentManager.loadConfiguration();
   }
   return environmentManager.getFeatureFlags();
