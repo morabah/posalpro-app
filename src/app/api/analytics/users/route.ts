@@ -76,10 +76,13 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
   // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
-  const isBuildTime = process.env.NETLIFY_BUILD_TIME === 'true' ||
-                     (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL);
+  // Build-time or no-DB fallback to allow static build to complete
+  const IS_BUILD_OR_NO_DB =
+    process.env.NEXT_PHASE === 'phase-production-build' ||
+    process.env.NETLIFY_BUILD_TIME === 'true' ||
+    !process.env.DATABASE_URL;
 
-  if (isBuildTime) {
+  if (IS_BUILD_OR_NO_DB) {
     logWarn('Analytics users accessed without database configuration - returning empty data');
     return NextResponse.json({
       data: {
