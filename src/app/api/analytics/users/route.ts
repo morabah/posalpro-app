@@ -16,6 +16,7 @@ import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { logWarn } from '@/lib/logger';
 import { z } from 'zod';
 
 /**
@@ -73,6 +74,20 @@ const UserAnalyticsSchema = z.object({
  */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
+
+  // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
+  // When Next.js collects page data during build, environment variables might not be available
+  if (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL) {
+    logWarn('Analytics users accessed without database configuration - returning empty data');
+    return NextResponse.json({
+      data: {
+        userMetrics: [],
+        sessionData: [],
+        lastUpdated: new Date().toISOString()
+      },
+      message: 'Analytics data not available during build process'
+    });
+  }
 
   try {
     await validateApiPermission(request, { resource: 'analytics', action: 'read' });

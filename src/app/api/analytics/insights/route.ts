@@ -5,10 +5,23 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { getServerSession } from 'next-auth';
+import { logWarn } from '@/lib/logger';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {
+  // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
+  if (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL) {
+    logWarn('Analytics insights accessed without database configuration - returning empty data');
+    return NextResponse.json({
+      data: {
+        insights: [],
+        lastUpdated: new Date().toISOString()
+      },
+      message: 'Analytics data not available during build process'
+    });
+  }
+
   try {
     await validateApiPermission(request, { resource: 'analytics', action: 'read' });
     const session = await getServerSession(authOptions);
