@@ -202,19 +202,19 @@ async function getHypothesisMetrics(hypothesis?: string, dateFilter?: Date | nul
     }
 
     const [totalEvents, avgImprovement, successfulEvents, hypothesisBreakdown] =
-      await prisma.$transaction([
-        prisma.hypothesisValidationEvent.count({ where }),
-        prisma.hypothesisValidationEvent.aggregate({
+      await prismaClient.$transaction([
+        prismaClient.hypothesisValidationEvent.count({ where }),
+        prismaClient.hypothesisValidationEvent.aggregate({
           where,
           _avg: { performanceImprovement: true },
         }),
-        prisma.hypothesisValidationEvent.count({
+        prismaClient.hypothesisValidationEvent.count({
           where: {
             ...where,
             performanceImprovement: { gt: 0 },
           },
         }),
-        prisma.hypothesisValidationEvent.groupBy({
+        prismaClient.hypothesisValidationEvent.groupBy({
           by: ['hypothesis'],
           where,
           orderBy: { hypothesis: 'asc' },
@@ -425,7 +425,7 @@ async function getRecentActivity(dateFilter?: Date | null) {
   try {
     const where = dateFilter ? { timestamp: { gte: dateFilter } } : {};
 
-    const recentEvents = await prisma.hypothesisValidationEvent.findMany({
+    const recentEvents = await prismaClient.hypothesisValidationEvent.findMany({
       where,
       orderBy: { timestamp: 'desc' },
       take: 10,
