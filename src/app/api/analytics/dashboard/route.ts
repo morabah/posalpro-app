@@ -60,6 +60,23 @@ interface AnalyticsHealthScoreData {
 export async function GET(request: NextRequest) {
   let session: Session | null = null;
 
+  // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
+  // When Next.js collects page data during build, environment variables might not be available
+  if (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL) {
+    logWarn('Analytics dashboard accessed without database configuration - returning empty data');
+    return NextResponse.json({
+      data: {
+        hypothesisMetrics: [],
+        userStoryMetrics: [],
+        performanceBaselines: [],
+        componentTraceability: [],
+        healthScore: 0,
+        lastUpdated: new Date().toISOString()
+      },
+      message: 'Analytics data not available during build process'
+    });
+  }
+
   try {
     // API Key protection for analytics data
     await assertApiKey(request, 'analytics:read');
