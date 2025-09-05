@@ -4,8 +4,9 @@
  * user story tracking, and performance measurement entities
  */
 
-import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+// Dynamic imports to avoid build-time database connections
+// import { authOptions } from '@/lib/auth';
+// import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logWarn } from '@/lib/logger';
@@ -61,9 +62,12 @@ export async function GET(request: NextRequest) {
   let session: Session | null = null;
 
   // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
-  // When Next.js collects page data during build, environment variables might not be available
-  if (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL) {
-    logWarn('Analytics dashboard accessed without database configuration - returning empty data');
+  // Check for build-time indicators and missing database configuration
+  const isBuildTime = process.env.NETLIFY_BUILD_TIME === 'true' ||
+                     (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL);
+
+  if (isBuildTime) {
+    logWarn('Analytics dashboard accessed during build time - returning empty data');
     return NextResponse.json({
       data: {
         hypothesisMetrics: [],
@@ -80,6 +84,10 @@ export async function GET(request: NextRequest) {
   try {
     // API Key protection for analytics data
     await assertApiKey(request, 'analytics:read');
+
+    // Dynamic imports to avoid build-time database connections
+    const { validateApiPermission } = await import('@/lib/auth/apiAuthorization');
+    const { authOptions } = await import('@/lib/auth');
 
     await validateApiPermission(request, { resource: 'analytics', action: 'read' });
     // Authentication check

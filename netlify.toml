@@ -43,6 +43,8 @@
   # 🚨 CRITICAL: Prevent Prisma build-time connection issues
   PRISMA_GENERATE_SKIP_DOWNLOAD = "true"
   SKIP_PRISMA_GENERATE = "true"
+  # Build-time indicator for API routes
+  NETLIFY_BUILD_TIME = "true"
 
 # Explicit production-context overrides (non-secrets only)
 [context.production.environment]

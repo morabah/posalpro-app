@@ -48,6 +48,21 @@ const ApprovalQueueQuerySchema = z.object({
  * GET /api/approval-queue - Fetch approval queue items
  */
 export async function GET(request: NextRequest) {
+  // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
+  const isBuildTime = process.env.NETLIFY_BUILD_TIME === 'true' ||
+                     (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL);
+
+  if (isBuildTime) {
+    return NextResponse.json({
+      data: {
+        items: [],
+        totalCount: 0,
+        hasMore: false
+      },
+      message: 'Approval queue data not available during build process'
+    });
+  }
+
   try {
     await validateApiPermission(request, { resource: 'workflows', action: 'read' });
     const session = await getServerSession(authOptions);
