@@ -28,6 +28,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Dynamic import of Prisma to avoid build-time initialization
+    const { default: prisma } = await import('@/lib/db/prisma');
+
     const { searchParams } = new URL(request.url);
     const limit = Math.min(parseInt(searchParams.get('limit') || '10', 10), 50);
 

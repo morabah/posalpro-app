@@ -114,7 +114,9 @@ class EnvironmentManager {
     if (process.env.DATABASE_URL) {
       this.loadConfiguration();
     } else {
-      logWarn('Environment configuration deferred - DATABASE_URL not available (likely build time)');
+      logWarn(
+        'Environment configuration deferred - DATABASE_URL not available (likely build time)'
+      );
     }
   }
 

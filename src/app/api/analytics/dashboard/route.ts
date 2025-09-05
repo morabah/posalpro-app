@@ -6,7 +6,6 @@
 
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { assertApiKey } from '@/server/api/apiKeyGuard';
@@ -88,6 +87,9 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Dynamic import of Prisma to avoid build-time initialization
+    const { default: prisma } = await import('@/lib/db/prisma');
 
     // Parse query parameters
     const { searchParams } = new URL(request.url);
