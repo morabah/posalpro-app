@@ -439,7 +439,7 @@ async function getRecentActivity(prismaClient: any, dateFilter?: Date | null) {
       },
     });
 
-    return recentEvents.map(event => ({
+    return recentEvents.map((event: any) => ({
       id: event.id,
       type: 'hypothesis_validation',
       hypothesis: event.hypothesis,
