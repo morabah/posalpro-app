@@ -1,14 +1,15 @@
 /**
  * Product API Routes - Modern Architecture
  * User Story: US-4.1 (Product Management)
- * Hypothesis: H5 (Modern data fetching improves performance and user experience)
+ * Hypimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+othesis: H5 (Modern data fetching improves performance and user experience)
  *
  * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/products/schemas.ts
  * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { logError, logInfo } from '@/lib/logger';
 
 // Import consolidated schemas from feature folder

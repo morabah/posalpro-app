@@ -1,14 +1,15 @@
 /**
  * PosalPro MVP2 - Proposals API Routes (Modern Architecture)
  * Enhanced proposal management with authentication, RBAC, and analytics
- * Component Traceability: US-3.1, US-3.2, H4
+ * Component Traceaimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+bility: US-3.1, US-3.2, H4
  *
  * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/proposals/schemas.ts
  * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { logError, logInfo } from '@/lib/logger';
 import { assertIdempotent } from '@/server/api/idempotency';
 

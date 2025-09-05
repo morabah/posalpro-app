@@ -7,14 +7,15 @@
 import { fail } from '@/lib/api/response';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import {
   createApiErrorResponse,
   ErrorCodes,
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import { logError, logInfo, logWarn } from '@/lib/logger';
+import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+port { logError, logInfo, logWarn } from '@/lib/logger';
 import { securityAuditManager } from '@/lib/security/audit';
 import { apiRateLimiter } from '@/lib/security/hardening';
 import type { Prisma } from '@prisma/client';

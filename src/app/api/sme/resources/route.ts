@@ -4,8 +4,10 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/db/prisma';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+import { ErrorCodes } from '@/lib/e;
+import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+rrors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';

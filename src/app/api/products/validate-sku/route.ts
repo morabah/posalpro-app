@@ -5,14 +5,15 @@
 
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import {
   createApiErrorResponse,
   ErrorCodes,
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import { logDebug, logError, logInfo } from '@/lib/logger';
+import { logDebugimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+, logError, logInfo } from '@/lib/logger';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';

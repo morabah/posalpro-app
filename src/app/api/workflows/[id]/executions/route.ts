@@ -5,8 +5,9 @@ import { logger } from '@/lib/logger';/**
  */
 
 import { authOptions } from '@/lib/auth';
-import { ExecutionStatus, Prisma } from '@prisma/client';
-import prisma from '@/lib/db/prisma';
+import { import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+ExecutionStatus, Prisma } from '@prisma/client';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';

@@ -5,10 +5,12 @@ import { logger } from '@/lib/logger'; /**
  */
 
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/db/prisma';
+// import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+port prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+
 import { z } from 'zod';
 
 /**

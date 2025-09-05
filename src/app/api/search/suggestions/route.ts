@@ -5,8 +5,9 @@ import { logError, logInfo } from '@/lib/logger'; /**
  */
 
 import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
+import { validateAimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+piPermission } from '@/lib/auth/apiAuthorization';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';

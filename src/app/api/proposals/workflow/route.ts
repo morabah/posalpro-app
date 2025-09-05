@@ -1,6 +1,7 @@
 /**
  * Proposal Workflow API Route - Modern Architecture
- * User Story: US-3.2 (Proposal Management)
+ * User Story: US-3.2 (Proposal Managemeimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+nt)
  * Hypothesis: H4 (Cross-Department Coordination)
  */
 
@@ -10,7 +11,7 @@ import {
 } from '@/features/proposals/schemas';
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { logError, logInfo } from '@/lib/logger';
 
 // Validation schemas for workflow operations (centralized)

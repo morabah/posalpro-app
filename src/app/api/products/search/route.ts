@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger'; /**
 import { ProductSearchApiSchema } from '@/features/products/schemas';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+
 import { productService } from '@/lib/services';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';

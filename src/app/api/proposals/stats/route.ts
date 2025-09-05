@@ -1,11 +1,12 @@
 /**
- * Proposal Stats API Routes - Modern Architecture
+ * Proposal Stats API Routes - Modern Archiimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+tecture
  * User Story: US-3.2 (Proposal Management)
  * Hypothesis: H4 (Cross-Department Coordination), H7 (Deadline Management)
  */
 
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { logError, logInfo } from '@/lib/logger';
 
 // ====================

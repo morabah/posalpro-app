@@ -1,6 +1,7 @@
 /**
  * PosalPro MVP2 - Products API Routes (New Architecture)
- * Enhanced product management with authentication, RBAC, and analytics
+ * Enhanced product management withimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+ authentication, RBAC, and analytics
  * Component Traceability: US-4.1, H5
  *
  * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/products/schemas.ts
@@ -8,7 +9,7 @@
  */
 
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { logError, logInfo } from '@/lib/logger';
 
 // Import consolidated schemas from feature folder

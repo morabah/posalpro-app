@@ -1,12 +1,13 @@
 /**
  * Product Bulk Delete API Route - Modern Architecture
  * User Story: US-4.1 (Product Management)
- * Hypothesis: H5 (Modern data fetching improves performance and user experience)
+ * Hypothesis: H5 (Modern import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+data fetching improves performance and user experience)
  */
 
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { logInfo } from '@/lib/logger';
 import { ProductBulkDeleteSchema } from '@/features/products/schemas';
 

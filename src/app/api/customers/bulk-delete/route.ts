@@ -1,12 +1,13 @@
 /**
  * PosalPro MVP2 - Customer Bulk Delete API Route
- * Bulk delete operations for customers with authentication, RBAC, and analytics
+ * Bulk delete operations for customers with authentication, RBAC,import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+ and analytics
  * Component Traceability: US-4.1, US-4.2, H4, H6
  */
 
 import { CustomerBulkDeleteSchema } from '@/features/customers/schemas';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { logError, logInfo } from '@/lib/logger';
 
 // ====================

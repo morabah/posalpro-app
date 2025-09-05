@@ -4,10 +4,12 @@
  * Hypothesis: H4 (Cross-Department Coordination), H7 (Deadline Management)
  */
 
-import { ProposalSchema, WizardProposalUpdateSchema } from '@/features/proposals';
+import { ProposalSchema, WizardProposalUpdateSchema } from '@/features/prop;
+import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+osals';
 import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { ErrorCodes, errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
 import { Prisma } from '@prisma/client';

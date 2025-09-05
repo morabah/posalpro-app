@@ -7,6 +7,7 @@
 // Dynamic imports to avoid build-time database connections
 // import { authOptions } from '@/lib/auth';
 // import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logWarn } from '@/lib/logger';

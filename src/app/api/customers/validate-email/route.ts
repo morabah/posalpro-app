@@ -8,7 +8,8 @@
 import { EmailValidationSchema } from '@/features/customers';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+laced with dynamic imports
 import {
   createApiErrorResponse,
   ErrorCodes,

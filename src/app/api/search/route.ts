@@ -15,8 +15,10 @@ import {
   type SearchResult,
 } from '@/features/search';
 import { authOptions } from '@/lib/auth';
+import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+;
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logError, logInfo } from '@/lib/logger';

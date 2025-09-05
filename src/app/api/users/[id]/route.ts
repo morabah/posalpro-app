@@ -5,7 +5,8 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replacimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+ed with dynamic imports
 import {
   createApiErrorResponse,
   ErrorCodes,

@@ -3,13 +3,14 @@
  * Enhanced product operations with authentication, RBAC, and analytics
  * Component Traceability: US-4.1, H5
  *
- * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/products/schemas.ts
+ * ✅ SCHEMA CONSOLimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+IDATION: All schemas imported from src/features/products/schemas.ts
  * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
 import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { errorHandlingService } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 

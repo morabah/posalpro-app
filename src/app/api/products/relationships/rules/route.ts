@@ -1,11 +1,12 @@
 import { RuleSchema } from '@/features/products/schemas';
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logInfo } from '@/lib/logger';
 import { ProductRelationshipEngine } from '@/lib/services/productRelationshipEngine';
-import { toPrismaJson } from '@/lib/utils/prismaUtils';
+import { toPrismaJson } froimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+m '@/lib/utils/prismaUtils';
 import { RuleStatus } from '@prisma/client';
 import { z } from 'zod';
 

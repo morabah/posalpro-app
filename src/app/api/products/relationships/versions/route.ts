@@ -5,8 +5,9 @@
 
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
+importimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+ { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getCache, setCache } from '@/lib/redis';
 import { getServerSession } from 'next-auth';

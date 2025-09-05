@@ -1,7 +1,8 @@
 /**
  * PosalPro MVP2 - Individual Customer API Routes (New Architecture)
  * Enhanced customer operations with authentication, RBAC, and analytics
- * Component Traceability: US-4.1, US-4.2, H4, H6
+ * Component Traceability: US-4.1, US-4.2, H4, import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+H6
  *
  * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/customers/schemas.ts
  * ✅ REMOVED DUPLICATION: No inline schema definitions
@@ -9,7 +10,7 @@
 
 import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
 

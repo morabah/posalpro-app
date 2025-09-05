@@ -1,11 +1,12 @@
 /**
- * Dashboard Metrics API Route - Modern Architecture
+ * Dashboard Metrics API Route - Modern Arcimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+hitecture
  * User Story: US-3.2 (Proposal Management)
  * Hypothesis: H4 (Cross-Department Coordination)
  */
 
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { logInfo } from '@/lib/logger';
 
 // ====================

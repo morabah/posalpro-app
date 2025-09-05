@@ -6,13 +6,15 @@
 
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import {
   createApiErrorResponse,
   ErrorCodes,
   errorHandlingService,
   StandardError,
-} from '@/lib/errors';
+} from '@;
+import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+/lib/errors';
 import { getRequestMeta, logger } from '@/lib/logging/structuredLogger';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { getServerSession } from 'next-auth';

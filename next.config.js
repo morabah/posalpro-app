@@ -37,15 +37,10 @@ const baseConfig = {
     // Avoid optimizing React packages to prevent RSC/Fast Refresh edge cases in Chrome
     optimizePackageImports: ['@prisma/client', 'next-auth', 'lucide-react'],
     webVitalsAttribution: ['CLS', 'LCP', 'FCP', 'FID', 'TTFB'],
-
-    // 🚨 CRITICAL: Disable static generation for API routes during build
-    // This prevents database connection attempts during Next.js build process
-    serverComponentsExternalPackages: [],
-    // Disable static optimization for API routes to prevent build-time execution
-    serverActions: {
-      bodySizeLimit: '2mb',
-    },
   },
+
+  // 🚨 CRITICAL: Prevent database connections during build
+  serverExternalPackages: [],
 
   // ✅ CRITICAL: Optimize images for performance
   images: {

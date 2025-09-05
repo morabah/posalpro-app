@@ -1,12 +1,13 @@
 /**
  * PosalPro MVP2 - Product Search API Route (New Architecture)
- * Enhanced search functionality with authentication, RBAC, and analytics
+ * Enhanced search functionality with authentication, Rimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+BAC, and analytics
  * Component Traceability: US-4.1, H5
  */
 
 import { ProductQuickSearchApiSchema } from '@/features/products/schemas';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { logError, logInfo } from '@/lib/logger';
 
 // ====================

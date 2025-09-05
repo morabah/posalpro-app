@@ -1,12 +1,13 @@
 /**
  * PosalPro MVP2 - Product Bulk Delete API Route (New Architecture)
- * Enhanced bulk operations with authentication, RBAC, and analytics
+ * Enhanced bulk operations with authentication, RBAC, and analytiimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+cs
  * Component Traceability: US-4.1, H5
  */
 
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/db/prisma'; // Replaced with dynamic imports
 import { logError, logInfo } from '@/lib/logger';
 import { ProductBulkDeleteSchema } from '@/features/products/schemas';
 
