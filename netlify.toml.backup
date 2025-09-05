@@ -1,0 +1,132 @@
+[build]
+<<<<<<< HEAD
+  # ✅ CRITICAL: Build from source using production environment variables
+  # This ensures Prisma client is generated with Neon database URLs, not localhost
+  command = "npm run build"
+  publish = ".next"
+
+  # Ensure clean build - remove any cached artifacts
+  ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
+
+[build.environment]
+  # Align with production environment
+  NODE_VERSION = "22"
+  # Increase memory for TypeScript compilation (2GB)
+  NODE_OPTIONS = "--max-old-space-size=2048"
+  NETLIFY_LINT = "false"
+  # Configure specific Next.js flags for Netlify
+  NEXT_USE_NETLIFY_EDGE = "false"
+  # Disable Next.js telemetry in CI/build
+  NEXT_TELEMETRY_DISABLED = "1"
+  # Safe build-time toggles (non-secrets)
+  ANALYTICS_ENABLED = "true"
+  API_BASE_URL = "https://posalpro-mvp2.windsurf.build/api"
+  # Force Prisma to use library (native) engines on Netlify (disable wasm/dataproxy)
+  PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
+  PRISMA_CLIENT_ENGINE_TYPE = "library"
+  PRISMA_GENERATE_DATAPROXY = "false"
+  PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x"
+
+# Explicit production-context overrides (non-secrets only)
+[context.production.environment]
+  # Node & Next config
+  NODE_VERSION = "22"
+  NODE_OPTIONS = "--max-old-space-size=2048"
+  NEXT_USE_NETLIFY_EDGE = "false"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+  # Safe toggles
+  ANALYTICS_ENABLED = "true"
+  API_BASE_URL = "https://posalpro-mvp2.windsurf.build/api"
+
+  # Prisma engine settings
+  PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
+  PRISMA_CLIENT_ENGINE_TYPE = "library"
+  PRISMA_GENERATE_DATAPROXY = "false"
+  PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x"
+
+  # ⚠️  CRITICAL: Database configuration required for authentication to work
+  # These MUST be set in Netlify Dashboard Environment Variables (Site Settings → Environment Variables)
+  #
+  # DATABASE_URL = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require&pgbouncer=true&connection_limit=1"
+  # DIRECT_URL = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul.gwc.azure.neon.tech/neondb?sslmode=require"
+  # NEXTAUTH_URL = "https://posalpro-mvp2.windsurf.build"
+  # NEXTAUTH_SECRET = "2731a3012e2f22bdabd344cb733f07aad06f770b82423b3d58c06d8a285433f9"
+  # JWT_SECRET = "posalpro-jwt-secret-production-key-32-chars-minimum-secure"
+  # CSRF_SECRET = "posalpro-csrf-protection-secret-32-chars-minimum"
+
+  # 🚨 AUTHENTICATION WILL FAIL WITHOUT THESE ENVIRONMENT VARIABLES 🚨
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# API routes are handled automatically by @netlify/plugin-nextjs
+
+# Set proper content type for API responses
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Content-Type = "application/json; charset=utf-8"
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"
+    Expires = "0"
+
+# Optimize static files
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Functions are managed by @netlify/plugin-nextjs
+[functions]
+  included_files = ["schema.prisma"]
+
+# Database initialization hook
+[dev]
+  command = "npm run dev:smart"
+
+# Add specific image optimization handling
+[[redirects]]
+  from = "/_next/image"
+  to = "/.netlify/images"
+  status = 200
+
+# ✅ CRITICAL: Essential catch-all redirect for Next.js App Router
+# This MUST be the LAST redirect rule - do not add any redirects after this
+=======
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # CRITICAL: Missing variables that fix the database error
+  DIRECT_URL = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul.gwc.azure.neon.tech/neondb?sslmode=require"
+  SESSION_ENCRYPTION_KEY = "5a5f2da8d602760003727d7f1f34adbc9ddfbba5fbea225c597d002e73b627a0"
+  API_KEY = "568b1a88f0aa1cc52f64257643fc74bab1a6b7851d649a65120080248027bb5f"
+
+  # Keep existing working variables
+  DATABASE_URL = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require&pgbouncer=true&connection_limit=1"
+  NEXTAUTH_SECRET = "451f4701894a2f66265997fc8b7dd50c3529c3482c4606299b269708ed7d0212"
+  NEXTAUTH_URL = "https://posalpro-mvp2.windsurf.build"
+  JWT_SECRET = "2031cd23e1b1641d299d8174858f3e6be0e86d4d7716c0c9ba2c99021f645a4a"
+  CSRF_SECRET = "7467d9c3b1b7f713dd0c4430b513a3498087be6968979c7f49a6a5d79bee3ead"
+  NODE_ENV = "production"
+
+>>>>>>> bridge-migration
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+<<<<<<< HEAD
+=======
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+>>>>>>> bridge-migration

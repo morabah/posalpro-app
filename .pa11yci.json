@@ -1,0 +1,71 @@
+{
+  "defaults": {
+    "timeout": 1000,
+    "wait": 500,
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "ignore": [
+      "notice",
+      "warning"
+    ],
+    "runners": [
+      "axe",
+      "htmlcs"
+    ],
+    "standard": "WCAG2AA",
+    "level": "error"
+  },
+  "urls": [
+    {
+      "url": "http://localhost:3000",
+      "name": "Homepage"
+    },
+    {
+      "url": "http://localhost:3000/auth/login",
+      "name": "Login Page"
+    },
+    {
+      "url": "http://localhost:3000/auth/register",
+      "name": "Registration Page"
+    },
+    {
+      "url": "http://localhost:3000/dashboard",
+      "name": "Dashboard",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      }
+    },
+    {
+      "url": "http://localhost:3000/products",
+      "name": "Product Management"
+    },
+    {
+      "url": "http://localhost:3000/proposals/create",
+      "name": "Proposal Creation"
+    },
+    {
+      "url": "http://localhost:3000/admin",
+      "name": "Admin Dashboard"
+    },
+    {
+      "url": "http://localhost:3000/settings",
+      "name": "User Settings"
+    }
+  ],
+  "sitemap": {
+    "url": "http://localhost:3000",
+    "find": "a[href]",
+    "exclude": [
+      "/api/*",
+      "/auth/logout",
+      "*.pdf",
+      "*.docx",
+      "mailto:*",
+      "tel:*",
+      "javascript:*"
+    ]
+  }
+}
