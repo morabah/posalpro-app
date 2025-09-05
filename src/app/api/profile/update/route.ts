@@ -4,9 +4,9 @@ import {
   createApiErrorResponse,
   ErrorCodes,
   errorHandlingService,
-  Stimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-andardError,
+  StandardError,
 } from '@/lib/errors';
+import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
 import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
