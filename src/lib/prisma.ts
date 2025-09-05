@@ -9,9 +9,16 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+// ✅ CRITICAL FIX: Handle serverless environment where DATABASE_URL might not be available at build time
+const createPrismaClient = () => {
+  // Check if DATABASE_URL is available
+  if (!process.env.DATABASE_URL) {
+    console.warn('⚠️ DATABASE_URL not available during Prisma client initialization');
+    // Return a placeholder client that will be replaced when env vars are loaded
+    return null as any;
+  }
+
+  return new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
     // ✅ CRITICAL: Database Performance Optimizations for TTFB reduction
     // Following Lesson #30: Database Performance Optimization - Connection Pooling
@@ -35,7 +42,28 @@ export const prisma =
     // These settings are added via connection string parameters
     // Example: postgresql://user:pass@host:port/db?connection_limit=5&pool_timeout=20&idle_timeout=600
   });
+};
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+// ✅ CRITICAL FIX: Lazy initialization for serverless environments
+let _prisma: PrismaClient | null = null;
+
+const getPrismaClient = (): PrismaClient => {
+  if (_prisma) return _prisma;
+
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is required but not available');
+  }
+
+  _prisma = createPrismaClient();
+  return _prisma!;
+};
+
+// Export a getter function instead of the client directly
+export const prisma = new Proxy({} as PrismaClient, {
+  get(target, prop) {
+    const client = getPrismaClient();
+    return (client as any)[prop];
+  }
+});
 
 export default prisma;
