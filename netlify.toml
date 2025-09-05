@@ -47,6 +47,8 @@
   NETLIFY_BUILD_TIME = "true"
   # Force build-time mode to prevent database connections
   BUILD_MODE = "static"
+  REDIS_URL = "redis://disabled:6379"
+  USE_REDIS = "false"
 
 # Explicit production-context overrides (non-secrets only)
 [context.production.environment]
