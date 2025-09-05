@@ -634,6 +634,13 @@ class EnvironmentManager {
     this.validationResult = null;
     this.loadConfiguration();
   }
+
+  // Public method to trigger configuration loading (used by exported functions)
+  public ensureConfigurationLoaded(): void {
+    if (!this.config && process.env.DATABASE_URL) {
+      this.loadConfiguration();
+    }
+  }
 }
 
 // Create singleton environment manager
@@ -642,17 +649,13 @@ const environmentManager = new EnvironmentManager();
 // ✅ CRITICAL FIX: Lazy loading for exported functions
 export const getConfig = (): AppConfig => {
   // Load configuration if not already loaded
-  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
-    environmentManager.loadConfiguration();
-  }
+  environmentManager.ensureConfigurationLoaded();
   return environmentManager.getConfig();
 };
 
 export const getValidationResult = (): ValidationResult => {
   // Load configuration if not already loaded
-  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
-    environmentManager.loadConfiguration();
-  }
+  environmentManager.ensureConfigurationLoaded();
   return environmentManager.getValidationResult();
 };
 
@@ -661,41 +664,31 @@ export const getCurrentEnvironment = (): Environment => environmentManager.getCu
 
 export const getDatabaseConfig = () => {
   // Load configuration if not already loaded
-  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
-    environmentManager.loadConfiguration();
-  }
+  environmentManager.ensureConfigurationLoaded();
   return environmentManager.getDatabaseConfig();
 };
 
 export const getApiConfig = () => {
   // Load configuration if not already loaded
-  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
-    environmentManager.loadConfiguration();
-  }
+  environmentManager.ensureConfigurationLoaded();
   return environmentManager.getApiConfig();
 };
 
 export const getAuthConfig = () => {
   // Load configuration if not already loaded
-  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
-    environmentManager.loadConfiguration();
-  }
+  environmentManager.ensureConfigurationLoaded();
   return environmentManager.getAuthConfig();
 };
 
 export const getSecurityConfig = () => {
   // Load configuration if not already loaded
-  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
-    environmentManager.loadConfiguration();
-  }
+  environmentManager.ensureConfigurationLoaded();
   return environmentManager.getSecurityConfig();
 };
 
 export const getFeatureFlags = () => {
   // Load configuration if not already loaded
-  if (!environmentManager.isValid() && process.env.DATABASE_URL) {
-    environmentManager.loadConfiguration();
-  }
+  environmentManager.ensureConfigurationLoaded();
   return environmentManager.getFeatureFlags();
 };
 
