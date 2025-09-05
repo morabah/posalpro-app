@@ -372,6 +372,10 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Dynamic imports to avoid build-time database connections
+    const { validateApiPermission } = await import('@/lib/auth/apiAuthorization');
+    const { authOptions } = await import('@/lib/auth');
+
     await validateApiPermission(request, { resource: 'workflows', action: 'update' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -398,6 +402,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Process bulk action based on type
+    // Dynamic import of Prisma to avoid build-time initialization
+    const { default: prisma } = await import('@/lib/db/prisma');
+
     let updatedCount = 0;
     const errors: string[] = [];
 
