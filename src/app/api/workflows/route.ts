@@ -4,8 +4,7 @@
  * Component Traceability: US-4.1, US-4.3, H7
  */
 
-import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { createApiErrorResponse, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -19,7 +18,6 @@ import {
 } from '@/lib/db/database';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { EntityType, Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -79,17 +77,13 @@ const WorkflowUpdateSchema = WorkflowCreateSchema.partial().extend({
 /**
  * GET /api/workflows - List workflow templates with filtering
  */
-export async function GET(request: NextRequest) {
-  try {
-    await validateApiPermission(request, { resource: 'workflows', action: 'read' });
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const queryParams = Object.fromEntries(searchParams);
-    const validatedQuery = WorkflowQuerySchema.parse(queryParams);
+export const GET = createRoute(
+  {
+    query: WorkflowQuerySchema,
+    apiVersion: '1',
+  },
+  async ({ req, query, user }) => {
+    const validatedQuery = query!;
 
     const where: Prisma.ApprovalWorkflowWhereInput = {
       entityType: validatedQuery.entityType,
@@ -125,7 +119,7 @@ export async function GET(request: NextRequest) {
     };
 
     // Optional cursor-based pagination: prefer when cursorId provided or when 'page' is missing in query
-    const url = new URL(request.url);
+    const url = new URL(req.url);
     const cursorId = url.searchParams.get('cursorId');
     const useCursor = Boolean(cursorId) || !url.searchParams.has('page');
 
@@ -204,7 +198,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (validatedQuery.search) {
-      await trackWorkflowSearchEvent(session.user.id, validatedQuery.search, total);
+      await trackWorkflowSearchEvent(user.id, validatedQuery.search, total);
     }
 
     const response = NextResponse.json({
@@ -231,51 +225,19 @@ export async function GET(request: NextRequest) {
       response.headers.set('Cache-Control', 'no-store');
     }
     return response;
-  } catch (error) {
-    // Normalize thrown Response from validateApiPermission (401/403)
-    if (error instanceof Response) {
-      return error as unknown as NextResponse;
-    }
-    errorHandlingService.processError(
-      error,
-      'Workflows fetch failed',
-      ErrorCodes.DATA.QUERY_FAILED,
-      {
-        component: 'WorkflowRoute',
-        operation: 'GET',
-        userStories: ['US-4.1', 'US-4.3'],
-        hypotheses: ['H7'],
-      }
-    );
-
-    if (error instanceof StandardError) {
-      return createApiErrorResponse(error);
-    }
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid query parameters', details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({ error: 'Failed to fetch workflows' }, { status: 500 });
   }
-}
+);
 
 /**
  * POST /api/workflows - Create new workflow template
  */
-export async function POST(request: NextRequest) {
-  try {
-    await validateApiPermission(request, { resource: 'workflows', action: 'create' });
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const validatedData = WorkflowCreateSchema.parse(body);
+export const POST = createRoute(
+  {
+    body: WorkflowCreateSchema,
+    apiVersion: '1',
+  },
+  async ({ body, user }) => {
+    const validatedData = body!;
 
     const existingWorkflow = await prisma.approvalWorkflow.findFirst({
       where: {
@@ -297,14 +259,14 @@ export async function POST(request: NextRequest) {
         name: validatedData.name,
         description: validatedData.description,
         entityType: validatedData.entityType,
-        createdBy: session.user.id,
+        createdBy: user.id,
         stages: {
           create: validatedData.stages,
         },
       },
     });
 
-    await trackWorkflowCreationEvent(session.user.id, newWorkflow.id, newWorkflow.name);
+    await trackWorkflowCreationEvent(user.id, newWorkflow.id, newWorkflow.name);
 
     return NextResponse.json(
       {
@@ -314,46 +276,19 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error) {
-    if (error instanceof Response) {
-      return error as unknown as NextResponse;
-    }
-    errorHandlingService.processError(
-      error,
-      'Workflow creation failed',
-      ErrorCodes.DATA.CREATE_FAILED,
-      {
-        component: 'WorkflowRoute',
-        operation: 'POST',
-        userStories: ['US-4.1', 'US-4.3'],
-        hypotheses: ['H7'],
-      }
-    );
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({ error: 'Failed to create workflow' }, { status: 500 });
   }
-}
+);
 
 /**
  * PUT /api/workflows - Update existing workflow template
  */
-export async function PUT(request: NextRequest) {
-  try {
-    await validateApiPermission(request, { resource: 'workflows', action: 'update' });
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const validatedData = WorkflowUpdateSchema.parse(body);
+export const PUT = createRoute(
+  {
+    body: WorkflowUpdateSchema,
+    apiVersion: '1',
+  },
+  async ({ body, user }) => {
+    const validatedData = body!;
     const { id, ...updateData } = validatedData;
 
     const updatedWorkflow = await prisma.approvalWorkflow.update({
@@ -368,7 +303,7 @@ export async function PUT(request: NextRequest) {
     });
 
     await trackWorkflowUpdateEvent(
-      session.user.id,
+      user.id,
       updatedWorkflow.id,
       updatedWorkflow.name,
       Object.keys(updateData)
@@ -379,32 +314,8 @@ export async function PUT(request: NextRequest) {
       data: updatedWorkflow,
       message: 'Workflow updated successfully',
     });
-  } catch (error) {
-    if (error instanceof Response) {
-      return error as unknown as NextResponse;
-    }
-    errorHandlingService.processError(
-      error,
-      'Workflow update failed',
-      ErrorCodes.DATA.UPDATE_FAILED,
-      {
-        component: 'WorkflowRoute',
-        operation: 'PUT',
-        userStories: ['US-4.1', 'US-4.3'],
-        hypotheses: ['H7'],
-      }
-    );
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({ error: 'Failed to update workflow' }, { status: 500 });
   }
-}
+);
 
 async function trackWorkflowSearchEvent(userId: string, query: string, resultsCount: number) {
   try {

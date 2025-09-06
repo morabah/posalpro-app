@@ -1,3 +1,4 @@
+import { createRoute } from '@/lib/api/route';
 import { error as apiError } from '@/lib/api/response';
 import { ErrorHandlingService } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -9,12 +10,10 @@ import { logger } from '@/lib/logger'; /**
  */
 
 import { ProductSearchApiSchema } from '@/features/products/schemas';
-import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 import { productService } from '@/lib/services';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 // Initialize error handling service
@@ -30,31 +29,10 @@ const searchSchema = ProductSearchApiSchema;
 /**
  * GET /api/products/search - Search products
  */
-export async function GET(request: NextRequest) {
-  await validateApiPermission(request, 'products:read');
+export const GET = createRoute({ query: searchSchema }, async ({ req, query }) => {
+  await validateApiPermission(req, 'products:read');
   try {
-    // Authentication check
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      const standardError = new StandardError({
-        message: 'Authentication required to search products',
-        code: ErrorCodes.AUTH.UNAUTHORIZED,
-        metadata: {
-          component: 'ProductSearchAPI',
-          operation: 'GET',
-        },
-      });
-      errorHandlingService.processError(standardError);
-      return NextResponse.json(apiError(ErrorCodes.AUTH.UNAUTHORIZED, 'Unauthorized access'), {
-        status: 401,
-      });
-    }
-
-    // Parse and validate query parameters
-    const { searchParams } = new URL(request.url);
-    const queryParams = Object.fromEntries(searchParams);
-
-    const validated = searchSchema.parse(queryParams);
+    const validated = query!;
 
     // Track search start time for H1 hypothesis analytics
     const searchStartTime = Date.now();
@@ -108,4 +86,4 @@ export async function GET(request: NextRequest) {
       status: 500,
     });
   }
-}
+});

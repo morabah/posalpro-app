@@ -6,11 +6,12 @@
  * Component Traceability Matrix: US-6.1, US-6.3, US-4.1 | H8, H11, H12
  */
 
+import { createRoute } from '@/lib/api/route';
 import { ErrorHandlingService } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { DatabaseOptimizationService } from '@/lib/services/DatabaseOptimizationService';
 import { PrismaClient } from '@prisma/client';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 /**
@@ -52,11 +53,11 @@ function initializeServices() {
  * GET /api/database/metrics
  * Fetch real-time database performance metrics
  */
-export async function GET(request: NextRequest) {
+export const GET = createRoute({}, async ({ req }) => {
   initializeServices();
 
   try {
-    await validateApiPermission(request, { resource: 'metrics', action: 'read' });
+    await validateApiPermission(req, { resource: 'metrics', action: 'read' });
     // Get optimization service metrics
     const optimizationMetrics = optimizationService.getPerformanceMetrics();
 
@@ -219,18 +220,18 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * POST /api/database/metrics
  * Record custom performance metrics
  */
-export async function POST(request: NextRequest) {
+export const POST = createRoute({}, async ({ req }) => {
   initializeServices();
 
   try {
-    await validateApiPermission(request, { resource: 'metrics', action: 'update' });
-    const body = await request.json();
+    await validateApiPermission(req, { resource: 'metrics', action: 'update' });
+    const body = await req.json();
     const { metric, value, hypothesis, metadata } = body;
 
     // Validate required fields
@@ -280,4 +281,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

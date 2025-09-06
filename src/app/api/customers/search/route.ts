@@ -4,7 +4,7 @@
  * Component Traceability: US-4.1, US-4.2, H4, H6
  */
 
-import { authOptions } from '@/lib/auth';
+import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import {
@@ -13,11 +13,17 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import { getRequestMeta, logger } from '@/lib/logging/structuredLogger';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { CustomerSearchApiSchema } from '@/features/customers/schemas';
 import { z } from 'zod';
 
@@ -35,35 +41,14 @@ const CustomerSearchSchema = CustomerSearchApiSchema;
 /**
  * GET /api/customers/search - Search customers
  */
-export async function GET(request: NextRequest) {
-  await validateApiPermission(request, 'customers:read');
+export const GET = createRoute({ query: CustomerSearchSchema }, async ({ req, user, query }) => {
+  await validateApiPermission(req, 'customers:read');
   const startTime = Date.now();
-  const { requestId } = getRequestMeta(request.headers);
+  const { requestId } = getRequestMeta(new Headers(req.headers));
 
   try {
-    // Authentication check
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Unauthorized access attempt',
-          code: ErrorCodes.AUTH.UNAUTHORIZED,
-          metadata: {
-            component: 'CustomerSearchRoute',
-            operation: 'searchCustomers',
-          },
-        }),
-        'Unauthorized',
-        ErrorCodes.AUTH.UNAUTHORIZED,
-        401,
-        { userFriendlyMessage: 'You must be logged in to search customers' }
-      );
-    }
-
-    // Parse and validate query parameters
-    const { searchParams } = new URL(request.url);
-    const queryParams = Object.fromEntries(searchParams);
-    const validatedQuery = CustomerSearchSchema.parse(queryParams);
+    // Use validated query from createRoute
+    const validatedQuery = query!;
 
     // Build optimized search query
     const where: any = {
@@ -119,12 +104,7 @@ export async function GET(request: NextRequest) {
     const searchDuration = Date.now() - startTime;
 
     // Track search analytics for hypothesis validation
-    await trackCustomerSearchEvent(
-      session.user.id,
-      validatedQuery.q,
-      customers.length,
-      searchDuration
-    );
+    await trackCustomerSearchEvent(user.id, validatedQuery.q, customers.length, searchDuration);
 
     logger.info('CustomerSearch GET success', {
       requestId,
@@ -132,7 +112,7 @@ export async function GET(request: NextRequest) {
       code: 'OK',
       route: '/api/customers/search',
       method: 'GET',
-      userId: session.user.id,
+      userId: user.id,
       resultCount: customers.length,
     });
     recordLatency(searchDuration);
@@ -233,7 +213,7 @@ export async function GET(request: NextRequest) {
     res.headers.set('Cache-Control', 'no-store');
     return res;
   }
-}
+});
 
 /**
  * Track customer search event for analytics and hypothesis validation

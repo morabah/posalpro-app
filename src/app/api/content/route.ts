@@ -1,11 +1,5 @@
-import { logDebug, logError, logInfo, logWarn } from '@/lib/logger'; /**
- * PosalPro MVP2 - Content API Route
- * Content management with authentication and analytics
- * Component Traceability: US-6.1, US-6.2
- */
-
-import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { createRoute } from '@/lib/api/route';
+import { logDebug, logError, logInfo, logWarn } from '@/lib/logger';
 import prisma from '@/lib/db/prisma';
 import { createApiErrorResponse, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
@@ -18,7 +12,6 @@ import {
   executeQuery,
 } from '@/lib/db/database';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 const errorHandlingService = ErrorHandlingService.getInstance();
@@ -168,37 +161,22 @@ interface ContentWhereClause {
 }
 
 // GET /api/content - List content items with filtering and pagination
-export async function GET(request: NextRequest) {
-  try {
-    await validateApiPermission(request, { resource: 'content', action: 'read' });
+export const GET = createRoute(
+  {
+    query: ContentQuerySchema,
+    apiVersion: '1',
+  },
+  async ({ req, query, user }) => {
     await logDebug('GET /api/content - Starting request processing');
-
-    const session = await getServerSession(authOptions);
-    await logDebug('Session data', {
-      userId: session?.user?.id,
-      userEmail: session?.user?.email,
-      isAuthenticated: !!session,
+    await logDebug('User data', {
+      userId: user.id,
+      userEmail: user.email,
     });
 
-    if (!session?.user?.id) {
-      errorHandlingService.processError(
-        new Error('No valid session'),
-        'Unauthorized access attempt',
-        ErrorCodes.AUTH.UNAUTHORIZED,
-        {
-          component: 'ContentRoute',
-          operation: 'GET',
-          userStories: ['US-6.1'],
-          hypotheses: ['H6'],
-        }
-      );
-      return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
-    }
-
-    // Check read permissions
+    // Check read permissions (keeping for now, could be moved to entitlements)
     await logDebug('Checking user permissions...');
-    const canRead = await checkUserPermissions(session.user.id, 'read');
-    await logDebug('Permission check result', { canRead, userId: session.user.id });
+    const canRead = await checkUserPermissions(user.id, 'read');
+    await logDebug('Permission check result', { canRead, userId: user.id });
 
     if (!canRead) {
       errorHandlingService.processError(
@@ -210,7 +188,7 @@ export async function GET(request: NextRequest) {
           operation: 'GET',
           userStories: ['US-6.1'],
           hypotheses: ['H6'],
-          userId: session.user.id,
+          userId: user.id,
         }
       );
       return NextResponse.json(
@@ -218,13 +196,6 @@ export async function GET(request: NextRequest) {
         { status: 403 }
       );
     }
-
-    // Parse and validate query parameters
-    const url = new URL(request.url);
-    const queryParams = Object.fromEntries(url.searchParams.entries());
-    await logDebug('Query parameters', queryParams as unknown as Record<string, unknown>);
-
-    const query = ContentQuerySchema.parse(queryParams);
     await logDebug('Validated query', query as unknown as Record<string, unknown>);
 
     // Build where clause
@@ -289,14 +260,14 @@ export async function GET(request: NextRequest) {
       if (content.length > 0) {
         try {
           const userExists = await prisma.user.findUnique({
-            where: { id: session.user.id },
+            where: { id: user.id },
             select: { id: true },
           });
           if (userExists) {
             await prisma.contentAccessLog.create({
               data: {
                 contentId: content[0].id,
-                userId: session.user.id,
+                userId: user.id,
                 accessType: 'VIEW',
                 userStory: 'US-6.1',
                 performanceImpact: 1.0,
@@ -304,7 +275,7 @@ export async function GET(request: NextRequest) {
             });
           } else {
             await logWarn('Skipping contentAccessLog: session user not found in DB', {
-              userId: session.user.id,
+              userId: user.id,
             });
           }
         } catch (logError) {
@@ -358,95 +329,21 @@ export async function GET(request: NextRequest) {
         { status: 500 }
       );
     }
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Content API route error',
-      ErrorCodes.API.REQUEST_FAILED,
-      { component: 'ContentRoute', operation: 'GET', userStories: ['US-6.1'], hypotheses: ['H6'] }
-    );
-
-    // Determine if it's a validation error
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          error: 'Invalid request parameters',
-          details: error.errors,
-          code: 'VALIDATION_ERROR',
-        },
-        { status: 400 }
-      );
-    }
-
-    // Handle database connection errors
-    if (error instanceof Error && 'code' in error) {
-      if (error.code === 'P2021') {
-        return NextResponse.json(
-          {
-            error: 'Database table not found',
-            code: 'DB_TABLE_NOT_FOUND',
-          },
-          { status: 500 }
-        );
-      }
-
-      if (error.code === 'P2002') {
-        return NextResponse.json(
-          {
-            error: 'Unique constraint violation',
-            code: 'DB_UNIQUE_VIOLATION',
-          },
-          { status: 409 }
-        );
-      }
-    }
-
-    return NextResponse.json(
-      { error: 'Internal server error', code: 'INTERNAL_ERROR' },
-      { status: 500 }
-    );
   }
-}
+);
 
-export async function POST(request: NextRequest) {
-  try {
-    await validateApiPermission(request, { resource: 'content', action: 'create' });
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
-
-    // Validate content creation data
-    const contentSchema = z.object({
+export const POST = createRoute(
+  {
+    body: z.object({
       title: z.string().min(3).max(200),
       category: z.string().min(2).max(50),
       content: z.string().min(10).max(10000),
       tags: z.array(z.string().max(50)).max(10).optional(),
-    });
-
-    const validationResult = contentSchema.safeParse(body);
-
-    if (!validationResult.success) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Invalid content data',
-          code: ErrorCodes.VALIDATION.INVALID_INPUT,
-          metadata: {
-            component: 'ContentRoute',
-            operation: 'createContent',
-            validationErrors: validationResult.error.errors,
-          },
-        }),
-        'Invalid content data',
-        ErrorCodes.VALIDATION.INVALID_INPUT,
-        400,
-        { userFriendlyMessage: 'Please check your content data and try again.' }
-      );
-    }
-
-    const { title, category, content, tags } = validationResult.data;
+    }),
+    apiVersion: '1',
+  },
+  async ({ body, user }) => {
+    const { title, category, content, tags } = body!;
 
     // Sanitize all text inputs
     const sanitizedTitle = sanitizeInput(title);
@@ -476,7 +373,7 @@ export async function POST(request: NextRequest) {
         description: sanitizedContent.slice(0, 240),
         content: sanitizedContent,
         tags: sanitizedTags,
-        createdBy: session.user.id,
+        createdBy: user.id,
         isActive: true,
       },
       select: {
@@ -506,23 +403,5 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error) {
-    await logError('Content creation error', error);
-
-    return createApiErrorResponse(
-      new StandardError({
-        message: 'Failed to create content',
-        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
-        metadata: {
-          component: 'ContentRoute',
-          operation: 'createContent',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        },
-      }),
-      'Content creation failed',
-      ErrorCodes.SYSTEM.INTERNAL_ERROR,
-      500,
-      { userFriendlyMessage: 'Unable to create content at this time. Please try again later.' }
-    );
   }
-}
+);

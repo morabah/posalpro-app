@@ -3,7 +3,7 @@
  * Handles SKU uniqueness validation for product creation/updates
  */
 
-import { authOptions } from '@/lib/auth';
+import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import {
@@ -13,10 +13,16 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { SKUValidationSchema } from '@/features/products/schemas';
 import { z } from 'zod';
 
@@ -32,13 +38,13 @@ import { z } from 'zod';
 /**
  * GET /api/products/validate-sku - Validate SKU uniqueness
  */
-export async function GET(request: NextRequest) {
+export const GET = createRoute({}, async ({ req }) => {
   const start = Date.now();
   try {
     // Handle authentication and permission validation
     let authContext;
     try {
-      authContext = await validateApiPermission(request, { resource: 'products', action: 'read' });
+      authContext = await validateApiPermission(req, { resource: 'products', action: 'read' });
     } catch (error) {
       if (error instanceof Response) {
         return error;
@@ -46,27 +52,8 @@ export async function GET(request: NextRequest) {
       throw error;
     }
 
-    // Authentication check
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Unauthorized access attempt',
-          code: ErrorCodes.AUTH.UNAUTHORIZED,
-          metadata: {
-            component: 'ProductsSKUValidationRoute',
-            operation: 'validateSKU',
-          },
-        }),
-        'Unauthorized',
-        ErrorCodes.AUTH.UNAUTHORIZED,
-        401,
-        { userFriendlyMessage: 'You must be logged in to validate SKUs' }
-      );
-    }
-
     // Parse and validate query parameters
-    const url = new URL(request.url);
+    const url = new URL(req.url);
     const searchParams = url.searchParams;
     const queryParams = Object.fromEntries(searchParams);
     const validatedQuery = SKUValidationSchema.parse(queryParams);
@@ -138,7 +125,7 @@ export async function GET(request: NextRequest) {
       {
         component: 'ProductsSKUValidationRoute',
         operation: 'validateSKU',
-        queryParams: Object.fromEntries(new URL(request.url).searchParams),
+        queryParams: Object.fromEntries(new URL(req.url).searchParams),
       }
     );
 
@@ -160,7 +147,7 @@ export async function GET(request: NextRequest) {
           metadata: {
             component: 'ProductsSKUValidationRoute',
             operation: 'validateSKU',
-            queryParameters: Object.fromEntries(new URL(request.url).searchParams),
+            queryParameters: Object.fromEntries(new URL(req.url).searchParams),
           },
         }),
         'Validation failed',
@@ -218,4 +205,4 @@ export async function GET(request: NextRequest) {
       }
     );
   }
-}
+});

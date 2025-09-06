@@ -3,8 +3,7 @@
  * Enhanced tag management with analytics tracking
  * Component Traceability: US-3.1, US-3.2, H3
  */
-
-import { authOptions } from '@/lib/auth';
+import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 import {
@@ -17,8 +16,7 @@ import {
 } from '@/lib/db/database';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 /**
  * Component Traceability Matrix:
@@ -32,19 +30,13 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * GET /api/products/tags - Get all product tags with statistics
  */
-export async function GET(request: NextRequest) {
-  await validateApiPermission(request, 'products:read');
+export const GET = createRoute({}, async ({ req, user }) => {
+  await validateApiPermission(req, 'products:read');
   const start = Date.now();
 
   try {
-    // Authentication check
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     // Parse query parameters
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(req.url);
     const search = searchParams.get('search') || '';
     const includeStats = searchParams.get('includeStats') === 'true';
     const activeOnly = searchParams.get('activeOnly') !== 'false'; // Default to true
@@ -175,4 +167,4 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ error: 'Failed to fetch product tags' }, { status: 500 });
   }
-}
+});

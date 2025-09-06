@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { createRoute } from '@/lib/api/route';
+import { NextResponse } from 'next/server';
 import { recordWebVital } from '@/lib/observability/metricsStore';
 
 interface MetricPayload {
@@ -8,16 +9,16 @@ interface MetricPayload {
   label?: string;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = createRoute({ requireAuth: false }, async ({ req }) => {
   try {
-    const contentType = request.headers.get('content-type') || '';
+    const contentType = req.headers.get('content-type') || '';
     let payload: MetricPayload | null = null;
 
     if (contentType.includes('application/json')) {
-      payload = (await request.json()) as MetricPayload;
+      payload = (await req.json()) as MetricPayload;
     } else {
       // Beacon without content-type; read as text then parse
-      const text = await request.text();
+      const text = await req.text();
       try {
         payload = JSON.parse(text) as MetricPayload;
       } catch {
@@ -37,4 +38,4 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ success: false }, { status: 500 });
   }
-}
+});
