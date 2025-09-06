@@ -141,6 +141,9 @@ export function ProposalWizard({
   const resetWizard = useProposalResetWizard();
   const initializeFromData = useProposalInitializeFromData();
 
+  // Hook must be called at component level, not inside callbacks
+  const createProposal = useCreateProposal();
+
   // Prevent duplicate initialization
   const hasInitializedRef = useRef(false);
 
@@ -341,7 +344,6 @@ export function ProposalWizard({
 
       if (hasBasic && hasTeam) {
         const proposalBody = buildCreateBodyFromStore();
-        const createProposal = useCreateProposal();
 
         try {
           await createProposal.mutateAsync(proposalBody as any);

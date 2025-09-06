@@ -105,6 +105,7 @@ export function getPrismaSelect(
       }
       select[field] = true;
     } else {
+      // Field not included in selection - skip
     }
 
     // Check relations

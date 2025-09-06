@@ -54,7 +54,9 @@ async function checkUserPermissions(userId: string, action: string, scope: strin
     if (process.env.NODE_ENV !== 'production') {
       return true;
     }
-  } catch {}
+  } catch {
+    // Ignore permission check failures - will be handled by database constraints
+  }
   try {
     const userRoles = await prisma.userRole.findMany({
       where: { userId },

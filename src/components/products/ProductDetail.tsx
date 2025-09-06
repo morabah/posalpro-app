@@ -148,7 +148,9 @@ export function ProductDetail({ productId }: ProductDetailProps) {
                       await navigator.clipboard.writeText(productData.sku);
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1500);
-                    } catch {}
+                    } catch {
+                      // Ignore clipboard write failures - user will see no feedback
+                    }
                   }}
                 >
                   {copied ? 'Copied' : 'Copy'}

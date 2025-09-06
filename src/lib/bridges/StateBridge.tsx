@@ -181,7 +181,7 @@ function globalReducer(state: GlobalState, action: GlobalAction): GlobalState {
         ui: { ...state.ui, sidebarCollapsed: !state.ui.sidebarCollapsed },
       };
 
-    case 'ADD_NOTIFICATION':
+    case 'ADD_NOTIFICATION': {
       const newNotification = {
         ...action.payload,
         id: Math.random().toString(36).substr(2, 9),
@@ -194,6 +194,7 @@ function globalReducer(state: GlobalState, action: GlobalAction): GlobalState {
           notifications: [...state.ui.notifications, newNotification],
         },
       };
+    }
 
     case 'REMOVE_NOTIFICATION':
       return {
@@ -262,7 +263,7 @@ function globalReducer(state: GlobalState, action: GlobalAction): GlobalState {
         ui: { ...state.ui, notifications: action.payload },
       };
 
-    case 'TRACK_INTERACTION':
+    case 'TRACK_INTERACTION': {
       const interaction: AnalyticsInteraction = {
         action: action.payload.action,
         timestamp: Date.now(),
@@ -277,6 +278,7 @@ function globalReducer(state: GlobalState, action: GlobalAction): GlobalState {
           interactions: [...state.analytics.interactions, interaction],
         },
       };
+    }
 
     case 'SET_LAST_VIEWED':
       return {

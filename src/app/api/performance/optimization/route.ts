@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
         };
         break;
 
-      case 'images':
+      case 'images': {
         // Trigger image optimization
         const imageResults = await imageService.compressAssets();
         optimizationResults = {
@@ -194,8 +194,9 @@ export async function POST(request: NextRequest) {
           results: imageResults,
         };
         break;
+      }
 
-      case 'all':
+      case 'all': {
         // Trigger all optimizations
         await memoryService.optimizeMemory();
         const imageResultsAll = await imageService.compressAssets();
@@ -212,8 +213,9 @@ export async function POST(request: NextRequest) {
           queries: memoryService.getQueryMetrics(),
         };
         break;
+      }
 
-      default:
+      default: {
         return createApiErrorResponse(
           new StandardError({
             message: 'Invalid optimization type',
@@ -229,6 +231,7 @@ export async function POST(request: NextRequest) {
           400,
           { userFriendlyMessage: 'Invalid optimization type specified' }
         );
+      }
     }
 
     // Cache the results

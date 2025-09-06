@@ -12,6 +12,7 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getCache, setCache } from '@/lib/redis';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
 
     // Pull authoritative history from ProposalVersion snapshots (captures deletes too)
     // Use raw SQL to ensure compatibility across generated clients
-    const PrismaLocal = (require('@prisma/client') as any).Prisma;
+    const PrismaLocal = Prisma;
 
     // Build cursor condition for stable pagination
     const cursorCondition =

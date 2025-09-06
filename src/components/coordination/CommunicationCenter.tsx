@@ -648,7 +648,7 @@ export function CommunicationCenter({
 
   // Helper functions
   const extractMentions = (content: string): string[] => {
-    const mentionRegex = /@([A-Za-z\s\.]+)/g;
+    const mentionRegex = /@([A-Za-z\s.]+)/g;
     const mentions = [];
     let match;
     while ((match = mentionRegex.exec(content)) !== null) {

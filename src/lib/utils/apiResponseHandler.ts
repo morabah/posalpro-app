@@ -28,7 +28,7 @@ interface PaginatedResponse<T = unknown> {
   };
 }
 
-interface ApiResponseWithPagination<T = unknown> extends ApiResponse<PaginatedResponse<T>> {}
+type ApiResponseWithPagination<T = unknown> = ApiResponse<PaginatedResponse<T>>;
 
 /**
  * Safely extracts an array from an API response with unknown structure

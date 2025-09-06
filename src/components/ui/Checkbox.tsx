@@ -73,8 +73,11 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     },
     ref
   ) => {
+    // Generate stable ID for accessibility
+    const generatedId = React.useId().replace(/:/g, '-');
+
     // Use provided ID or generate stable one
-    const inputId = id || `checkbox-stable-${React.useId().replace(/:/g, '-')}`;
+    const inputId = id || `checkbox-stable-${generatedId}`;
 
     // Size mapping
     const sizeStyles = {

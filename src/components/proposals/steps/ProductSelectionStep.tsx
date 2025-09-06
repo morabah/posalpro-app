@@ -114,7 +114,9 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         if (saved.showSelectedOnly !== undefined)
           setValue('showSelectedOnly', saved.showSelectedOnly);
       }
-    } catch {}
+    } catch {
+      // Ignore localStorage read failures - will use default values
+    }
   }, [STORAGE_KEY, setValue]); // ✅ FIXED: Include STORAGE_KEY in dependency to re-load when proposal changes
 
   // ✅ FIXED: Reset UI state when proposal changes to prevent stale data
@@ -144,7 +146,9 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         STORAGE_KEY,
         JSON.stringify({ search, sortBy, sortOrder, category, showSelectedOnly })
       );
-    } catch {}
+    } catch {
+      // Ignore localStorage write failures - non-critical
+    }
   }, [STORAGE_KEY, search, sortBy, sortOrder, category, showSelectedOnly]);
 
   // Debounced search for API fetch

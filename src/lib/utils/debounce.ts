@@ -17,7 +17,6 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
   } = {}
 ): T & { cancel: () => void; flush: () => ReturnType<T> } {
   let lastArgs: Parameters<T> | undefined;
-  let lastThis: unknown;
   let maxTimeoutId: NodeJS.Timeout | undefined;
   let result: ReturnType<T> | undefined;
   let timerId: NodeJS.Timeout | undefined;
@@ -28,11 +27,10 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
 
   function invokeFunc(time: number): ReturnType<T> {
     const args = lastArgs!;
-    const thisArg = lastThis;
 
-    lastArgs = lastThis = undefined;
+    lastArgs = undefined;
     lastInvokeTime = time;
-    result = func.apply(thisArg, args) as ReturnType<T>;
+    result = func(...args) as ReturnType<T>;
     return result;
   }
 
@@ -88,7 +86,7 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
     if (trailing && lastArgs) {
       return invokeFunc(time);
     }
-    lastArgs = lastThis = undefined;
+    lastArgs = undefined;
     return result!;
   }
 
@@ -100,7 +98,7 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
       cancelTimer(maxTimeoutId);
     }
     lastInvokeTime = 0;
-    lastArgs = lastCallTime = lastThis = timerId = maxTimeoutId = undefined;
+    lastArgs = lastCallTime = timerId = maxTimeoutId = undefined;
   }
 
   function flush(): ReturnType<T> {
@@ -116,7 +114,6 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
     const isInvoking = shouldInvoke(time);
 
     lastArgs = args;
-    lastThis = this;
     lastCallTime = time;
 
     if (isInvoking) {

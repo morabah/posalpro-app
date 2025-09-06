@@ -13,9 +13,9 @@ import { recordDbLatency } from '@/lib/observability/metricsStore';
 
 declare global {
   // Reuse Prisma client across HMR cycles in dev
-  var prisma: PrismaClient | undefined;
+  let prisma: PrismaClient | undefined;
   // Track middleware registration to avoid duplicate $use calls in dev
-  var prismaMiddlewareRegistered: boolean | undefined;
+  let prismaMiddlewareRegistered: boolean | undefined;
 }
 
 // Configure Prisma client with appropriate database URL based on environment

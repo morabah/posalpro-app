@@ -12,17 +12,8 @@
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 
-// Conditionally import service based on environment
-let versionHistoryService: any;
-if (typeof window === 'undefined') {
-  // Server-side - use direct Prisma service
-  const { versionHistoryService: serverService } = require('@/services/versionHistoryService');
-  versionHistoryService = serverService;
-} else {
-  // Client-side - use HTTP client service
-  const { versionHistoryServiceClient } = require('@/services/versionHistoryServiceClient');
-  versionHistoryService = versionHistoryServiceClient;
-}
+// Service will be imported lazily when needed
+let versionHistoryService: any = null;
 
 // Import types
 import type { VersionHistoryEntry } from '@/services/versionHistoryServiceClient';
@@ -78,6 +69,17 @@ export function useInfiniteVersionHistory({
       dateTo,
     }),
     queryFn: async ({ pageParam }) => {
+      // Lazy import service based on environment
+      if (!versionHistoryService) {
+        if (typeof window === 'undefined') {
+          const { versionHistoryService: serverService } = await import('@/services/versionHistoryService');
+          versionHistoryService = serverService;
+        } else {
+          const { versionHistoryServiceClient } = await import('@/services/versionHistoryServiceClient');
+          versionHistoryService = versionHistoryServiceClient;
+        }
+      }
+
       logDebug('Fetching version history with cursor pagination', {
         component: 'useInfiniteVersionHistory',
         operation: 'queryFn',

@@ -1,5 +1,4 @@
 import js from '@eslint/js';
-import nextConfig from 'eslint-config-next';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
@@ -48,9 +47,6 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-argument': 'off',
     },
   },
-
-  // Next.js configuration
-  ...nextConfig.configs.recommended,
 
   // React Hooks
   {

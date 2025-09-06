@@ -13,7 +13,7 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 export async function GET(request: NextRequest) {
   const requestStart = Date.now();
-  let filters: any = {};
+  const filters: any = {};
 
   try {
     // RBAC guard

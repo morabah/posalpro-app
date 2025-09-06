@@ -164,7 +164,7 @@ class ErrorInterceptor {
         originalMessage = msgFromMessage || msgFromError || `HTTP ${status}` || 'Unknown API error';
       } else {
         // No response data
-        originalMessage = `HTTP ${status}` || 'Unknown API error';
+        originalMessage = status ? `HTTP ${status}` : 'Unknown API error';
       }
     } else {
       // Network or other error

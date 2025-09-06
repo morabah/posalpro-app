@@ -173,7 +173,7 @@ export class ProposalService {
         });
         if (!proposal) return;
 
-        const PrismaLocal = (require('@prisma/client') as typeof import('@prisma/client')).Prisma;
+        const PrismaLocal = Prisma;
         const last = await prisma.$queryRaw<Array<{ v: number }>>(
           PrismaLocal.sql`SELECT COALESCE(MAX(version), 0) as v FROM proposal_versions WHERE "proposalId" = ${proposalId}`
         );

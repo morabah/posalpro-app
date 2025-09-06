@@ -11,11 +11,11 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { useInfiniteProposals } from '@/features/proposals/hooks';
 import type { Proposal } from '@/features/proposals/schemas';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { useInfiniteProposals } from '@/features/proposals/hooks';
-import { useDashboardFilters } from '@/lib/store/dashboardStore';
 import { logDebug } from '@/lib/logger';
+import { useDashboardFilters } from '@/lib/store/dashboardStore';
 import {
   AlertTriangleIcon,
   ArrowUpDownIcon,
@@ -107,47 +107,58 @@ interface ProposalCardProps {
 const ProposalCard = ({ proposal, onEdit, onDelete, onView }: ProposalCardProps) => {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
-  // Safety check for proposal object
+  // React hooks must be called in the same order every render
+  const handleView = useCallback(() => {
+    analytics(
+      'proposal_viewed_from_list',
+      {
+        proposalId: proposal?.id || '',
+        status: proposal?.status || '',
+        totalValue: proposal?.value || 0,
+      },
+      'low'
+    );
+
+    onView?.(proposal?.id || '');
+  }, [proposal?.id, proposal?.status, proposal?.value, analytics, onView]);
+
+  const handleEdit = useCallback(() => {
+    analytics(
+      'proposal_edit_initiated',
+      {
+        proposalId: proposal?.id || '',
+        status: proposal?.status || '',
+      },
+      'medium'
+    );
+
+    onEdit?.(proposal?.id || '');
+  }, [proposal?.id, proposal?.status, analytics, onEdit]);
+
+  const handleDelete = useCallback(() => {
+    analytics(
+      'proposal_delete_initiated',
+      {
+        proposalId: proposal?.id || '',
+        status: proposal?.status || '',
+      },
+      'medium'
+    );
+
+    onDelete?.(proposal?.id || '');
+  }, [proposal?.id, proposal?.status, analytics, onDelete]);
+
+  // Safety check for proposal object after hooks
   if (!proposal || typeof proposal !== 'object') {
     return null;
   }
-
-  const handleView = useCallback(() => {
-    analytics('proposal_viewed_from_list', {
-      proposalId: proposal.id,
-      status: proposal.status,
-      totalValue: proposal.value || 0,
-    }, 'low');
-
-    onView?.(proposal.id);
-  }, [proposal.id, proposal.status, proposal.value, analytics, onView]);
-
-  const handleEdit = useCallback(() => {
-    analytics('proposal_edit_initiated', {
-      proposalId: proposal.id,
-      status: proposal.status,
-    }, 'medium');
-
-    onEdit?.(proposal.id);
-  }, [proposal.id, proposal.status, analytics, onEdit]);
-
-  const handleDelete = useCallback(() => {
-    analytics('proposal_delete_initiated', {
-      proposalId: proposal.id,
-      status: proposal.status,
-    }, 'medium');
-
-    onDelete?.(proposal.id);
-  }, [proposal.id, proposal.status, analytics, onDelete]);
 
   return (
     <Card className="p-6 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
-            <h3 className="text-lg font-semibold text-gray-900 truncate">
-              {proposal.title}
-            </h3>
+            <h3 className="text-lg font-semibold text-gray-900 truncate">{proposal.title}</h3>
             <Badge variant={getStatusVariant(proposal.status)} size="sm">
               {proposal.status.replace('_', ' ')}
             </Badge>
@@ -157,9 +168,7 @@ const ProposalCard = ({ proposal, onEdit, onDelete, onView }: ProposalCardProps)
           </div>
 
           {proposal.description && (
-            <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-              {proposal.description}
-            </p>
+            <p className="text-sm text-gray-600 mb-2 line-clamp-2">{proposal.description}</p>
           )}
 
           <div className="flex items-center gap-4 text-sm text-gray-500">
@@ -186,9 +195,7 @@ const ProposalCard = ({ proposal, onEdit, onDelete, onView }: ProposalCardProps)
           <div className="text-xl font-bold text-gray-900">
             {formatCurrency(proposal.value || 0, proposal.currency)}
           </div>
-          <div className="text-sm text-gray-500">
-            Updated {formatDate(proposal.updatedAt)}
-          </div>
+          <div className="text-sm text-gray-500">Updated {formatDate(proposal.updatedAt)}</div>
         </div>
       </div>
 
@@ -246,7 +253,8 @@ export default function UnifiedProposalList() {
   });
 
   // Extract proposals from infinite query data and filter out any undefined/null items
-  const proposals = data?.pages?.flatMap(page => page.items).filter((item): item is Proposal => item != null) || [];
+  const proposals =
+    data?.pages?.flatMap(page => page.items).filter((item): item is Proposal => item != null) || [];
   const total = proposals.length;
 
   // Local state for filtering and searching
@@ -280,7 +288,7 @@ export default function UnifiedProposalList() {
 
   // Filter and sort proposals
   const filteredAndSortedProposals = useMemo(() => {
-    let filtered = proposals.filter((proposal: Proposal) => {
+    const filtered = proposals.filter((proposal: Proposal) => {
       // Safety check for undefined/null proposal
       if (!proposal || typeof proposal !== 'object') {
         return false;
@@ -296,9 +304,7 @@ export default function UnifiedProposalList() {
       const matchesDashboardStatus = (() => {
         switch (dashboardStatus) {
           case 'active':
-            return (
-              proposal.status === 'IN_REVIEW' || proposal.status === 'PENDING_APPROVAL'
-            );
+            return proposal.status === 'IN_REVIEW' || proposal.status === 'PENDING_APPROVAL';
           case 'overdue': {
             const due = proposal.dueDate ? new Date(proposal.dueDate) : null;
             const isFinal = proposal.status === 'ACCEPTED' || proposal.status === 'DECLINED';
@@ -481,7 +487,10 @@ export default function UnifiedProposalList() {
                 <p className="text-2xl font-bold text-gray-900">
                   {
                     filteredAndSortedProposals.filter(
-                      p => p && p.status && (p.status === 'IN_REVIEW' || p.status === 'PENDING_APPROVAL')
+                      p =>
+                        p &&
+                        p.status &&
+                        (p.status === 'IN_REVIEW' || p.status === 'PENDING_APPROVAL')
                     ).length
                   }
                 </p>
@@ -495,7 +504,13 @@ export default function UnifiedProposalList() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Customers</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {new Set(filteredAndSortedProposals.filter(p => p && p.customerId).map(p => p.customerId)).size}
+                  {
+                    new Set(
+                      filteredAndSortedProposals
+                        .filter(p => p && p.customerId)
+                        .map(p => p.customerId)
+                    ).size
+                  }
                 </p>
               </div>
             </div>
@@ -508,7 +523,9 @@ export default function UnifiedProposalList() {
                 <p className="text-sm font-medium text-gray-600">Total Value</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {formatCurrency(
-                    filteredAndSortedProposals.filter(p => p && typeof p.value === 'number').reduce((sum, p) => sum + (p.value || 0), 0)
+                    filteredAndSortedProposals
+                      .filter(p => p && typeof p.value === 'number')
+                      .reduce((sum, p) => sum + (p.value || 0), 0)
                   )}
                 </p>
               </div>
@@ -585,15 +602,17 @@ export default function UnifiedProposalList() {
         </div>
       ) : filteredAndSortedProposals.length > 0 ? (
         <div className="space-y-4">
-          {filteredAndSortedProposals.filter((proposal: Proposal) => proposal && proposal.id).map((proposal: Proposal) => (
-            <ProposalCard
-              key={proposal.id}
-              proposal={proposal}
-              onView={handleView}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          ))}
+          {filteredAndSortedProposals
+            .filter((proposal: Proposal) => proposal && proposal.id)
+            .map((proposal: Proposal) => (
+              <ProposalCard
+                key={proposal.id}
+                proposal={proposal}
+                onView={handleView}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            ))}
         </div>
       ) : (
         <Card className="p-8 text-center">

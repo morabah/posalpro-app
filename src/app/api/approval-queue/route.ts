@@ -274,11 +274,12 @@ export async function GET(request: NextRequest) {
       let aValue: any, bValue: any;
 
       switch (validatedQuery.sortBy) {
-        case 'priority':
+        case 'priority': {
           const priorityOrder = { Critical: 4, High: 3, Medium: 2, Low: 1 };
           aValue = priorityOrder[a.priority];
           bValue = priorityOrder[b.priority];
           break;
+        }
         case 'deadline':
           aValue = a.deadline.getTime();
           bValue = b.deadline.getTime();

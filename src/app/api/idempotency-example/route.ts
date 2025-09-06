@@ -9,7 +9,7 @@ import { logError, logInfo } from '@/lib/logger';
 import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 
 // Simulate a database/storage for this example
-let processedRequests = new Map<string, any>();
+const processedRequests = new Map<string, any>();
 
 export async function POST(request: NextRequest) {
   try {
