@@ -5,11 +5,17 @@
 
 import { Mail, MessageCircle, Phone } from 'lucide-react';
 import Link from 'next/link';
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout';
 
 export default function ContactPage() {
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto">
+    <ClientLayoutWrapper>
+      <AuthProvider>
+        <ProtectedLayout>
+          <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-3xl mx-auto">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">Contact Support</h1>
           <p className="mt-4 text-lg text-gray-600">
@@ -127,7 +133,10 @@ export default function ContactPage() {
             Back to PosalPro
           </Link>
         </div>
-      </div>
-    </div>
+            </div>
+          </div>
+        </ProtectedLayout>
+      </AuthProvider>
+    </ClientLayoutWrapper>
   );
 }

@@ -183,22 +183,35 @@ export class DashboardAPI {
         hypothesis: DASHBOARD_API_TRACEABILITY.hypotheses[0],
       });
 
-      // Use the actual enhanced-stats endpoint that exists
+      // Prefer enhanced-stats when available; gracefully fall back to basic stats
       const queryParams = new URLSearchParams();
       if (refresh) queryParams.set('fresh', '1');
 
-      const response = await apiClient.get<any>(
-        `/dashboard/enhanced-stats?${queryParams.toString()}`,
-        {
-          timeout: 20000, // 20 seconds timeout for dashboard queries
-        }
-      );
-
-      debugResponseStructure(response, 'Enhanced Stats API Response');
-      const enhancedStats = response.data;
+      let enhancedStats: any | null = null;
+      try {
+        const response = await apiClient.get<any>(
+          `/dashboard/enhanced-stats?${queryParams.toString()}`,
+          { timeout: 20000 }
+        );
+        debugResponseStructure(response, 'Enhanced Stats API Response');
+        enhancedStats = response.data;
+      } catch (enhErr) {
+        // Most common in FREE tier: missing entitlement (403). Fall back to basic stats.
+        logger.warn('Enhanced stats unavailable, falling back to basic stats', {
+          component: DASHBOARD_API_TRACEABILITY.component,
+          operation: 'getDashboardData',
+          reason: (enhErr as Error)?.message,
+        });
+        const basicRes = await apiClient.get<any>(
+          `/dashboard/stats?${queryParams.toString()}`,
+          { timeout: 15000 }
+        );
+        debugResponseStructure(basicRes, 'Basic Stats API Response');
+        enhancedStats = basicRes.data;
+      }
 
       if (!enhancedStats) {
-        throw new Error('No data received from enhanced stats API');
+        throw new Error('No data received from dashboard stats API');
       }
 
       // Transform enhanced stats data to dashboard data format

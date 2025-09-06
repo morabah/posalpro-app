@@ -178,30 +178,80 @@ services.
 **📊 Complete Data Flow Architecture:**
 
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│ Route       │    │   UI        │    │ React Query │
-│ Boundaries  │    │ Components  │    │   Hooks     │
-│ loading.tsx │    │             │    │             │
-│ error.tsx   │    └─────────────┘    └─────────────┘
-└─────────────┘             │                   │
-       │                    ▼                   ▼
-       │           ┌─────────────┐    ┌─────────────┐
-       │           │ Zustand     │    │  Service    │
-       │           │ UI State    │    │   Layer     │
-       │           └─────────────┘    └─────────────┘
-       │                    │                   │
-       └────────────────────┼───────────────────┼─────────────────┐
-                            ▼                   ▼                 │
-                   ┌─────────────┐    ┌─────────────┐            │
-                   │ Centralized │    │   API       │            │
-                   │ Query Keys  │    │  Routes     │            │
-                   └─────────────┘    └─────────────┘            │
-                                   │                            │
-                                   ▼                            ▼
-                          ┌─────────────┐             ┌─────────────┐
-                          │  Database   │◀────────────┤ Error       │
-                          │   Schema    │             │ Boundaries  │
-                          └─────────────┘             └─────────────┘
+┌──────────────────────┐
+│ Edge Middleware      │  middleware.ts + rbacIntegration.authenticateAndAuthorize
+└──────────┬───────────┘
+           │ allow/redirect
+           ▼
+┌───────────────────────────────┐
+│ Route Boundaries (App Router) │  loading.tsx / error.tsx
+└──────────────┬────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Layout Gating                                                                │
+│                                                                              │
+│  Dashboard routes:                                                           │
+│   src/app/(dashboard)/layout.tsx                                             │
+│     → getServerSession(authOptions)                                          │
+│     → AuthProvider(session)                                                  │
+│     → ProtectedLayout                                                        │
+│     → AppLayout (header/sidebar/nav)                                         │
+│                                                                              │
+│  Top-level internal routes (e.g., /observability, /performance/*, /docs):    │
+│     ClientLayoutWrapper → AuthProvider → ProtectedLayout                     │
+└──────────────────────────────────────────────────────────────────────────────┘
+               │
+               ▼
+┌──────────────┐        ┌─────────────┐
+│ UI Components│  <-->  │ Zustand UI  │  '@/lib/store/*'
+└──────┬───────┘        │ State       │
+       │                └─────────────┘
+       ▼
+┌──────────────┐
+│ React Query  │  hooks ('@/features/*/hooks') + centralized keys
+└──────┬───────┘
+       ▼
+┌──────────────┐        ┌────────────────┐        ┌──────────────────┐        ┌──────────┐
+│ Frontend     │  -->   │ API Routes     │  -->   │ DB Services      │  -->   │ Prisma   │
+│ Services     │  <--   │ (App Router)   │  <--   │ (src/lib/services│  <--   │ / DB     │
+│ (src/services│        │                │        │ /*.ts)           │        └──────────┘
+└──────────────┘        └────────────────┘        └──────────────────┘
+       │                         │                           │
+       ▼                         ▼                           ▼
+ ErrorHandlingService      ProblemDetails RFC7807      Caching / Indexes
+ (standard errors)         (standardized responses)    (prisma + SQL)
+
+Observability & Analytics: WebVitalsProvider, logger, metrics store, optimized analytics
+```
+
+## 🔐 Authentication & Route Gating
+
+- All pages under `src/app/(dashboard)/` are gated via `ProtectedLayout` in `src/app/(dashboard)/layout.tsx` and require authentication.
+- Top-level internal pages are gated client-side using `ClientLayoutWrapper` → `AuthProvider` → `ProtectedLayout`:
+  - Gated: `/observability`, `/docs`, `/performance` (all subpages), `/proposals/preview`, `/dashboard/proposals/create`, dev test pages (`/test-error`, `/test-error-boundary`, `/test-proposal`).
+  - Public: `/` (marketing/landing), auth routes under `/auth/*`, Next.js internals, and API routes as permitted by middleware.
+- Server-side protection remains enforced by `middleware.ts` + `rbacIntegration.authenticateAndAuthorize`.
+- New pages created via migration templates include this gating by default; remove it only for truly public pages (e.g., `/`).
+
+Implementation pattern (client wrapper inside a server page):
+
+```tsx
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout';
+
+export default function Page() {
+  return (
+    <ClientLayoutWrapper>
+      <AuthProvider>
+        <ProtectedLayout>
+          {/* page content */}
+        </ProtectedLayout>
+      </AuthProvider>
+    </ClientLayoutWrapper>
+  );
+}
 ```
 
 ## 🎯 **IMPLEMENTATION PRIORITIES**
@@ -1105,3 +1155,15 @@ document to every Cursor prompt when working on new features.
 
 **🎯 Implementation Principle**: Follow established patterns while adapting to
 specific domain requirements.
+
+---
+
+## 🔐 Entitlements & Feature Gating
+
+- Enforce premium features on the server using `createRoute` with `entitlements` in the route config. This is mandatory for security.
+- Optional client-side UX gating uses `FeatureGate`/`FeatureLockedBanner` to hide panels when a tenant lacks a feature. Client gating does not replace server checks.
+- Entitlements are stored per-tenant in the `Entitlement` table and cached server-side for performance.
+- Developer tooling:
+  - Seed default dev entitlements in `prisma/seed.ts` (tenant `tenant_default`).
+  - Toggle at runtime: `node scripts/toggle-entitlement.js <tenantId> <key> <enable|disable> [value]`.
+- See `docs/FEATURE_GATE_USAGE.md` for examples and patterns.

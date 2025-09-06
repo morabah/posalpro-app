@@ -15,6 +15,7 @@ import {
   ChartBarIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
+  CreditCardIcon,
   CircleStackIcon,
   ClockIcon,
   CogIcon,
@@ -253,6 +254,16 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     href: '/admin',
     icon: CogIcon,
     roles: ['admin'],
+    children: [
+      { id: 'admin-system', name: 'System', href: '/admin', icon: CogIcon, roles: ['admin'] },
+      {
+        id: 'admin-billing',
+        name: 'Billing',
+        href: '/admin/billing',
+        icon: CreditCardIcon,
+        roles: ['admin'],
+      },
+    ],
   },
   {
     id: 'about',
@@ -287,6 +298,13 @@ export function AppSidebar({
   const navigationThrottleRef = useRef(new Map<string, number>());
   const { getSidebarItems } = useTierSettings();
   const analytics = useAnalytics();
+
+  // Normalize admin roles: treat 'Administrator' and 'System Administrator' as admin
+  const isAdminRole = useCallback((role?: string) => {
+    if (!role) return false;
+    const r = role.toLowerCase();
+    return r === 'admin' || r === 'administrator' || r === 'system administrator';
+  }, []);
 
   // Auto-expand active group with null check
   useEffect(() => {
@@ -371,14 +389,14 @@ export function AppSidebar({
         // If no roles specified, show to everyone
         if (!item.roles) return true;
         // Show admin items only to admin users
-        if (item.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
+        if (item.roles.includes('admin') && !isAdminRole(user.role)) return false;
         // For other role restrictions, be more permissive
         return true;
       }).map(item => ({
         ...item,
         children: item.children?.filter(child => {
           if (!child.roles) return true;
-          if (child.roles.includes('admin') && user.role.toLowerCase() !== 'admin') return false;
+          if (child.roles.includes('admin') && !isAdminRole(user.role)) return false;
           return true;
         }),
       }));
@@ -390,7 +408,7 @@ export function AppSidebar({
     }
 
     return filteredItems;
-  }, [user?.role, getSidebarItems]);
+  }, [user?.role, getSidebarItems, isAdminRole]);
 
   const toggleGroup = useCallback(
     (groupId: string) => {

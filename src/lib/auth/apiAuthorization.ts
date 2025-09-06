@@ -5,7 +5,9 @@
 
 import { logger } from '@/lib/logger';
 import { getToken } from 'next-auth/jwt';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export interface AuthorizationContext {
   userId: string;
@@ -26,34 +28,60 @@ export interface PermissionCheck {
  * Validate user permissions for API endpoints
  */
 export async function validateApiPermission(
-  req: NextRequest,
+  req: any,
   requiredPermission: string | PermissionCheck,
   context?: Record<string, unknown>
 ): Promise<AuthorizationContext> {
-  const token = await getToken({
-    req,
-    secret:
-      process.env.NEXTAUTH_SECRET || 'posalpro-mvp2-secret-key-for-jwt-signing-32-chars-minimum',
-  });
+  // Compute path for logging regardless of request type
+  const path = (() => {
+    try {
+      if (req?.nextUrl?.pathname) return req.nextUrl.pathname;
+      if (req?.url) return new URL(req.url).pathname;
+    } catch {}
+    return 'unknown';
+  })();
 
-  if (!token) {
-    // Normalize: do not log missing token at WARN level; return clean 401
-    const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    throw res;
+  // Try JWT token first (works with NextRequest)
+  let token: any = null;
+  try {
+    token = await getToken({
+      req,
+      secret:
+        process.env.NEXTAUTH_SECRET || 'posalpro-mvp2-secret-key-for-jwt-signing-32-chars-minimum',
+    });
+  } catch {
+    // ignore and fallback to session
   }
 
-  const authContext: AuthorizationContext = {
-    userId: token.id as string,
-    roles: Array.isArray(token.roles) ? token.roles : [],
-    permissions: Array.isArray(token.permissions) ? token.permissions : [],
-  };
+  let authContext: AuthorizationContext | null = null;
+  if (token) {
+    authContext = {
+      userId: token.id as string,
+      roles: Array.isArray(token.roles) ? token.roles : [],
+      permissions: Array.isArray(token.permissions) ? token.permissions : [],
+    };
+  } else {
+    // Fallback: derive from server session (App Router Request compatible)
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      throw res;
+    }
+    authContext = {
+      userId: session.user.id,
+      roles: Array.isArray(session.user.roles) ? (session.user.roles as string[]) : [],
+      permissions: Array.isArray((session.user as any).permissions)
+        ? ((session.user as any).permissions as string[])
+        : [],
+    };
+  }
 
   // Skip permission checks for admin roles (System Administrator / Administrator) in all environments
   if (hasRole(authContext.roles, ['System Administrator', 'Administrator'])) {
     logger.info('[API Auth] Bypass for admin role', {
       userId: authContext.userId,
       roles: authContext.roles,
-      path: req.nextUrl.pathname,
+      path,
     });
     return authContext;
   }
@@ -64,7 +92,7 @@ export async function validateApiPermission(
       logger.warn('[API Auth] Permission denied', {
         userId: authContext.userId,
         required: requiredPermission,
-        path: req.nextUrl.pathname,
+        path,
       });
       const res = NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       throw res;
@@ -95,7 +123,7 @@ export async function validateApiPermission(
       required: permissionString,
       scope: requiredPermission.scope,
       context: context ? Object.keys(context) : [],
-      path: req.nextUrl.pathname,
+      path,
     });
     const res = NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     throw res;

@@ -14,70 +14,48 @@ import {
   type SearchResponse,
   type SearchResult,
 } from '@/features/search';
-import { authOptions } from '@/lib/auth';
+import { createRoute } from '@/lib/api/route';
 import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
 ;
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+// Permission checks are enforced via createRoute roles
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logError, logInfo } from '@/lib/logger';
 import { decidePaginationStrategy } from '@/lib/utils/selectiveHydration';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-// Session types (keeping these local as they're NextAuth specific)
-interface SessionUser {
-  id: string;
-  email?: string;
-  name?: string;
-  roles?: string[];
-}
-
-interface AuthenticatedSession {
-  user: SessionUser;
-  expires: string;
-}
+// (session types removed; createRoute provides authenticated user)
 
 /**
  * Global search endpoint with enhanced filtering and cursor pagination
  */
-export async function GET(request: NextRequest) {
-  const startTime = performance.now();
-  let session: AuthenticatedSession | null = null;
-  let validatedQuery: SearchQuery | null = null;
+export const GET = createRoute(
+  {
+    roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'],
+    query: SearchQuerySchema,
+  },
+  async ({ req, user, query }) => {
+    const startTime = performance.now();
+    let validatedQuery: SearchQuery | null = query as SearchQuery;
+    try {
+      // RBAC handled via createRoute roles; granular permission string skipped here
 
-  try {
-    // RBAC guard - general authenticated search
-    await validateApiPermission(request, { resource: 'search', action: 'read' });
-    // Authentication check
-    session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Parse and validate query parameters
-    const { searchParams } = new URL(request.url);
-    const queryParams = Object.fromEntries(searchParams);
-
-    const parsedQuery = SearchQuerySchema.parse(queryParams);
-    validatedQuery = parsedQuery as SearchQuery;
-
-    // Determine pagination strategy
-    const { useCursorPagination, reason } = decidePaginationStrategy({
-      cursor: validatedQuery.cursor,
-      limit: validatedQuery.limit,
-      sortBy: validatedQuery.sortBy,
-      sortOrder: validatedQuery.sortOrder,
-      fields: validatedQuery.fields ? validatedQuery.fields.join(',') : undefined,
-      page: validatedQuery.page,
-    });
+      // Determine pagination strategy
+      const { useCursorPagination, reason } = decidePaginationStrategy({
+        cursor: validatedQuery!.cursor,
+        limit: validatedQuery!.limit,
+        sortBy: validatedQuery!.sortBy,
+        sortOrder: validatedQuery!.sortOrder,
+        fields: validatedQuery!.fields ? validatedQuery!.fields.join(',') : undefined,
+        page: validatedQuery!.page,
+      });
 
     // Parse filters if provided
     let parsedFilters: SearchFilters = {};
-    if (validatedQuery.filters) {
+    if (validatedQuery!.filters) {
       try {
-        parsedFilters = JSON.parse(validatedQuery.filters);
+        parsedFilters = JSON.parse(validatedQuery!.filters);
       } catch (error) {
         return NextResponse.json({ error: 'Invalid filters format' }, { status: 400 });
       }
@@ -85,19 +63,19 @@ export async function GET(request: NextRequest) {
 
     // Track search event for analytics
     await logInfo('Search request initiated', {
-      searchTerm: validatedQuery.q,
-      searchType: validatedQuery.type,
-      userId: session.user.id,
-      userEmail: session?.user?.email,
-      userRoles: session?.user?.roles,
+      searchTerm: validatedQuery!.q,
+      searchType: validatedQuery!.type,
+      userId: user.id,
+      userEmail: (user as any)?.email,
+      userRoles: (user as any)?.roles,
       timestamp: new Date().toISOString(),
     });
 
     // Perform enhanced search with cursor pagination
     const searchResults = await performEnhancedSearch(
-      validatedQuery,
+      validatedQuery!,
       parsedFilters,
-      session.user.id,
+      user.id,
       useCursorPagination
     );
 
@@ -105,25 +83,25 @@ export async function GET(request: NextRequest) {
 
     if (useCursorPagination) {
       pagination = {
-        page: validatedQuery.page,
-        limit: validatedQuery.limit,
+        page: validatedQuery!.page,
+        limit: validatedQuery!.limit,
         total: searchResults.totalCount,
-        totalPages: Math.ceil(searchResults.totalCount / validatedQuery.limit),
+        totalPages: Math.ceil(searchResults.totalCount / validatedQuery!.limit),
         hasMore: searchResults.hasNextPage,
-        nextPage: searchResults.hasNextPage ? validatedQuery.page + 1 : null,
-        prevPage: validatedQuery.page > 1 ? validatedQuery.page - 1 : null,
+        nextPage: searchResults.hasNextPage ? validatedQuery!.page + 1 : null,
+        prevPage: validatedQuery!.page > 1 ? validatedQuery!.page - 1 : null,
         nextCursor: searchResults.nextCursor,
       };
     } else {
-      const totalPages = Math.ceil(searchResults.totalCount / validatedQuery.limit);
+      const totalPages = Math.ceil(searchResults.totalCount / validatedQuery!.limit);
       pagination = {
-        page: validatedQuery.page,
-        limit: validatedQuery.limit,
+        page: validatedQuery!.page,
+        limit: validatedQuery!.limit,
         total: searchResults.totalCount,
         totalPages,
-        hasMore: validatedQuery.page < totalPages,
-        nextPage: validatedQuery.page < totalPages ? validatedQuery.page + 1 : null,
-        prevPage: validatedQuery.page > 1 ? validatedQuery.page - 1 : null,
+        hasMore: validatedQuery!.page < totalPages,
+        nextPage: validatedQuery!.page < totalPages ? validatedQuery!.page + 1 : null,
+        prevPage: validatedQuery!.page > 1 ? validatedQuery!.page - 1 : null,
       };
     }
 
@@ -135,7 +113,7 @@ export async function GET(request: NextRequest) {
         statuses: [],
         dateRanges: [],
       },
-      searchTerm: validatedQuery.q,
+      searchTerm: validatedQuery!.q,
       totalTime: searchResults.executionTime,
       suggestions: searchResults.suggestions || [],
       meta: {
@@ -147,7 +125,7 @@ export async function GET(request: NextRequest) {
     };
 
     await logInfo('Search request success', {
-      searchTerm: validatedQuery.q,
+      searchTerm: validatedQuery!.q,
       totalCount: response.meta.totalCount,
       executionTime: response.meta.executionTime,
     });
@@ -155,9 +133,9 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     await logError('Search request failed', error as unknown, {
       searchTerm: validatedQuery?.q,
-      userId: session?.user?.id,
-      userEmail: session?.user?.email,
-      userRoles: session?.user?.roles,
+      userId: user.id,
+      userEmail: (user as any)?.email,
+      userRoles: (user as any)?.roles,
       timestamp: new Date().toISOString(),
     });
 
@@ -171,13 +149,14 @@ export async function GET(request: NextRequest) {
         component: 'SearchRoute',
         query: validatedQuery?.q,
         searchType: validatedQuery?.type,
-        userId: session?.user?.id,
+        userId: user.id,
       }
     );
 
     return NextResponse.json({ error: 'Search operation failed' }, { status: 500 });
   }
-}
+  }
+);
 
 /**
  * Perform enhanced search across multiple entity types

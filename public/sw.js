@@ -26,8 +26,7 @@ const API_CACHE_PATTERNS = [
   '/api/dashboard/stats',
   // Short-lived provider discovery cache to smooth dev spikes
   '/api/auth/providers',
-  // Short-lived session cache to smooth dev spikes
-  '/api/auth/session',
+  // Do NOT cache /api/auth/session to avoid stale auth in dev
 ];
 
 // Cache strategies

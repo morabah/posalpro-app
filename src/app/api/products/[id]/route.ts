@@ -5,8 +5,7 @@
  */
 
 import { fail } from '@/lib/api/response';
-import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
@@ -26,7 +25,6 @@ import { logError, logInfo, logWarn } from '@/lib/logger';
 import { securityAuditManager } from '@/lib/security/audit';
 import { apiRateLimiter } from '@/lib/security/hardening';
 import type { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -98,144 +96,35 @@ type ProductRelatedFrom = {
 /**
  * GET /api/products/[id] - Get specific product with relationships
  */
-export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  await validateApiPermission(request, { resource: 'products', action: 'read' });
+export const GET = createRoute(
+  { roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'] },
+  async ({ req, user }) => {
+    const id = req.url.split('/').pop()?.split('?')[0];
+    if (!id) return Response.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
 
-  try {
-    const params = await context.params;
-    const { id } = params;
-
-    // ✅ RATE LIMITING: Apply rate limiting to prevent abuse
-    const clientIp =
-      request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
-    if (!apiRateLimiter.isAllowed(clientIp)) {
-      logWarn('Rate limit exceeded for product GET request', {
-        component: 'ProductsIdRoute',
-        operation: 'getProductById',
-        clientIp,
-        productId: id,
-      });
-
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Rate limit exceeded',
-          code: ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
-          metadata: {
-            component: 'ProductsIdRoute',
-            operation: 'getProductById',
-            clientIp,
-            productId: id,
-          },
-        }),
-        'Too many requests',
-        ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
-        429,
-        {
-          userFriendlyMessage: 'Too many requests. Please try again later.',
-          retryAfter: Math.ceil(apiRateLimiter.getResetTime(clientIp) / 1000),
-        }
-      );
-    }
-
-    // Authentication check
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Unauthorized access attempt',
-          code: ErrorCodes.AUTH.UNAUTHORIZED,
-          metadata: {
-            component: 'ProductsIdRoute',
-            operation: 'getProductById',
-            productId: id,
-          },
-        }),
-        'Unauthorized',
-        ErrorCodes.AUTH.UNAUTHORIZED,
-        401,
-        { userFriendlyMessage: 'You must be logged in to view this product' }
-      );
-    }
-
-    // ✅ SECURITY AUDIT: Log the access attempt
-    securityAuditManager.logAccess({
-      userId: session.user.id,
-      resource: 'products',
-      action: 'read',
-      scope: 'TEAM',
-      success: true,
-      timestamp: new Date().toISOString(),
-      metadata: {
-        productId: id,
-        operationType: 'api_access',
-        component: 'ProductsIdRoute',
-      },
-    });
-
-    // Fetch product with comprehensive relationships
     const product = await prisma.product.findUnique({
       where: { id },
       include: {
         relationships: {
           include: {
-            targetProduct: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-                price: true,
-                currency: true,
-                isActive: true,
-              },
-            },
+            targetProduct: { select: { id: true, name: true, sku: true, price: true, currency: true, isActive: true } },
           },
         },
         relatedFrom: {
           include: {
-            sourceProduct: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-                price: true,
-                currency: true,
-                isActive: true,
-              },
-            },
+            sourceProduct: { select: { id: true, name: true, sku: true, price: true, currency: true, isActive: true } },
           },
         },
         proposalProducts: {
-          include: {
-            proposal: {
-              include: {
-                customer: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
+          include: { proposal: { include: { customer: { select: { id: true, name: true } } } } },
+          orderBy: { createdAt: 'desc' },
           take: 10,
         },
-        _count: {
-          select: {
-            relationships: true,
-            relatedFrom: true,
-            proposalProducts: true,
-            validationRules: true,
-          },
-        },
+        _count: { select: { relationships: true, relatedFrom: true, proposalProducts: true, validationRules: true } },
       },
     });
 
-    if (!product) {
-      return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
-    }
+    if (!product) return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
 
     // Transform the data for frontend consumption
     const transformedProduct = {
@@ -299,7 +188,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     delete (transformedProduct as any)._count;
 
     // Track product view for analytics
-    await trackProductViewEvent(session.user.id, id, product.name);
+    await trackProductViewEvent(user.id, id, product.name);
 
     // Validate response against schema
     const validationResult = ProductSchema.safeParse(transformedProduct);
@@ -315,356 +204,241 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       ? validationResult.data
       : transformedProduct;
 
-    return NextResponse.json(
-      {
-        ok: true,
-        data: validatedProductData,
+    return NextResponse.json({ ok: true, data: validatedProductData }, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
       },
-      {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          Pragma: 'no-cache',
-          Expires: '0',
-        },
-      }
-    );
-  } catch (error) {
-    const params = await context.params;
-    // Log the error using ErrorHandlingService
-    errorHandlingService.processError(error);
-
-    return createApiErrorResponse(
-      error instanceof StandardError
-        ? error
-        : new StandardError({
-            message: `Failed to fetch product ${params.id}`,
-            code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
-            cause: error instanceof Error ? error : undefined,
-            metadata: {
-              component: 'ProductsIdRoute',
-              operation: 'getProductById',
-              productId: params.id,
-            },
-          }),
-      'Failed to fetch product',
-      ErrorCodes.SYSTEM.INTERNAL_ERROR,
-      500,
-      { userFriendlyMessage: 'Unable to retrieve the product. Please try again later.' }
-    );
+    });
   }
-}
+);
 
 /**
- * PUT /api/products/[id] - Update specific product
+ * PUT /api/products/[id] - Update specific product (createRoute + entitlements)
  */
-export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  await validateApiPermission(request, { resource: 'products', action: 'update' });
-  try {
-    const params = await context.params;
-    const { id } = params;
+export const PUT = createRoute(
+  {
+    roles: ['admin', 'manager', 'System Administrator', 'Administrator'],
+    body: ProductUpdateSchema,
+    entitlements: ['feature.products.advanced'],
+  },
+  async ({ req, user, body }) => {
+    try {
+      const id = req.url.split('/').pop()?.split('?')[0];
+      if (!id) return NextResponse.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
 
-    // Authentication check
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(fail('UNAUTHORIZED', 'Unauthorized'), { status: 401 });
-    }
+      const validatedData = body!;
 
-    // Parse and validate request body
-    const body = await request.json();
-    const validatedData = ProductUpdateSchema.parse(body);
-
-    // Check if product exists
-    const existingProduct = await prisma.product.findUnique({
-      where: { id },
-      select: { id: true, name: true, sku: true, version: true },
-    });
-
-    if (!existingProduct) {
-      return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
-    }
-
-    // Check for SKU uniqueness if SKU is being updated
-    if (validatedData.sku && validatedData.sku !== existingProduct.sku) {
-      const skuExists = await prisma.product.findFirst({
-        where: {
-          sku: validatedData.sku,
-          id: { not: id },
-        },
-        select: { id: true },
+      const existingProduct = await prisma.product.findUnique({
+        where: { id },
+        select: { id: true, name: true, sku: true, version: true },
       });
-
-      if (skuExists) {
-        return NextResponse.json(
-          { error: 'A product with this SKU already exists' },
-          { status: 400 }
-        );
+      if (!existingProduct) {
+        return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
       }
-    }
 
-    // Update product with version increment
-    const updatedProduct = await prisma.product.update({
-      where: { id },
-      data: {
-        ...validatedData,
-        ...(validatedData.attributes
-          ? { attributes: validatedData.attributes as unknown as Prisma.InputJsonValue }
-          : {}),
-        version: existingProduct.version + 1,
-        usageAnalytics: {
-          lastUpdatedBy: session.user.id,
-          lastUpdatedAt: new Date().toISOString(),
-          updateCount: (existingProduct as any).usageAnalytics?.updateCount + 1 || 1,
-          hypothesis: ['H3', 'H4'],
-          userStories: ['US-3.1', 'US-3.2'],
-        } as unknown as Prisma.InputJsonValue,
-      } as any,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        sku: true,
-        price: true,
-        currency: true,
-        category: true,
-        tags: true,
-        attributes: true,
-        images: true,
-        stockQuantity: true,
-        status: true,
-        isActive: true,
-        version: true,
-        userStoryMappings: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    } as any);
+      if (validatedData.sku && validatedData.sku !== existingProduct.sku) {
+        const skuExists = await prisma.product.findFirst({
+          where: { sku: validatedData.sku, id: { not: id } },
+          select: { id: true },
+        });
+        if (skuExists) {
+          return NextResponse.json(
+            { error: 'A product with this SKU already exists' },
+            { status: 400 }
+          );
+        }
+      }
 
-    // Track product update for analytics
-    await trackProductUpdateEvent(
-      session.user.id,
-      id,
-      existingProduct.name,
-      Object.keys(validatedData)
-    );
+      const updatedProduct = await prisma.product.update({
+        where: { id },
+        data: {
+          ...validatedData,
+          ...(validatedData.attributes
+            ? { attributes: validatedData.attributes as unknown as Prisma.InputJsonValue }
+            : {}),
+          version: existingProduct.version + 1,
+          usageAnalytics: {
+            lastUpdatedBy: user.id,
+            lastUpdatedAt: new Date().toISOString(),
+            updateCount: (existingProduct as any).usageAnalytics?.updateCount + 1 || 1,
+            hypothesis: ['H3', 'H4'],
+            userStories: ['US-3.1', 'US-3.2'],
+          } as unknown as Prisma.InputJsonValue,
+        } as any,
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          sku: true,
+          price: true,
+          currency: true,
+          category: true,
+          tags: true,
+          attributes: true,
+          images: true,
+          stockQuantity: true,
+          status: true,
+          isActive: true,
+          version: true,
+          userStoryMappings: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      } as any);
 
-    // Transform null values to appropriate defaults before validation
-    const transformedProduct = {
-      ...updatedProduct,
-      description: updatedProduct.description || '',
-      price:
-        typeof updatedProduct.price === 'object' && updatedProduct.price !== null
-          ? Number(updatedProduct.price.toString())
-          : Number(updatedProduct.price ?? 0),
-      category: Array.isArray(updatedProduct.category)
-        ? updatedProduct.category
-        : updatedProduct.category
-          ? [updatedProduct.category]
-          : [],
-      stockQuantity: updatedProduct.stockQuantity || 0,
-      status: updatedProduct.status || 'ACTIVE',
-      attributes: updatedProduct.attributes || undefined,
-      usageAnalytics: (updatedProduct as any).usageAnalytics || undefined,
-    };
+      await trackProductUpdateEvent(user.id, id, existingProduct.name, Object.keys(validatedData));
 
-    // Validate response against schema
-    const validationResult = ProductSchema.safeParse(transformedProduct);
-    if (!validationResult.success) {
-      logError('Product schema validation failed after update', validationResult.error, {
-        component: 'ProductAPI',
-        operation: 'PUT',
-      });
-      // Return the product data anyway for now, but log the validation error
-    }
+      const transformedProduct = {
+        ...updatedProduct,
+        description: updatedProduct.description || '',
+        price:
+          typeof updatedProduct.price === 'object' && updatedProduct.price !== null
+            ? Number(updatedProduct.price.toString())
+            : Number(updatedProduct.price ?? 0),
+        category: Array.isArray(updatedProduct.category)
+          ? updatedProduct.category
+          : updatedProduct.category
+            ? [updatedProduct.category]
+            : [],
+        stockQuantity: updatedProduct.stockQuantity || 0,
+        status: updatedProduct.status || 'ACTIVE',
+        attributes: updatedProduct.attributes || undefined,
+        usageAnalytics: (updatedProduct as any).usageAnalytics || undefined,
+      };
 
-    const validatedUpdatedData = validationResult.success
-      ? validationResult.data
-      : transformedProduct;
+      const validationResult = ProductSchema.safeParse(transformedProduct);
+      if (!validationResult.success) {
+        logError('Product schema validation failed after update', validationResult.error, {
+          component: 'ProductAPI',
+          operation: 'PUT',
+        });
+      }
 
-    return NextResponse.json({
-      ok: true,
-      data: validatedUpdatedData,
-    });
-  } catch (error) {
-    const params = await context.params;
-    errorHandlingService.processError(
-      error,
-      'Failed to update product',
-      ErrorCodes.DATA.UPDATE_FAILED,
-      { component: 'ProductsIdRoute', operation: 'updateProduct', productId: params.id }
-    );
-
-    if (error instanceof z.ZodError) {
+      const validatedUpdatedData = validationResult.success ? validationResult.data : transformedProduct;
+      return NextResponse.json({ ok: true, data: validatedUpdatedData });
+    } catch (error) {
+      errorHandlingService.processError(
+        error,
+        'Failed to update product',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        { component: 'ProductsIdRoute', operation: 'updateProduct' }
+      );
       return createApiErrorResponse(
         new StandardError({
-          message: 'Validation failed',
-          code: ErrorCodes.VALIDATION.INVALID_INPUT,
-          cause: error,
+          message: 'Failed to update product',
+          code: ErrorCodes.DATA.UPDATE_FAILED,
+          cause: error instanceof Error ? error : undefined,
           metadata: {
             component: 'ProductsIdRoute',
             operation: 'updateProduct',
-            productId: params.id,
           },
-        }),
-        'Validation failed',
-        ErrorCodes.VALIDATION.INVALID_INPUT,
-        400
+        })
       );
     }
-
-    return createApiErrorResponse(
-      new StandardError({
-        message: 'Failed to update product',
-        code: ErrorCodes.DATA.UPDATE_FAILED,
-        cause: error instanceof Error ? error : undefined,
-        metadata: {
-          component: 'ProductsIdRoute',
-          operation: 'updateProduct',
-          productId: params.id,
-        },
-      })
-    );
   }
-}
+);
 
 /**
- * DELETE /api/products/[id] - Archive/delete specific product
+ * DELETE /api/products/[id] - Archive/delete specific product (createRoute + entitlements)
  */
-export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  await validateApiPermission(request, { resource: 'products', action: 'delete' });
-  try {
-    const params = await context.params;
-    const { id } = params;
+export const DELETE = createRoute(
+  {
+    roles: ['admin', 'manager', 'System Administrator', 'Administrator'],
+    entitlements: ['feature.products.advanced'],
+  },
+  async ({ req, user }) => {
+    try {
+      const id = req.url.split('/').pop()?.split('?')[0];
+      if (!id) return NextResponse.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
 
-    // Authentication check
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(fail('UNAUTHORIZED', 'Unauthorized'), { status: 401 });
-    }
-
-    // Check if product exists and get usage information
-    const product = await prisma.product.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        isActive: true,
-        _count: {
-          select: {
-            proposalProducts: true,
-            relationships: true,
-            relatedFrom: true,
-          },
-        },
-      },
-    });
-
-    if (!product) {
-      return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
-    }
-
-    // Check if product is in use
-    const isInUse =
-      product._count.proposalProducts > 0 ||
-      product._count.relationships > 0 ||
-      product._count.relatedFrom > 0;
-
-    if (isInUse) {
-      // Soft delete by marking as inactive instead of hard delete
-      const archivedProduct = await prisma.product.update({
+      const product = await prisma.product.findUnique({
         where: { id },
-        data: {
-          isActive: false,
-          usageAnalytics: {
-            archivedBy: session.user.id,
-            archivedAt: new Date().toISOString(),
-            archivedReason: 'Product archived due to being in use',
-          },
-        },
         select: {
           id: true,
           name: true,
           isActive: true,
-          updatedAt: true,
+          _count: { select: { proposalProducts: true, relationships: true, relatedFrom: true } },
         },
       });
-
-      // Track product archival for analytics
-      await trackProductArchiveEvent(session.user.id, id, product.name, 'in_use');
-
-      // Transform null values to appropriate defaults before validation
-      const transformedProduct = {
-        ...archivedProduct,
-        description: (archivedProduct as any).description || '',
-        price:
-          typeof (archivedProduct as any).price === 'object' &&
-          (archivedProduct as any).price !== null
-            ? Number((archivedProduct as any).price.toString())
-            : Number((archivedProduct as any).price ?? 0),
-        category: Array.isArray((archivedProduct as any).category)
-          ? (archivedProduct as any).category
-          : (archivedProduct as any).category
-            ? [(archivedProduct as any).category]
-            : [],
-        stockQuantity: (archivedProduct as any).stockQuantity || 0,
-        status: (archivedProduct as any).status || 'ACTIVE',
-        attributes: (archivedProduct as any).attributes || undefined,
-        usageAnalytics: (archivedProduct as any).usageAnalytics || undefined,
-      };
-
-      // Validate response against schema
-      const validationResult = ProductSchema.safeParse(transformedProduct);
-      if (!validationResult.success) {
-        logError('Product schema validation failed after archive', validationResult.error, {
-          component: 'ProductAPI',
-          operation: 'PUT_ARCHIVE',
-        });
-        // Return the product data anyway for now, but log the validation error
+      if (!product) {
+        return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
       }
 
-      const validatedArchivedData = validationResult.success
-        ? validationResult.data
-        : transformedProduct;
+      const isInUse =
+        product._count.proposalProducts > 0 ||
+        product._count.relationships > 0 ||
+        product._count.relatedFrom > 0;
 
-      return NextResponse.json({
-        ok: true,
-        data: validatedArchivedData,
-      });
-    } else {
-      // Hard delete if not in use
-      await prisma.product.delete({
-        where: { id },
-      });
+      if (isInUse) {
+        const archivedProduct = await prisma.product.update({
+          where: { id },
+          data: {
+            isActive: false,
+            usageAnalytics: {
+              archivedBy: user.id,
+              archivedAt: new Date().toISOString(),
+              archivedReason: 'Product archived due to being in use',
+            },
+          },
+          select: { id: true, name: true, isActive: true, updatedAt: true },
+        });
 
-      // Track product deletion for analytics
-      await trackProductArchiveEvent(session.user.id, id, product.name, 'deleted');
+        await trackProductArchiveEvent(user.id, id, product.name, 'in_use');
 
-      return NextResponse.json({
-        ok: true,
-        data: { id, deleted: true },
-      });
+        const transformedProduct = {
+          ...archivedProduct,
+          description: (archivedProduct as any).description || '',
+          price:
+            typeof (archivedProduct as any).price === 'object' &&
+            (archivedProduct as any).price !== null
+              ? Number((archivedProduct as any).price.toString())
+              : Number((archivedProduct as any).price ?? 0),
+          category: Array.isArray((archivedProduct as any).category)
+            ? (archivedProduct as any).category
+            : (archivedProduct as any).category
+              ? [(archivedProduct as any).category]
+              : [],
+          stockQuantity: (archivedProduct as any).stockQuantity || 0,
+          status: (archivedProduct as any).status || 'ACTIVE',
+          attributes: (archivedProduct as any).attributes || undefined,
+          usageAnalytics: (archivedProduct as any).usageAnalytics || undefined,
+        };
+
+        const validationResult = ProductSchema.safeParse(transformedProduct);
+        if (!validationResult.success) {
+          logError('Product schema validation failed after archive', validationResult.error, {
+            component: 'ProductAPI',
+            operation: 'PUT_ARCHIVE',
+          });
+        }
+
+        const validatedArchivedData = validationResult.success ? validationResult.data : transformedProduct;
+        return NextResponse.json({ ok: true, data: validatedArchivedData });
+      } else {
+        await prisma.product.delete({ where: { id } });
+        await trackProductArchiveEvent(user.id, id, product.name, 'deleted');
+        return NextResponse.json({ ok: true, data: { id, deleted: true } });
+      }
+    } catch (error) {
+      errorHandlingService.processError(
+        error,
+        'Failed to delete product',
+        ErrorCodes.DATA.DELETE_FAILED,
+        { component: 'ProductsIdRoute', operation: 'deleteProduct' }
+      );
+      return createApiErrorResponse(
+        new StandardError({
+          message: 'Failed to delete product',
+          code: ErrorCodes.DATA.DELETE_FAILED,
+          cause: error instanceof Error ? error : undefined,
+          metadata: { component: 'ProductsIdRoute', operation: 'deleteProduct' },
+        })
+      );
     }
-  } catch (error) {
-    const params = await context.params;
-    errorHandlingService.processError(
-      error,
-      'Failed to delete product',
-      ErrorCodes.DATA.DELETE_FAILED,
-      { component: 'ProductsIdRoute', operation: 'deleteProduct', productId: params.id }
-    );
-    return createApiErrorResponse(
-      new StandardError({
-        message: 'Failed to delete product',
-        code: ErrorCodes.DATA.DELETE_FAILED,
-        cause: error instanceof Error ? error : undefined,
-        metadata: {
-          component: 'ProductsIdRoute',
-          operation: 'deleteProduct',
-          productId: params.id,
-        },
-      })
-    );
   }
-}
+);
 
 /**
  * Track product view event for analytics

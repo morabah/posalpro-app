@@ -50,6 +50,9 @@ const MOBILE_NAV_ITEMS: MobileNavItem[] = [
     icon: TrendingUp,
     category: 'secondary',
   },
+  // Admin-only entries
+  { id: 'admin', label: 'Admin', href: '/admin', icon: Settings, category: 'secondary', role: ['admin','Administrator','System Administrator'] },
+  { id: 'admin-billing', label: 'Billing', href: '/admin/billing', icon: Settings, category: 'secondary', role: ['admin','Administrator','System Administrator'] },
   { id: 'settings', label: 'Settings', href: '/settings', icon: Settings, category: 'utility' },
 ];
 

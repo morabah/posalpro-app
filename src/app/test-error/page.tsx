@@ -7,6 +7,9 @@
 
 import { logInfo } from '@/lib/logger';
 import { useEffect, useState } from 'react';
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout';
 
 type ErrorType = 'sync' | 'async' | 'component' | 'api';
 
@@ -66,9 +69,12 @@ export default function TestErrorPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
-        <div className="px-6 py-8">
+    <ClientLayoutWrapper>
+      <AuthProvider>
+        <ProtectedLayout>
+          <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
+              <div className="px-6 py-8">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Error Boundary Testing</h1>
             <p className="text-gray-600 text-sm">
@@ -157,9 +163,11 @@ export default function TestErrorPage() {
                 Again" or "Go to Dashboard". Check the browser console for detailed error logging.
               </p>
             </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
+        </ProtectedLayout>
+      </AuthProvider>
+    </ClientLayoutWrapper>
   );
 }

@@ -5,6 +5,9 @@
  */
 
 import { MemoryOptimizationDashboard } from '@/components/performance/MemoryOptimizationDashboard';
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { ErrorHandlingService } from '@/lib/errors';
@@ -21,8 +24,11 @@ function MemoryOptimizationPage() {
   const errorHandlingService = ErrorHandlingService.getInstance();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <ClientLayoutWrapper>
+      <AuthProvider>
+        <ProtectedLayout>
+          <div className="min-h-screen bg-gray-50">
+            <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Memory Optimization</h1>
@@ -179,8 +185,11 @@ function MemoryOptimizationPage() {
             </div>
           </div>
         </Card>
-      </div>
-    </div>
+            </div>
+          </div>
+        </ProtectedLayout>
+      </AuthProvider>
+    </ClientLayoutWrapper>
   );
 }
 

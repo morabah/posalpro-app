@@ -4,8 +4,8 @@
  * Component Traceability: US-2.1, US-2.2, H4, H7
  */
 
-import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { createRoute } from '@/lib/api/route';
+// Permission checks are enforced via createRoute roles
 import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
@@ -15,8 +15,7 @@ import {
 } from '@/lib/errors';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 /**
@@ -44,41 +43,31 @@ const ActivityQuerySchema = z.object({
 /**
  * GET /api/users/[id] - Get specific user profile and activity
  */
-export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    await validateApiPermission(request, { resource: 'users', action: 'read' });
-    const params = await context.params;
-    const { id } = params;
+export const GET = createRoute(
+  {
+    roles: ['admin', 'manager', 'viewer', 'System Administrator', 'Administrator'],
+    query: ActivityQuerySchema,
+  },
+  async ({ req, user, query }) => {
+    try {
+      // RBAC enforced via createRoute roles; skipping permission string here
+      const id = req.url.split('/').pop()?.split('?')[0] as string;
+      if (!id) {
+        return createApiErrorResponse(
+          new StandardError({
+            message: 'User ID is required',
+            code: ErrorCodes.VALIDATION.INVALID_INPUT,
+            metadata: { component: 'UsersIdRoute', operation: 'getUserById' },
+          })
+        );
+      }
 
-    // Authentication check
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Unauthorized access attempt',
-          code: ErrorCodes.AUTH.UNAUTHORIZED,
-          metadata: {
-            component: 'UsersIdRoute',
-            operation: 'getUserById',
-            userId: id,
-          },
-        }),
-        'Unauthorized',
-        ErrorCodes.AUTH.UNAUTHORIZED,
-        401,
-        { userFriendlyMessage: 'You must be logged in to view user profiles' }
-      );
-    }
+      const validatedQuery = query as z.infer<typeof ActivityQuerySchema>;
 
-    // Parse query parameters
-    const { searchParams } = new URL(request.url);
-    const queryParams = Object.fromEntries(searchParams);
-    const validatedQuery = ActivityQuerySchema.parse(queryParams);
-
-    // Get user role and permission context for granular security
-    const userRoles = session.user.roles || ['Business Development Manager']; // Array of user roles
-    const userPermissions = session.user.permissions || []; // Array of user permissions
-    const userRole = userRoles[0]; // Primary role for backward compatibility
+      // Get user role and permission context for granular security
+      const userRoles = (user.roles as string[]) || ['Business Development Manager'];
+      const userPermissions = ((user as any).permissions as string[]) || [];
+      const userRole = userRoles[0];
 
     // Parse requested fields with selective hydration and security context
     const { select: userSelect, optimizationMetrics } = parseFieldsParam(
@@ -126,12 +115,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const finalSelect = { ...userSelect, ...essentialFields };
 
     // Check if user exists and is accessible
-    const user = await prisma.user.findUnique({
+    const userRecord = await prisma.user.findUnique({
       where: { id },
       select: finalSelect,
     });
 
-    if (!user) {
+    if (!userRecord) {
       return createApiErrorResponse(
         new StandardError({
           message: `User with ID ${id} not found`,
@@ -150,16 +139,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // Only allow access to active users (privacy protection)
-    if (user.status !== 'ACTIVE') {
+    if (userRecord.status !== 'ACTIVE') {
       return createApiErrorResponse(
         new StandardError({
-          message: `User with ID ${id} is not active (status: ${user.status})`,
+          message: `User with ID ${id} is not active (status: ${userRecord.status})`,
           code: ErrorCodes.AUTH.PERMISSION_DENIED,
           metadata: {
             component: 'UsersIdRoute',
             operation: 'getUserById',
             userId: id,
-            userStatus: user.status,
+            userStatus: userRecord.status,
           },
         }),
         'User not available',
@@ -171,39 +160,55 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     // Prepare the base user profile
     const userProfile = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      department: user.department,
-      status: user.status,
-      lastLogin: user.lastLogin,
-      createdAt: user.createdAt,
-      timezone: user.communicationPrefs?.timezone || 'UTC',
-      language: user.communicationPrefs?.language || user.preferences?.language || 'en',
-      theme: user.preferences?.theme || 'system',
-      analyticsConsent: user.preferences?.analyticsConsent || false,
-      roles: user.roles.map((ur: any) => ({
+      id: userRecord.id,
+      name: userRecord.name,
+      email: userRecord.email,
+      department: userRecord.department,
+      status: userRecord.status,
+      lastLogin: userRecord.lastLogin,
+      createdAt: userRecord.createdAt,
+      timezone: userRecord.communicationPrefs?.timezone || 'UTC',
+      language: userRecord.communicationPrefs?.language || userRecord.preferences?.language || 'en',
+      theme: userRecord.preferences?.theme || 'system',
+      analyticsConsent: userRecord.preferences?.analyticsConsent || false,
+      roles: userRecord.roles.map((ur: any) => ({
         name: ur.role.name,
         description: ur.role.description,
         level: ur.role.level,
       })),
       stats: {
-        proposalsCreated: user._count.createdProposals,
-        proposalsAssigned: user._count.assignedProposals,
-        contentCreated: user._count.createdContent,
-        hypothesisEvents: user._count.hypothesisEvents,
+        proposalsCreated: userRecord._count.createdProposals,
+        proposalsAssigned: userRecord._count.assignedProposals,
+        contentCreated: userRecord._count.createdContent,
+        hypothesisEvents: userRecord._count.hypothesisEvents,
       },
-      performance: user.analyticsProfile
+      performance: userRecord.analyticsProfile
         ? {
-            metrics: user.analyticsProfile.performanceMetrics,
-            hypothesisContributions: user.analyticsProfile.hypothesisContributions,
-            lastAssessment: user.analyticsProfile.lastAssessment,
+            metrics: userRecord.analyticsProfile.performanceMetrics,
+            hypothesisContributions: userRecord.analyticsProfile.hypothesisContributions,
+            lastAssessment: userRecord.analyticsProfile.lastAssessment,
           }
         : null,
     };
 
     // If activity is requested, fetch recent activity
     if (validatedQuery.includeActivity) {
+      // Modern SaaS: gate advanced activity via entitlement
+      const tenantId = (user as any).tenantId;
+      const ok = await EntitlementService.hasEntitlement(tenantId, 'feature.users.activity');
+      if (!ok) {
+        return createApiErrorResponse(
+          new StandardError({
+            message: 'Missing entitlement: feature.users.activity',
+            code: ErrorCodes.AUTH.PERMISSION_DENIED,
+            metadata: { component: 'UsersIdRoute', operation: 'getUserActivity', userId: id },
+          }),
+          'Forbidden',
+          ErrorCodes.AUTH.PERMISSION_DENIED,
+          403
+        );
+      }
+
       const daysAgo = new Date();
       daysAgo.setDate(daysAgo.getDate() - validatedQuery.days);
 
@@ -320,8 +325,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       message: 'User profile retrieved successfully',
     });
   } catch (error) {
-    const params = await context.params;
-    const userId = params.id;
+    const userId = req.url.split('/').pop()?.split('?')[0] as string;
 
     // Log the error using ErrorHandlingService
     errorHandlingService.processError(error);
@@ -386,6 +390,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
         cause: error instanceof Error ? error : undefined,
         metadata: {
+import { EntitlementService } from '@/lib/services/EntitlementService';
           component: 'UsersIdRoute',
           operation: 'getUserById',
           userId,
@@ -400,4 +405,5 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       }
     );
   }
-}
+  }
+);

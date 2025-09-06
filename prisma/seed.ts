@@ -19,8 +19,11 @@ import {
   SectionType,
   Severity,
   ValidationRuleType,
+  PlanTier,
+  SubscriptionStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { PLAN_TIER_ENTITLEMENTS } from '@/lib/billing/entitlementMapping';
 
 // Platform compatibility: Using bcryptjs (pure JS) instead of bcrypt (native)
 // This ensures consistent behavior across all environments (dev, CI, production)
@@ -61,6 +64,92 @@ async function main() {
     console.log('✅ Created default tenant');
   } else {
     console.log('ℹ️ Default tenant already exists');
+  }
+
+  // ========================================
+  // ENTITLEMENTS: Seed dev entitlements for default tenant
+  // ========================================
+  console.log('🔐 Ensuring default entitlements for tenant_default...');
+  const devTenantId = 'tenant_default';
+  const entitlementKeys: Array<{ key: string; value?: string | null }> = [
+    { key: 'feature.products.create' },
+    { key: 'feature.products.advanced' },
+    { key: 'feature.products.analytics' },
+    { key: 'feature.analytics.dashboard' },
+    { key: 'feature.analytics.enhanced' },
+    { key: 'feature.analytics.insights' },
+    { key: 'feature.analytics.users' },
+    { key: 'feature.search.suggestions' },
+    { key: 'feature.users.activity' },
+  ];
+
+  for (const ent of entitlementKeys) {
+    const exists = await prisma.entitlement.findFirst({
+      where: { tenantId: devTenantId, key: ent.key },
+      select: { id: true },
+    });
+    if (!exists) {
+      await prisma.entitlement.create({
+        data: {
+          tenantId: devTenantId,
+          key: ent.key,
+          enabled: true,
+          value: ent.value ?? null,
+        },
+      });
+      console.log(`  ✅ Entitlement created: ${ent.key}`);
+    }
+  }
+  console.log('✅ Default entitlements ensured');
+
+  // Align enabled entitlements exactly to FREE plan mapping
+  const freeEntitlements = new Set(PLAN_TIER_ENTITLEMENTS['FREE'] || []);
+  // Ensure all FREE entitlements exist and are enabled
+  for (const key of freeEntitlements) {
+    await prisma.entitlement.upsert({
+      where: { tenantId_key: { tenantId: devTenantId, key } },
+      update: { enabled: true, value: null },
+      create: { tenantId: devTenantId, key, enabled: true },
+    });
+  }
+  // Disable any entitlement not part of FREE
+  await prisma.entitlement.updateMany({
+    where: { tenantId: devTenantId, key: { notIn: Array.from(freeEntitlements) } },
+    data: { enabled: false, value: null },
+  });
+  console.log('✅ Entitlements aligned to FREE plan mapping');
+
+  // ========================================
+  // BILLING: Ensure FREE plan + active subscription for default tenant
+  // ========================================
+  console.log('💳 Ensuring FREE plan and active subscription for tenant_default...');
+  const freePlan = await prisma.plan.upsert({
+    where: { name: 'FREE' },
+    update: { tier: PlanTier.FREE, active: true },
+    create: { name: 'FREE', tier: PlanTier.FREE, active: true },
+  });
+
+  const existingSub = await prisma.subscription.findFirst({ where: { tenantId: devTenantId } });
+  if (existingSub) {
+    await prisma.subscription.update({
+      where: { id: existingSub.id },
+      data: {
+        planId: freePlan.id,
+        status: SubscriptionStatus.ACTIVE,
+        seats: existingSub.seats || Number(process.env.DEFAULT_PLAN_SEATS || 5),
+      },
+    });
+    console.log('✅ Updated existing subscription to FREE/ACTIVE');
+  } else {
+    await prisma.subscription.create({
+      data: {
+        tenantId: devTenantId,
+        planId: freePlan.id,
+        status: SubscriptionStatus.ACTIVE,
+        seats: Number(process.env.DEFAULT_PLAN_SEATS || 5),
+      },
+    });
+    console.log('✅ Created active FREE subscription for tenant_default');
   }
 
   // ========================================

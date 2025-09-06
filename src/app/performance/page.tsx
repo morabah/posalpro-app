@@ -14,6 +14,9 @@ import { Activity, BarChart3, Shield, TrendingUp, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout';
 
 export default function PerformancePage() {
   const [optimizationScore, setOptimizationScore] = useState(0);
@@ -65,8 +68,11 @@ export default function PerformancePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <ClientLayoutWrapper>
+      <AuthProvider>
+        <ProtectedLayout>
+          <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
+            <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center space-x-3">
@@ -257,7 +263,10 @@ export default function PerformancePage() {
             </div>
           </div>
         </Card>
-      </div>
-    </div>
+            </div>
+          </div>
+        </ProtectedLayout>
+      </AuthProvider>
+    </ClientLayoutWrapper>
   );
 }

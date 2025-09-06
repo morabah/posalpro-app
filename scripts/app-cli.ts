@@ -220,15 +220,59 @@ class CookieJar {
 
   setFromSetCookie(headers: string[] | undefined) {
     if (!headers || headers.length === 0) return;
-    for (const h of headers) {
-      const [pair] = h.split(';');
-      const [name, ...rest] = pair.split('=');
-      const value = rest.join('=');
+    const lines: string[] = [];
+    // Some runtimes return multiple cookies in a single header line.
+    // Robustly split combined Set-Cookie lines while respecting Expires commas.
+    for (const raw of headers) {
+      lines.push(...this.splitCombinedSetCookie(raw));
+    }
+    for (const line of lines) {
+      const [pair] = line.split(';');
+      const eq = pair.indexOf('=');
+      if (eq <= 0) continue;
+      const name = pair.slice(0, eq).trim();
+      const value = pair.slice(eq + 1).trim();
       if (name && value) {
-        this.cookies.set(name.trim(), value.trim());
+        this.cookies.set(name, value);
       }
     }
     this.saveToDisk();
+  }
+
+  // Split a possibly combined Set-Cookie header string into individual cookie strings.
+  // Handles commas inside Expires attribute (e.g., Expires=Wed, 11 Sep 2024 12:00:00 GMT).
+  private splitCombinedSetCookie(headerLine: string): string[] {
+    // If header already looks like a single cookie (no comma), short-circuit.
+    if (!headerLine.includes(',')) return [headerLine];
+
+    const result: string[] = [];
+    let inExpires = false;
+    let start = 0;
+    for (let i = 0; i < headerLine.length; i++) {
+      const ch = headerLine[i];
+      // Detect start of Expires attribute (case-insensitive)
+      if (!inExpires && headerLine.slice(i).toLowerCase().startsWith('expires=')) {
+        inExpires = true;
+        i += 'expires='.length - 1;
+        continue;
+      }
+      if (inExpires) {
+        // Expires attribute ends at the next semicolon or end of string
+        if (ch === ';') {
+          inExpires = false;
+        }
+        continue;
+      }
+      if (ch === ',') {
+        // Comma that is not part of Expires → cookie separator
+        const segment = headerLine.slice(start, i).trim();
+        if (segment) result.push(segment);
+        start = i + 1;
+      }
+    }
+    const tail = headerLine.slice(start).trim();
+    if (tail) result.push(tail);
+    return result;
   }
 
   getCookieHeader(): string {
@@ -347,6 +391,11 @@ class ApiClient {
     return this.tenantId;
   }
 
+  // Expose the exact Cookie header that will be sent
+  getCookieHeader(): string {
+    return this.jar.getCookieHeader();
+  }
+
   async login(email: string, password: string, role?: string) {
     try {
       logInfo('CLI: Login attempt started', {
@@ -371,9 +420,7 @@ class ApiClient {
         );
       }
 
-      const rawSetCookie: string[] | undefined =
-        (csrfRes.headers as any).getSetCookie?.() ??
-        ((csrfRes.headers.get('set-cookie') && [csrfRes.headers.get('set-cookie')!]) || undefined);
+      const rawSetCookie = extractSetCookieList(csrfRes.headers);
       this.jar.setFromSetCookie(rawSetCookie);
       const csrfData = (await csrfRes.json()) as { csrfToken: string };
 
@@ -400,10 +447,7 @@ class ApiClient {
         body: params.toString(),
         redirect: 'manual',
       });
-      const loginSetCookie: string[] | undefined =
-        (loginRes.headers as any).getSetCookie?.() ??
-        ((loginRes.headers.get('set-cookie') && [loginRes.headers.get('set-cookie')!]) ||
-          undefined);
+      const loginSetCookie = extractSetCookieList(loginRes.headers);
       this.jar.setFromSetCookie(loginSetCookie);
 
       if (loginRes.status !== 302 && loginRes.status !== 200) {
@@ -414,6 +458,21 @@ class ApiClient {
           'AppCLI',
           { status: loginRes.status, email, role }
         );
+      }
+
+      // Follow one redirect to callbackUrl to collect any additional cookies
+      if (loginRes.status === 302 || loginRes.status === 303 || loginRes.status === 307 || loginRes.status === 308) {
+        const loc = loginRes.headers.get('location');
+        if (loc) {
+          const redirectUrl = loc.startsWith('http') ? loc : `${this.baseUrl}${loc.startsWith('/') ? '' : '/'}${loc}`;
+          const redirRes = await httpsFetch(redirectUrl, {
+            method: 'GET',
+            headers: { Cookie: this.jar.getCookieHeader(), Accept: 'text/html,application/json' },
+            redirect: 'manual',
+          });
+          const redirCookies = extractSetCookieList(redirRes.headers);
+          this.jar.setFromSetCookie(redirCookies);
+        }
       }
 
       logDebug('CLI: Credentials accepted', {
@@ -463,6 +522,9 @@ class ApiClient {
           Accept: 'application/json',
           Cookie: this.jar.getCookieHeader(),
         };
+        if (this.tenantId) {
+          headers['x-tenant-id'] = this.tenantId;
+        }
         let fetchBody: any = undefined;
         if (body !== undefined && method !== 'GET') {
           headers['Content-Type'] = 'application/json';
@@ -523,6 +585,28 @@ class ApiClient {
   }
 }
 
+// Helper to normalize access to multiple Set-Cookie headers across runtimes
+function extractSetCookieList(headers: Headers): string[] {
+  const anyHeaders: any = headers as any;
+  // Node 20+ undici
+  if (typeof anyHeaders.getSetCookie === 'function') {
+    try {
+      const arr = anyHeaders.getSetCookie();
+      if (Array.isArray(arr)) return arr as string[];
+    } catch {}
+  }
+  // Undici raw()
+  if (typeof anyHeaders.raw === 'function') {
+    try {
+      const raw = anyHeaders.raw();
+      if (raw && Array.isArray(raw['set-cookie'])) return raw['set-cookie'] as string[];
+    } catch {}
+  }
+  // Fallback single header
+  const single = headers.get('set-cookie');
+  return single ? [single] : [];
+}
+
 function printHelp() {
   console.log(`
 ╭─────────────────────────────────────────────────────────────╮
@@ -555,6 +639,11 @@ function printHelp() {
   import <model> <file> [options]            # Import data to database
   generate test-data                         # Generate test data for development
   monitor [target]                           # Monitor API endpoints and database
+
+🛠️ TROUBLESHOOTING
+  troubleshoot auth                          # Diagnose auth/session/roles issues
+  troubleshoot dashboard                     # Diagnose dashboard RBAC/entitlements & fallbacks
+  cookies show                               # Show CLI Cookie header and server debug cookie presence
 
 ⚙️ ENVIRONMENT & CONFIGURATION
   env                                        # Show loaded environment variables
@@ -618,6 +707,9 @@ function printHelp() {
   versions for <proposalId> [limit]          # Get versions for specific proposal
   versions diff <proposalId> <version>       # Show version differences
   versions assert [proposalId]               # Assert version integrity
+
+🧪 TESTS
+  tests tenant                               # Run all tenant-related Jest tests (middleware, seats)
 
 🔒 RBAC TESTING
   rbac try <method> <path> [json]            # Test RBAC permission
@@ -1372,6 +1464,143 @@ async function handleHealth(api: ApiClient) {
   console.log('='.repeat(60));
 }
 
+async function handleTroubleshootAuth(api: ApiClient) {
+  console.log('🔎 Auth Troubleshooter\n');
+
+  // 1) Try auth debug (dev-only)
+  try {
+    const r = await api.request('GET', '/api/auth/debug');
+    const bodyText = await r.text();
+    console.log(`GET /api/auth/debug → ${r.status}`);
+    try {
+      const j = JSON.parse(bodyText);
+      const roles = j?.session?.user?.roles || [];
+      const perms = j?.session?.user?.permissions || [];
+      console.log('  Session:', {
+        hasUser: j?.session?.hasUser ?? Boolean(j?.session?.user),
+        email: j?.session?.user?.email,
+        rolesCount: Array.isArray(roles) ? roles.length : 0,
+        permissionsCount: Array.isArray(perms) ? perms.length : 0,
+      });
+      const tRoles = j?.token?.roles || [];
+      console.log('  Token:', {
+        email: j?.token?.email,
+        rolesCount: Array.isArray(tRoles) ? tRoles.length : 0,
+        hasSessionId: Boolean(j?.token?.hasSessionId),
+      });
+    } catch {
+      console.log('  Body:', bodyText);
+    }
+  } catch (e) {
+    console.log('GET /api/auth/debug failed (likely prod).');
+  }
+
+  // 2) NextAuth session (stable)
+  try {
+    const r = await api.request('GET', '/api/auth/session');
+    const t = await r.text();
+    console.log(`GET /api/auth/session → ${r.status}`);
+    try {
+      const j = JSON.parse(t);
+      const roles = j?.user?.roles || [];
+      console.log('  Session user:', {
+        id: j?.user?.id,
+        email: j?.user?.email,
+        rolesCount: Array.isArray(roles) ? roles.length : 0,
+      });
+    } catch {
+      console.log('  Body:', t);
+    }
+  } catch (e) {
+    console.log('GET /api/auth/session failed.');
+  }
+
+  // 3) Profile API (our wrapper)
+  try {
+    const r = await api.request('GET', '/api/profile');
+    const t = await r.text();
+    console.log(`GET /api/profile → ${r.status}`);
+    console.log(t);
+  } catch {
+    console.log('GET /api/profile failed.');
+  }
+
+  // 4) Proposals access sanity (RBAC)
+  try {
+    const r = await api.request('GET', '/api/proposals?limit=1');
+    const ok = r.ok;
+    console.log(`GET /api/proposals?limit=1 → ${r.status}${ok ? ' ✅' : ' ❌'}`);
+    if (!ok) {
+      const t = await r.text();
+      console.log('  Error:', t);
+    }
+  } catch (e) {
+    console.log('GET /api/proposals failed:', (e as Error)?.message);
+  }
+
+  console.log('\nIf rolesCount is 0, run: logout → login again.');
+}
+
+async function handleTroubleshootDashboard(api: ApiClient) {
+  console.log('📊 Dashboard Troubleshooter\n');
+
+  // 1) Enhanced stats (may require entitlement)
+  try {
+    const r = await api.request('GET', '/api/dashboard/enhanced-stats');
+    console.log(`GET /api/dashboard/enhanced-stats → ${r.status}${r.ok ? ' ✅' : ' ❌'}`);
+    if (!r.ok) {
+      const t = await r.text();
+      console.log('  Error:', t);
+    }
+  } catch (e) {
+    console.log('GET /api/dashboard/enhanced-stats failed:', (e as Error)?.message);
+  }
+
+  // 2) Basic stats (FREE plan)
+  try {
+    const r = await api.request('GET', '/api/dashboard/stats');
+    console.log(`GET /api/dashboard/stats → ${r.status}${r.ok ? ' ✅' : ' ❌'}`);
+    if (!r.ok) {
+      const t = await r.text();
+      console.log('  Error:', t);
+    }
+  } catch (e) {
+    console.log('GET /api/dashboard/stats failed:', (e as Error)?.message);
+  }
+
+  // 3) Proposals list sanity check
+  try {
+    const r = await api.request('GET', '/api/proposals?limit=1&sortBy=createdAt&sortOrder=desc');
+    console.log(`GET /api/proposals → ${r.status}${r.ok ? ' ✅' : ' ❌'}`);
+    if (!r.ok) {
+      const t = await r.text();
+      console.log('  Error:', t);
+    }
+  } catch (e) {
+    console.log('GET /api/proposals failed:', (e as Error)?.message);
+  }
+
+  // 4) Entitlements for tenant (DB direct)
+  try {
+    const tenantId = process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default';
+    const entRows = await prisma.entitlement.findMany({
+      where: { tenantId, enabled: true },
+      select: { key: true },
+    });
+    const keys = entRows.map(e => e.key);
+    const hasEnhanced = keys.includes('feature.analytics.enhanced');
+    console.log(`\nTenant: ${tenantId}`);
+    console.log('Enabled entitlements:', keys.length ? keys.join(', ') : '(none)');
+    console.log(`Enhanced analytics entitlement: ${hasEnhanced ? 'YES' : 'NO'}`);
+    if (!hasEnhanced) {
+      console.log('\nℹ️ Enhanced stats require feature.analytics.enhanced (PRO/ENTERPRISE).');
+      console.log('   Basic stats should work; the app now falls back automatically.');
+    }
+  } catch (e) {
+    console.log('Entitlement check failed:', (e as Error)?.message);
+  }
+}
+
 async function runOnceFromArg(command: string, api: ApiClient) {
   const tokens = tokenize(command);
   await execute(tokens, api);
@@ -1490,6 +1719,61 @@ async function execute(tokens: string[], api: ApiClient) {
       console.log(`API ${r.status} (${Date.now() - startApi}ms)`);
       break;
     }
+    case 'cookies': {
+      const sub = (tokens[1] || '').toLowerCase();
+      if (sub !== 'show') {
+        console.log('Usage: cookies show');
+        break;
+      }
+      // 1) Print local Cookie header
+      const cookieHeader = (api as any).getCookieHeader();
+      console.log('CLI Cookie header to be sent:');
+      console.log(cookieHeader || '(empty)');
+      const cookieNames = (cookieHeader || '')
+        .split(';')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .map(s => s.split('=')[0]);
+      console.log('Cookie names:', cookieNames.length ? cookieNames.join(', ') : '(none)');
+
+      // 2) Server-side debug
+      try {
+        const res = await api.request('GET', '/api/auth/debug');
+        const text = await res.text();
+        console.log(`\nServer /api/auth/debug → ${res.status}`);
+        try {
+          const j = JSON.parse(text);
+          console.log('Server sees cookie(s):', j?.cookieNamesPresent || []);
+          console.log('hasCookie:', j?.hasCookie);
+          console.log('session.hasUser:', j?.session?.hasUser ?? false);
+          console.log('token.hasSessionId:', j?.token?.hasSessionId ?? false);
+        } catch {
+          console.log(text);
+        }
+      } catch (e) {
+        console.log('auth debug endpoint unavailable, falling back to /api/auth/session');
+        try {
+          const res2 = await api.request('GET', '/api/auth/session');
+          const text2 = await res2.text();
+          console.log(`/api/auth/session → ${res2.status}`);
+          console.log(text2);
+        } catch (e2) {
+          console.log('Fallback request failed:', (e2 as Error)?.message);
+        }
+      }
+      break;
+    }
+    case 'troubleshoot': {
+      const area = (tokens[1] || '').toLowerCase();
+      if (area === 'auth') {
+        await handleTroubleshootAuth(api);
+      } else if (area === 'dashboard') {
+        await handleTroubleshootDashboard(api);
+      } else {
+        console.log('Usage:\n  troubleshoot auth\n  troubleshoot dashboard');
+      }
+      break;
+    }
     case 'jobs:drain': {
       console.log('🚀 Starting outbox drain process...');
       const startTime = Date.now();
@@ -1544,6 +1828,25 @@ async function execute(tokens: string[], api: ApiClient) {
     }
     case 'monitor': {
       await handleMonitor(tokens, api);
+      break;
+    }
+    case 'tests': {
+      const sub = (tokens[1] || '').toLowerCase();
+      if (sub === 'tenant') {
+        const { execSync } = require('child_process');
+        try {
+          // Run tenant middleware and subscription service tests
+          execSync(
+            'npx jest src/test/integration/tenant-middleware.test.ts src/test/services/subscriptionService.test.ts --coverage --verbose',
+            { stdio: 'inherit', cwd: process.cwd() }
+          );
+        } catch (e) {
+          // jest exits non-zero on failures; propagate exit code
+          process.exitCode = 1;
+        }
+      } else {
+        console.log('Usage: tests tenant');
+      }
       break;
     }
     case 'env': {
@@ -2451,6 +2754,50 @@ async function execute(tokens: string[], api: ApiClient) {
       } catch {}
       (api as any).jar.clear();
       console.log('Session cleared.');
+      break;
+    }
+    case 'entitlements': {
+      const sub = (tokens[1] || '').toLowerCase();
+      const tenantArg = tokens.find((t, i) => t === '--tenant' && tokens[i + 1])
+        ? tokens[tokens.indexOf('--tenant') + 1]
+        : undefined;
+      const tenantId = tenantArg || process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default';
+
+      if (sub === 'list') {
+        const rows = await prisma.entitlement.findMany({
+          where: { tenantId, enabled: undefined },
+          select: { key: true, enabled: true },
+          orderBy: { key: 'asc' },
+        });
+        console.log(`Tenant: ${tenantId}`);
+        if (!rows.length) console.log('(no entitlements found)');
+        rows.forEach(r => console.log(`${r.enabled ? '✅' : '❌'} ${r.key}`));
+      } else if (sub === 'grant') {
+        const key = tokens[2];
+        if (!key) {
+          console.log('Usage: entitlements grant <key> [--tenant <id>]');
+          break;
+        }
+        await prisma.entitlement.upsert({
+          where: { tenantId_key: { tenantId, key } },
+          update: { enabled: true, value: null },
+          create: { tenantId, key, enabled: true },
+        });
+        console.log(`Granted ${key} to ${tenantId}`);
+      } else if (sub === 'revoke') {
+        const key = tokens[2];
+        if (!key) {
+          console.log('Usage: entitlements revoke <key> [--tenant <id>]');
+          break;
+        }
+        await prisma.entitlement.updateMany({
+          where: { tenantId, key },
+          data: { enabled: false },
+        });
+        console.log(`Revoked ${key} for ${tenantId}`);
+      } else {
+        console.log('Usage:\n  entitlements list [--tenant <id>]\n  entitlements grant <key> [--tenant <id>]\n  entitlements revoke <key> [--tenant <id>]');
+      }
       break;
     }
     case 'schema': {

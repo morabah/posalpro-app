@@ -146,6 +146,7 @@ export const POST = createRoute(
   {
     roles: ['admin', 'manager', 'System Administrator', 'Administrator'],
     body: ProductCreateSchema,
+    entitlements: ['feature.products.create'],
   },
   async ({ body, user }) => {
     try {
@@ -156,14 +157,9 @@ export const POST = createRoute(
         productName: body!.name,
       });
 
-      // Check for duplicate SKU
-      const existingProduct = await prisma.product.findUnique({
-        where: {
-          tenantId_sku: {
-            tenantId: 'tenant_default',
-            sku: body!.sku,
-          },
-        },
+      // Check for duplicate SKU within tenant (tenant filter auto-injected by Prisma middleware)
+      const existingProduct = await prisma.product.findFirst({
+        where: { sku: body!.sku },
         select: { id: true },
       });
 
@@ -174,7 +170,6 @@ export const POST = createRoute(
       // Create product
       const product = await prisma.product.create({
         data: {
-          tenantId: 'tenant_default',
           name: body!.name,
           description: body!.description,
           price: body!.price,

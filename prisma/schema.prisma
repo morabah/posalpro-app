@@ -11,20 +11,23 @@ datasource db {
 }
 
 model Tenant {
-  id           String   @id @default(cuid())
-  name         String
-  domain       String   @unique
-  subdomain    String?  @unique
-  status       String   @default("ACTIVE")
-  settings     Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  domain    String   @unique
+  subdomain String?  @unique
+  stripeCustomerId String? @unique
+  status    String   @default("ACTIVE")
+  settings  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  customers    Customer[]
-  products     Product[]
-  proposals    Proposal[]
-  users        User[]
+  customers     Customer[]
+  products      Product[]
+  proposals     Proposal[]
+  users         User[]
+  subscriptions Subscription[]
+  entitlements  Entitlement[]
 
   @@index([status])
   @@index([createdAt])
@@ -54,7 +57,7 @@ model User {
   createdRules             ProductRelationshipRule[]        @relation("RuleCreator")
   updatedRules             ProductRelationshipRule[]        @relation("RuleUpdater")
   productRelationships     ProductRelationship[]
-  tenant                   Tenant                            @relation(fields: [tenantId], references: [id])
+  tenant                   Tenant                           @relation(fields: [tenantId], references: [id])
   createdProposals         Proposal[]                       @relation("ProposalCreator")
   securityEvents           SecurityEvent[]
   temporaryAccess          TemporaryAccess[]
@@ -300,10 +303,10 @@ model ApiKey {
 }
 
 model Idempotency {
-  id        String   @id @default(cuid())
-  key       String   @unique
+  id        String    @id @default(cuid())
+  key       String    @unique
   route     String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   expiresAt DateTime?
   userId    String?
 
@@ -311,6 +314,66 @@ model Idempotency {
   @@index([route])
   @@index([userId])
   @@index([expiresAt])
+}
+
+// --- SaaS Billing (minimal scaffolding) ---
+
+enum PlanTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+}
+
+model Plan {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  tier      PlanTier
+  features  Json?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id         String             @id @default(cuid())
+  tenantId   String
+  planId     String
+  status     SubscriptionStatus @default(ACTIVE)
+  seats      Int                @default(5)
+  stripeSubscriptionId String?  @unique
+  validUntil DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  @@index([tenantId])
+  @@index([planId])
+  @@index([status])
+}
+
+model Entitlement {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String
+  enabled   Boolean  @default(true)
+  value     String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
 }
 
 model SecurityEvent {
@@ -592,7 +655,7 @@ model Customer {
   syncStatus   String?           @default("PENDING")
   contacts     CustomerContact[]
   proposals    Proposal[]
-  tenant       Tenant @relation(fields: [tenantId], references: [id])
+  tenant       Tenant            @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, email])
   @@index([status, tier])
@@ -800,7 +863,7 @@ model Product {
   relatedFrom       ProductRelationship[]     @relation("TargetProduct")
   proposalProducts  ProposalProduct[]
   validationRules   ValidationRule[]
-  tenant            Tenant @relation(fields: [tenantId], references: [id])
+  tenant            Tenant                    @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, sku])
   @@index([isActive, createdAt(sort: Desc)])
@@ -1410,7 +1473,7 @@ model Outbox {
   id        String   @id @default(cuid())
   type      String
   payload   Json
-  status    String   @default("pending")  // pending, processing, done, error
+  status    String   @default("pending") // pending, processing, done, error
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   attempts  Int      @default(0)

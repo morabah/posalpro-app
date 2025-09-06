@@ -4,20 +4,10 @@
  * Component Traceability: US-5.1, US-5.2, H5, H8
  */
 
-// Dynamic imports to avoid build-time database connections
-// import { authOptions } from '@/lib/auth';
-// import prisma from '@/lib/db/prisma';
-import {
-  createApiErrorResponse,
-  ErrorCodes,
-  errorHandlingService,
-  StandardError,
-} from '@/lib/errors';
+import { createRoute } from '@/lib/api/route';
+import { createApiErrorResponse, ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-
+import { NextResponse } from 'next/server';
 import { logWarn } from '@/lib/logger';
 import { z } from 'zod';
 
@@ -74,7 +64,13 @@ const UserAnalyticsSchema = z.object({
 /**
  * GET /api/analytics/users - Get user analytics data
  */
-export async function GET(request: NextRequest) {
+export const GET = createRoute(
+  {
+    roles: ['admin', 'manager', 'viewer', 'System Administrator', 'Administrator'],
+    query: UserAnalyticsSchema,
+    entitlements: ['feature.analytics.users'],
+  },
+  async ({ req, user, query }) => {
   const startTime = Date.now();
 
   // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
@@ -100,34 +96,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Dynamic imports to avoid build-time database connections
-    const { validateApiPermission } = await import('@/lib/auth/apiAuthorization');
-    const { authOptions } = await import('@/lib/auth');
-
-    await validateApiPermission(request, { resource: 'analytics', action: 'read' });
-    // Authentication check
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Unauthorized access attempt',
-          code: ErrorCodes.AUTH.UNAUTHORIZED,
-          metadata: {
-            component: 'UserAnalyticsRoute',
-            operation: 'getUserAnalytics',
-          },
-        }),
-        'Unauthorized',
-        ErrorCodes.AUTH.UNAUTHORIZED,
-        401,
-        { userFriendlyMessage: 'You must be logged in to view analytics' }
-      );
-    }
-
-    // Parse and validate query parameters
-    const { searchParams } = new URL(request.url);
-    const queryParams = Object.fromEntries(searchParams);
-    const validatedQuery = UserAnalyticsSchema.parse(queryParams);
+    // Parse and validate query parameters (already parsed via createRoute)
+    const validatedQuery = query as z.infer<typeof UserAnalyticsSchema>;
 
     // Dynamic import of Prisma to avoid build-time initialization
     const { default: prisma } = await import('@/lib/db/prisma');
@@ -351,7 +321,7 @@ export async function GET(request: NextRequest) {
     };
 
     // Track analytics access for hypothesis validation
-    await trackAnalyticsAccessEvent(prisma, session.user.id, 'user_analytics', analytics.summary);
+    await trackAnalyticsAccessEvent(prisma, user.id, 'user_analytics', analytics.summary);
 
     return NextResponse.json({
       success: true,
@@ -404,7 +374,8 @@ export async function GET(request: NextRequest) {
       }
     );
   }
-}
+  }
+);
 
 /**
  * Track analytics access event for hypothesis validation

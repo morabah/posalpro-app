@@ -10,6 +10,7 @@ import { logger } from '@/lib/logging/structuredLogger';
 import { recordDbLatency } from '@/lib/observability/metricsStore';
 import type { Prisma } from '@prisma/client';
 import { PrismaClient } from '@prisma/client';
+import { getCurrentTenant } from '@/lib/tenant';
 
 declare global {
   // Reuse Prisma client across HMR cycles in dev
@@ -126,6 +127,74 @@ export { prisma };
 // Observability: Prisma middleware to record per-query timings (no PII)
 // Note: Middleware registration should be idempotent in dev
 if (!globalThis.prismaMiddlewareRegistered) {
+  // Tenant scope enforcement middleware (runs first)
+  // Only include models that have a direct tenantId field in the schema
+  const TENANT_SCOPED_MODELS = new Set<string>([
+    'User',
+    'Customer',
+    'Product',
+    'Proposal',
+    'Subscription',
+    'Entitlement',
+  ]);
+
+  prisma.$use(async (params, next) => {
+    if (!params.model || !TENANT_SCOPED_MODELS.has(params.model)) {
+      return next(params);
+    }
+    // Resolve tenant from async context; if missing, skip (public/system contexts)
+    let tenantId: string | null = null;
+    try {
+      tenantId = getCurrentTenant().tenantId;
+    } catch {
+      tenantId = null;
+    }
+    if (!tenantId) return next(params);
+
+    const action = params.action;
+    const whereOps = new Set([
+      'findUnique',
+      'findUniqueOrThrow',
+      'findFirst',
+      'findFirstOrThrow',
+      'findMany',
+      'count',
+      'aggregate',
+      'groupBy',
+      'update',
+      'updateMany',
+      'delete',
+      'deleteMany',
+    ]);
+
+    if (whereOps.has(action)) {
+      params.args = params.args || {};
+      params.args.where = { ...(params.args.where || {}), tenantId };
+    }
+
+    if (action === 'create' || action === 'createMany') {
+      params.args = params.args || {};
+      if (action === 'create') {
+        params.args.data = { ...(params.args.data || {}), tenantId };
+      } else {
+        if (Array.isArray(params.args.data)) {
+          params.args.data = params.args.data.map((d: any) => ({ ...d, tenantId }));
+        } else {
+          params.args.data = { ...(params.args.data || {}), tenantId };
+        }
+      }
+    }
+
+    if (action === 'upsert') {
+      params.args = params.args || {};
+      params.args.where = { ...(params.args.where || {}), tenantId };
+      params.args.update = { ...(params.args.update || {}), tenantId };
+      params.args.create = { ...(params.args.create || {}), tenantId };
+    }
+
+    return next(params);
+  });
+
   prisma.$use(
     async (
       params: Prisma.MiddlewareParams,

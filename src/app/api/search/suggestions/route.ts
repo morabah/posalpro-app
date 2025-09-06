@@ -4,8 +4,7 @@ import { logError, logInfo } from '@/lib/logger'; /**
  * Component Traceability: US-1.1, US-1.2, H1
  */
 
-import { authOptions } from '@/lib/auth';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { createRoute } from '@/lib/api/route';
 import {
   customerQueries,
   productQueries,
@@ -15,8 +14,7 @@ import {
   executeQuery,
 } from '@/lib/db/database';
 import prisma from '@/lib/db/prisma';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 /**
@@ -40,70 +38,61 @@ const SuggestionsQuerySchema = z.object({
 /**
  * GET /api/search/suggestions - Get search suggestions
  */
-export async function GET(request: NextRequest) {
-  try {
-    await validateApiPermission(request, { resource: 'search', action: 'read' });
-    // Authentication check
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const GET = createRoute(
+  {
+    roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'],
+    query: SuggestionsQuerySchema,
+    entitlements: ['feature.search.suggestions'],
+  },
+  async ({ req, user, query }) => {
+    try {
+      const validatedQuery = query as z.infer<typeof SuggestionsQuerySchema>;
+      const searchTerm = validatedQuery.q.toLowerCase();
 
-    // Parse and validate query parameters
-    const { searchParams } = new URL(request.url);
-    const queryParams = Object.fromEntries(searchParams);
-    const validatedQuery = SuggestionsQuerySchema.parse(queryParams);
+      const suggestions = await Promise.all([
+        getContentSuggestions(searchTerm, validatedQuery.limit),
+        getProductSuggestions(searchTerm, validatedQuery.limit),
+        getCustomerSuggestions(searchTerm, validatedQuery.limit),
+        getTagSuggestions(searchTerm, validatedQuery.limit),
+        getRecentSearches(user.id, searchTerm, validatedQuery.limit),
+      ]);
 
-    const searchTerm = validatedQuery.q.toLowerCase();
+      const allSuggestions = suggestions.flat();
+      const uniqueSuggestions = Array.from(new Map(allSuggestions.map(item => [item.text, item])).values());
+      const sortedSuggestions = uniqueSuggestions
+        .sort((a, b) => (b.score || 0) - (a.score || 0))
+        .slice(0, validatedQuery.limit);
 
-    // Get suggestions from different sources
-    const suggestions = await Promise.all([
-      getContentSuggestions(searchTerm, validatedQuery.limit),
-      getProductSuggestions(searchTerm, validatedQuery.limit),
-      getCustomerSuggestions(searchTerm, validatedQuery.limit),
-      getTagSuggestions(searchTerm, validatedQuery.limit),
-      getRecentSearches(session.user.id, searchTerm, validatedQuery.limit),
-    ]);
-
-    // Combine and deduplicate suggestions
-    const allSuggestions = suggestions.flat();
-    const uniqueSuggestions = Array.from(
-      new Map(allSuggestions.map(item => [item.text, item])).values()
-    );
-
-    // Sort by relevance and limit results
-    const sortedSuggestions = uniqueSuggestions
-      .sort((a, b) => (b.score || 0) - (a.score || 0))
-      .slice(0, validatedQuery.limit);
-
-    await logInfo('Search suggestions success', {
-      query: validatedQuery.q,
-      limit: validatedQuery.limit,
-      userId: session.user.id,
-      count: sortedSuggestions.length,
-    });
-    return NextResponse.json({
-      success: true,
-      data: {
+      await logInfo('Search suggestions success', {
         query: validatedQuery.q,
-        suggestions: sortedSuggestions,
-        total: sortedSuggestions.length,
-      },
-      message: 'Suggestions retrieved successfully',
-    });
-  } catch (error) {
-    await logError('Search suggestions error', error as unknown);
+        limit: validatedQuery.limit,
+        userId: user.id,
+        count: sortedSuggestions.length,
+      });
 
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid query parameters', details: error.errors },
-        { status: 400 }
-      );
+      return NextResponse.json({
+        success: true,
+        data: {
+          query: validatedQuery.q,
+          suggestions: sortedSuggestions,
+          total: sortedSuggestions.length,
+        },
+        message: 'Suggestions retrieved successfully',
+      });
+    } catch (error) {
+      await logError('Search suggestions error', error as unknown);
+
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: 'Invalid query parameters', details: error.errors },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({ error: 'Failed to get suggestions' }, { status: 500 });
     }
-
-    return NextResponse.json({ error: 'Failed to get suggestions' }, { status: 500 });
   }
-}
+);
 
 /**
  * Get content title suggestions

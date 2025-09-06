@@ -2,6 +2,7 @@
 
 import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
 import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 const ProposalWizard = dynamic(
@@ -34,18 +35,20 @@ export default function ProposalCreatePage() {
   return (
     <ClientLayoutWrapper>
       <AuthProvider>
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-4xl mx-auto">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New Proposal</h1>
-              <p className="text-gray-600">
-                Follow the guided workflow to create a comprehensive proposal for your client.
-              </p>
-            </div>
+        <ProtectedLayout>
+          <div className="container mx-auto px-4 py-8">
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New Proposal</h1>
+                <p className="text-gray-600">
+                  Follow the guided workflow to create a comprehensive proposal for your client.
+                </p>
+              </div>
 
-            <ProposalWizard onComplete={handleComplete} onCancel={handleCancel} />
+              <ProposalWizard onComplete={handleComplete} onCancel={handleCancel} />
+            </div>
           </div>
-        </div>
+        </ProtectedLayout>
       </AuthProvider>
     </ClientLayoutWrapper>
   );

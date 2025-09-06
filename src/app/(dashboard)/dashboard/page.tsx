@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
 import CollapsibleSection from '@/components/dashboard/CollapsibleSection';
 import DashboardToolbar from '@/components/dashboard/DashboardToolbar';
+import FeatureGate from '@/components/entitlements/FeatureGate';
 
 // PDF Export Button
 const PDFExportButton = dynamic(() => import('@/components/dashboard/PDFExportButton'), {
@@ -93,15 +94,23 @@ export default function DashboardPage() {
           <h2 id="executive-dashboard-heading" className="sr-only">
             Executive Dashboard
           </h2>
-          <SimpleErrorBoundary>
-            <Suspense
-              fallback={
-                <div className="animate-pulse bg-gradient-to-br from-blue-900 to-indigo-900 rounded-lg h-96"></div>
-              }
-            >
-              <ExecutiveDashboard />
-            </Suspense>
-          </SimpleErrorBoundary>
+          <FeatureGate
+            featureKey="feature.analytics.enhanced"
+            bannerTitle="Executive Dashboard Locked"
+            bannerDescription="Unlock the executive dashboard to access high-end visualizations and KPIs."
+            bannerCtaLabel="Upgrade"
+            bannerHref="/pricing"
+          >
+            <SimpleErrorBoundary>
+              <Suspense
+                fallback={
+                  <div className="animate-pulse bg-gradient-to-br from-blue-900 to-indigo-900 rounded-lg h-96"></div>
+                }
+              >
+                <ExecutiveDashboard />
+              </Suspense>
+            </SimpleErrorBoundary>
+          </FeatureGate>
         </section>
 
         {/* Enhanced Business-Priority Dashboard - Collapsible */}
@@ -125,11 +134,19 @@ export default function DashboardPage() {
             </>
           }
         >
-          <SimpleErrorBoundary>
-            <Suspense fallback={<div className="animate-pulse bg-gray-200 rounded-lg h-96"></div>}>
-              <EnhancedDashboard />
-            </Suspense>
-          </SimpleErrorBoundary>
+          <FeatureGate
+            featureKey="feature.analytics.dashboard"
+            bannerTitle="Enhanced Analytics Locked"
+            bannerDescription="Upgrade your plan to access enhanced analytics widgets."
+            bannerCtaLabel="View plans"
+            bannerHref="/pricing"
+          >
+            <SimpleErrorBoundary>
+              <Suspense fallback={<div className="animate-pulse bg-gray-200 rounded-lg h-96"></div>}>
+                <EnhancedDashboard />
+              </Suspense>
+            </SimpleErrorBoundary>
+          </FeatureGate>
         </CollapsibleSection>
 
         {/* Additional Analytics (Collapsible) */}
@@ -153,11 +170,19 @@ export default function DashboardPage() {
             </>
           }
         >
-          <SimpleErrorBoundary>
-            <Suspense fallback={<div className="animate-pulse bg-gray-200 rounded-lg h-64" />}>
-              <UnifiedDashboardStats />
-            </Suspense>
-          </SimpleErrorBoundary>
+          <FeatureGate
+            featureKey="feature.analytics.insights"
+            bannerTitle="Detailed Analytics Locked"
+            bannerDescription="Activate Insights to unlock detailed analytics and trends."
+            bannerCtaLabel="Contact admin"
+            bannerHref="/support"
+          >
+            <SimpleErrorBoundary>
+              <Suspense fallback={<div className="animate-pulse bg-gray-200 rounded-lg h-64" />}>
+                <UnifiedDashboardStats />
+              </Suspense>
+            </SimpleErrorBoundary>
+          </FeatureGate>
         </CollapsibleSection>
 
         {/* Two-column layout: content + right rail */}

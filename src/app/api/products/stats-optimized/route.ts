@@ -1,9 +1,8 @@
-import { authOptions } from '@/lib/auth';
+import { createRoute } from '@/lib/api/route';
 import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { optimizedProductService } from '@/lib/services/OptimizedProductService';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { NextResponse } from 'next/server';
+// Permission checks are enforced via createRoute roles and entitlements
 
 /**
  * Optimized Product Stats API Route
@@ -11,21 +10,19 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
  * Target: <200ms response time vs 18+ seconds in original
  */
 
-export async function GET(request: NextRequest) {
-  const requestStart = Date.now();
-  const filters: any = {};
+export const GET = createRoute(
+  {
+    roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'],
+    entitlements: ['feature.products.analytics'],
+  },
+  async ({ req }) => {
+    const requestStart = Date.now();
+    const filters: any = {};
+    try {
+      // RBAC handled via createRoute roles; granular permission string skipped here
 
-  try {
-    // RBAC guard
-    await validateApiPermission(request, { resource: 'products', action: 'read' });
-    // Authentication check
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Parse query parameters
-    const { searchParams } = new URL(request.url);
+      // Parse query parameters
+      const { searchParams } = new URL(req.url);
     const dateFromParam = searchParams.get('dateFrom');
     const dateToParam = searchParams.get('dateTo');
     const categoryParam = searchParams.get('category');
@@ -101,4 +98,5 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+  }
+);

@@ -5,6 +5,9 @@
 'use client';
 
 import { useState } from 'react';
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout';
 
 export default function TestErrorBoundary() {
   const [shouldError, setShouldError] = useState(false);
@@ -15,9 +18,12 @@ export default function TestErrorBoundary() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
-        <div className="px-6 py-8">
+    <ClientLayoutWrapper>
+      <AuthProvider>
+        <ProtectedLayout>
+          <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
+              <div className="px-6 py-8">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">
               Error Boundary Test
@@ -41,8 +47,11 @@ export default function TestErrorBoundary() {
               </p>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+              </div>
+            </div>
+          </div>
+        </ProtectedLayout>
+      </AuthProvider>
+    </ClientLayoutWrapper>
   );
 }

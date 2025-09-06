@@ -16,6 +16,7 @@ export const GET = createRoute(
     roles: ['admin', 'manager', 'sales', 'viewer', 'Administrator', 'System Administrator'],
     query: DashboardStatsQuerySchema,
     apiVersion: '1',
+    entitlements: ['feature.analytics.dashboard'],
   },
   async ({ req, user, query }) => {
     const start = performance.now();

@@ -4,16 +4,13 @@
  * user story tracking, and performance measurement entities
  */
 
-// Dynamic imports to avoid build-time database connections
-// import { authOptions } from '@/lib/auth';
-// import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { createRoute } from '@/lib/api/route';
 
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logWarn } from '@/lib/logger';
 import { assertApiKey } from '@/server/api/apiKeyGuard';
-import { getServerSession, Session } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { shouldSkipDatabase, getBuildTimeResponse } from '@/lib/buildGuard';
 
@@ -65,20 +62,27 @@ interface AnalyticsHealthScoreData {
 /**
  * GET - Retrieve comprehensive analytics dashboard data
  */
-export async function GET(request: NextRequest) {
-  // 🚨 TEMPORARY BUILD FIX: Return immediately during build
-  // This prevents any database operations during Next.js build process
-  return NextResponse.json({
-    success: true,
-    data: {
-      hypothesisMetrics: [],
-      userStoryMetrics: [],
-      performanceBaselines: [],
-      componentTraceability: [],
-      healthScore: 0,
-      lastUpdated: new Date().toISOString(),
-      recentActivity: [],
-    },
-    message: 'Analytics temporarily disabled during build',
-  });
-}
+export const GET = createRoute(
+  {
+    roles: ['admin', 'manager', 'viewer', 'System Administrator', 'Administrator'],
+    query: DashboardQuerySchema,
+    entitlements: ['feature.analytics.dashboard'],
+  },
+  async () => {
+    // 🚨 TEMPORARY BUILD FIX: Return immediately during build
+    // This prevents any database operations during Next.js build process
+    return NextResponse.json({
+      success: true,
+      data: {
+        hypothesisMetrics: [],
+        userStoryMetrics: [],
+        performanceBaselines: [],
+        componentTraceability: [],
+        healthScore: 0,
+        lastUpdated: new Date().toISOString(),
+        recentActivity: [],
+      },
+      message: 'Analytics temporarily disabled during build',
+    });
+  }
+);

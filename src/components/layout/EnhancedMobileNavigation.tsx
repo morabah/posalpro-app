@@ -90,6 +90,25 @@ const DEFAULT_NAVIGATION_ITEMS: NavigationItem[] = [
     icon: Cog6ToothIcon,
     priority: 'tertiary',
   },
+  // Admin-only entries
+  {
+    id: 'admin',
+    href: '/admin',
+    label: 'Admin',
+    shortLabel: 'Admin',
+    icon: Cog6ToothIcon,
+    priority: 'secondary',
+    roles: ['admin', 'Administrator', 'System Administrator'],
+  },
+  {
+    id: 'admin-billing',
+    href: '/admin/billing',
+    label: 'Billing',
+    shortLabel: 'Billing',
+    icon: Cog6ToothIcon,
+    priority: 'secondary',
+    roles: ['admin', 'Administrator', 'System Administrator'],
+  },
 ];
 
 // Component Traceability Matrix

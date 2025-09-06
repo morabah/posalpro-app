@@ -15,6 +15,9 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout';
 
 // ✅ Dynamic import to prevent SSR issues
 const MobileResponsivenessEnhancer = dynamic(
@@ -49,14 +52,28 @@ export default function MobilePerformancePage() {
   // ✅ Show loading state during hydration
   if (!isClient) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Initializing Mobile Performance Dashboard...</p>
-        </div>
-      </div>
+      <ClientLayoutWrapper>
+        <AuthProvider>
+          <ProtectedLayout>
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Initializing Mobile Performance Dashboard...</p>
+              </div>
+            </div>
+          </ProtectedLayout>
+        </AuthProvider>
+      </ClientLayoutWrapper>
     );
   }
 
-  return <MobilePerformanceDashboard />;
+  return (
+    <ClientLayoutWrapper>
+      <AuthProvider>
+        <ProtectedLayout>
+          <MobilePerformanceDashboard />
+        </ProtectedLayout>
+      </AuthProvider>
+    </ClientLayoutWrapper>
+  );
 }

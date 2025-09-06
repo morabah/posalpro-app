@@ -6,6 +6,7 @@ import { createSecurityMiddleware, SecurityHeaders } from '@/lib/security/harden
 import { getToken } from 'next-auth/jwt';
 import { getAuthSecret } from '@/lib/auth/secret';
 import { NextRequest, NextResponse } from 'next/server';
+import { recordTenantRequest } from '@/lib/observability/metricsStore';
 
 // Compose security + RBAC + request id
 const securityMiddleware = createSecurityMiddleware();
@@ -50,6 +51,11 @@ const buckets = new Map<string, { tokens: number; ts: number }>();
 const WINDOW_MS = 60_000;
 const LIMIT = 100;
 
+// Per-tenant rate limiter (soft guardrail, complements global limiter)
+const tenantBuckets = new Map<string, { count: number; resetAt: number }>();
+const TENANT_WINDOW_MS = Number(process.env.TENANT_RATE_WINDOW_MS || 60_000);
+const TENANT_LIMIT = Number(process.env.TENANT_RATE_LIMIT || 600);
+
 // CORS allowlist (dynamic). Prefer CORS_ORIGINS env; fallback to app URL or sensible defaults.
 const ALLOWED_ORIGINS: string[] = (
   process.env.CORS_ORIGINS ||
@@ -88,6 +94,57 @@ function applyCors(req: NextRequest, res: NextResponse): NextResponse {
   );
   res.headers.set('Access-Control-Max-Age', '86400');
   return res;
+}
+
+function extractSubdomain(host: string | null): string | null {
+  if (!host) return null;
+  const parts = host.split(':')[0].split('.');
+  if (parts.length < 3) return null;
+  return parts[0] || null;
+}
+
+async function resolveTenantId(req: NextRequest): Promise<string | null> {
+  const headerTenant = (req.headers.get('x-tenant-id') || '').trim();
+  if (headerTenant) return headerTenant;
+  try {
+    const token = await getToken({ req, secret: getAuthSecret() });
+    const jwtTenant = (token as any)?.tenantId as string | undefined;
+    if (jwtTenant) return jwtTenant;
+  } catch {}
+  const sub = extractSubdomain(req.headers.get('host'));
+  if (sub) return sub;
+  if (process.env.NODE_ENV !== 'production') {
+    return process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default';
+  }
+  return null;
+}
+
+function rateLimitTenant(req: NextRequest, tenantId: string | null): NextResponse | null {
+  const p = req.nextUrl.pathname;
+  if (!p.startsWith('/api/')) return null;
+  if (!tenantId) return null; // skip strict limit when tenant unknown
+  const ip =
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || (req as { ip?: string }).ip || 'local';
+  const key = `${tenantId}:${ip}`;
+  const now = Date.now();
+  const bucket = tenantBuckets.get(key) || { count: 0, resetAt: now + TENANT_WINDOW_MS };
+  if (now > bucket.resetAt) {
+    bucket.count = 0;
+    bucket.resetAt = now + TENANT_WINDOW_MS;
+  }
+  bucket.count += 1;
+  tenantBuckets.set(key, bucket);
+  if (bucket.count > TENANT_LIMIT) {
+    const res = NextResponse.json('Tenant rate limit exceeded', {
+      status: 429,
+      headers: { 'retry-after': Math.ceil((bucket.resetAt - now) / 1000).toString() },
+    });
+    res.headers.set('x-tenant-id', tenantId);
+    return res;
+  }
+  // Telemetry: record per-tenant API usage
+  recordTenantRequest(tenantId);
+  return null;
 }
 
 function rateLimitAdmin(req: NextRequest): NextResponse | null {
@@ -200,11 +257,13 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
 }
 
 export async function middleware(req: NextRequest) {
+  const tenantId = await resolveTenantId(req);
   // Handle CORS preflight for API routes early
   if (req.method === 'OPTIONS' && req.nextUrl.pathname.startsWith('/api/')) {
     const preflight = new NextResponse(null, { status: 204 });
     const rid = req.headers.get('x-request-id') ?? generateUUID();
     preflight.headers.set('x-request-id', rid);
+    if (tenantId) preflight.headers.set('x-tenant-id', tenantId);
     return SecurityHeaders.applyToResponse(applyCors(req, preflight));
   }
 
@@ -222,6 +281,7 @@ export async function middleware(req: NextRequest) {
       const rid = req.headers.get('x-request-id') ?? generateUUID();
       res.headers.set('x-request-id', rid);
       (globalThis as any).__requestId = rid;
+      if (tenantId) res.headers.set('x-tenant-id', tenantId);
       return SecurityHeaders.applyToResponse(applyCors(req, res));
     }
   }
@@ -235,12 +295,14 @@ export async function middleware(req: NextRequest) {
   if (p.startsWith('/icons/') || p === '/manifest.json' || p === '/sw.js' || p === '/favicon.ico') {
     const res = NextResponse.next();
     res.headers.set('x-request-id', rid);
+    if (tenantId) res.headers.set('x-tenant-id', tenantId);
     return SecurityHeaders.applyToResponse(res);
   }
   // Security headers, rate limiting, audit logging
   const securityResult = await securityMiddleware(req);
   if (securityResult.status === 429) {
     securityResult.headers.set('x-request-id', rid);
+    if (tenantId) securityResult.headers.set('x-tenant-id', tenantId);
     return SecurityHeaders.applyToResponse(applyCors(req, securityResult));
   }
 
@@ -254,13 +316,22 @@ export async function middleware(req: NextRequest) {
   const rateLimited = rateLimitAdmin(req);
   if (rateLimited) {
     rateLimited.headers.set('x-request-id', rid);
+    if (tenantId) rateLimited.headers.set('x-tenant-id', tenantId);
     return SecurityHeaders.applyToResponse(applyCors(req, rateLimited));
+  }
+
+  // Per-tenant rate limit for API routes
+  const tenantLimited = rateLimitTenant(req, tenantId);
+  if (tenantLimited) {
+    tenantLimited.headers.set('x-request-id', rid);
+    return SecurityHeaders.applyToResponse(applyCors(req, tenantLimited));
   }
 
   // Edge-level auth enforcement for admin routes
   const edgeAuthResult = await enforceEdgeAuth(req);
   if (edgeAuthResult) {
     edgeAuthResult.headers.set('x-request-id', rid);
+    if (tenantId) edgeAuthResult.headers.set('x-tenant-id', tenantId);
     return SecurityHeaders.applyToResponse(applyCors(req, edgeAuthResult));
   }
 
@@ -269,12 +340,14 @@ export async function middleware(req: NextRequest) {
   if (r && r instanceof NextResponse) {
     // Apply security headers on RBAC response as well
     r.headers.set('x-request-id', rid);
+    if (tenantId) r.headers.set('x-tenant-id', tenantId);
     return SecurityHeaders.applyToResponse(applyCors(req, r));
   }
 
   // Fallback: attach request id and headers
   const res = NextResponse.next();
   res.headers.set('x-request-id', rid);
+  if (tenantId) res.headers.set('x-tenant-id', tenantId);
   return SecurityHeaders.applyToResponse(applyCors(req, res));
 }
 

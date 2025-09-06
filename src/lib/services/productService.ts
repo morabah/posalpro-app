@@ -305,8 +305,9 @@ export class ProductService {
 
   async getProductWithRelationships(id: string): Promise<ProductWithRelationships | null> {
     try {
+      const tenant = getCurrentTenant();
       return await prisma.product.findUnique({
-        where: { id },
+        where: { id, tenantId: tenant.tenantId },
         include: {
           relationships: {
             include: {
@@ -337,8 +338,9 @@ export class ProductService {
 
   async getProductWithValidation(id: string): Promise<ProductWithValidation | null> {
     try {
+      const tenant = getCurrentTenant();
       return await prisma.product.findUnique({
-        where: { id },
+        where: { id, tenantId: tenant.tenantId },
         include: {
           validationRules: {
             select: {

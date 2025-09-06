@@ -11,6 +11,9 @@ import { logError, logInfo } from '@/lib/logger';
 import { getCache, setCache } from '@/lib/redis';
 import { getOrCreateRequestId } from '@/lib/requestId';
 import { createHash } from 'crypto';
+import { getFeatureFlags } from '@/lib/env';
+import { runWithTenantContext } from '@/lib/tenant';
+import { EntitlementService } from '@/lib/services/EntitlementService';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 
@@ -32,6 +35,8 @@ export interface RouteConfig<
   query?: Q;
   body?: B;
   requireAuth?: boolean;
+  /** Optional per-route entitlements required (by key). */
+  entitlements?: string[];
   /**
    * Optional API deprecation metadata for this route.
    * When provided, standard headers will be added:
@@ -153,6 +158,67 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
           throw forbidden(`Access denied. Required roles: ${config.roles.join(', ')}`);
         }
 
+        // Optional seat enforcement (server-side guardrail). Admins bypass.
+        try {
+          const enforceSeats = process.env.SEAT_ENFORCEMENT === 'true';
+          if (enforceSeats) {
+            const isAdmin = (user.roles || []).some(r => r === 'Administrator' || r === 'System Administrator');
+            if (!isAdmin) {
+              const { getSeatStatus } = await import('@/lib/services/subscriptionService');
+              const status = await getSeatStatus(user.tenantId);
+              if (!status.hasAvailableSeat) {
+                throw forbidden('Seat limit reached. Contact your administrator.');
+              }
+            }
+          }
+        } catch (e) {
+          if (e instanceof StandardError) throw e;
+          throw forbidden('Seat enforcement error');
+        }
+
+        // Optional subscription status enforcement (server-side guardrail). Admins bypass.
+        try {
+          const enforceSub = process.env.SUBSCRIPTION_ENFORCEMENT === 'true';
+          if (enforceSub) {
+            const isAdmin = (user.roles || []).some(r => r === 'Administrator' || r === 'System Administrator');
+            if (!isAdmin) {
+              const { getSubscriptionStatus } = await import('@/lib/services/subscriptionService');
+              const sub = await getSubscriptionStatus(user.tenantId);
+              const allowed = sub.status === 'ACTIVE' || sub.status === 'TRIALING';
+              if (!allowed) {
+                throw forbidden('Subscription inactive. Please update billing.');
+              }
+            }
+          }
+        } catch (e) {
+          if (e instanceof StandardError) throw e;
+          throw forbidden('Subscription enforcement error');
+        }
+
+        // Tenant scope check: if request carries x-tenant-id header or subdomain, ensure match
+        const headerTenant = req.headers.get('x-tenant-id');
+        if (headerTenant && user.tenantId && headerTenant !== user.tenantId) {
+          throw forbidden('Tenant mismatch');
+        }
+
+        // Minimal paid feature gating using feature flags (server-side guard rail)
+        if ((config as any).requireAuth !== false && (config as any).requirePaid) {
+          const flags = getFeatureFlags();
+          const enforce = process.env.PAID_FEATURES_ENFORCE === 'true';
+          const paidOn = flags.enableExperimentalFeatures || process.env.PAID_FEATURES_DEFAULT === 'true';
+          if (enforce && !paidOn) {
+            throw forbidden('Upgrade required');
+          }
+        }
+
+        // Entitlement enforcement: require all listed entitlements for the tenant
+        if (config.entitlements && config.entitlements.length > 0) {
+          const ok = await EntitlementService.hasEntitlements((user as any).tenantId, config.entitlements);
+          if (!ok) {
+            throw forbidden('Missing entitlements');
+          }
+        }
+
         // Parse query parameters
         let query: Q extends z.ZodTypeAny ? z.infer<Q> : undefined;
         if (config.query) {
@@ -219,18 +285,23 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
           }
         }
 
-        // Call the handler
-        const response = await handler({
-          req,
-          user,
-          query,
-          body,
-          requestId,
-        });
+        // Call the handler within tenant async context for Prisma middleware
+        const response = await runWithTenantContext(
+          { tenantId: user.tenantId } as any,
+          async () =>
+            handler({
+              req,
+              user,
+              query,
+              body,
+              requestId,
+            })
+        );
 
         // Add request ID and API headers to response
         const responseHeaders = new Headers(response.headers);
         decorate(responseHeaders);
+        if (user.tenantId) responseHeaders.set('x-tenant-id', user.tenantId);
 
         // Persist idempotent response if applicable
         if (cacheKey) {

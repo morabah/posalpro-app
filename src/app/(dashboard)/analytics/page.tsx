@@ -2,6 +2,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Suspense, lazy, useEffect, useState } from 'react';
+import FeatureGate from '@/components/entitlements/FeatureGate';
 
 // ✅ PERFORMANCE: Lazy load heavy analytics components
 const AnalyticsDashboardLazy = lazy(() =>
@@ -98,14 +99,30 @@ export default function AnalyticsPage() {
       {isClient && (
         <>
           {/* ✅ PERFORMANCE: Lazy load main analytics dashboard */}
-          <Suspense fallback={<DashboardSkeleton />}>
-            <AnalyticsDashboardLazy />
-          </Suspense>
+          <FeatureGate
+            featureKey="feature.analytics.dashboard"
+            bannerTitle="Analytics Dashboard Locked"
+            bannerDescription="Upgrade your plan to access the analytics dashboard."
+            bannerCtaLabel="View plans"
+            bannerHref="/pricing"
+          >
+            <Suspense fallback={<DashboardSkeleton />}>
+              <AnalyticsDashboardLazy />
+            </Suspense>
+          </FeatureGate>
 
           {/* ✅ PERFORMANCE: Lazy load hypothesis tracking */}
-          <Suspense fallback={<HypothesisSkeleton />}>
-            <HypothesisTrackingDashboardLazy />
-          </Suspense>
+          <FeatureGate
+            featureKey="feature.analytics.insights"
+            bannerTitle="Insights Locked"
+            bannerDescription="Enable Insights to unlock hypothesis tracking and recent activity."
+            bannerCtaLabel="Contact admin"
+            bannerHref="/support"
+          >
+            <Suspense fallback={<HypothesisSkeleton />}>
+              <HypothesisTrackingDashboardLazy />
+            </Suspense>
+          </FeatureGate>
         </>
       )}
     </div>

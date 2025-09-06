@@ -5,6 +5,8 @@ const dbLatencyPoints: MetricPoint[] = [];
 const errorCodes: Record<string, number> = {};
 let cacheHits = 0;
 let cacheMisses = 0;
+// Per-tenant request counters (lightweight telemetry)
+const tenantRequestCounts: Record<string, number> = {};
 
 // Web Vitals tracking
 type WebVitalName = 'FCP' | 'LCP' | 'CLS' | 'TTFB' | 'INP';
@@ -45,6 +47,11 @@ export function recordCacheHit() {
 
 export function recordCacheMiss() {
   cacheMisses += 1;
+}
+
+export function recordTenantRequest(tenantId: string) {
+  if (!tenantId) return;
+  tenantRequestCounts[tenantId] = (tenantRequestCounts[tenantId] || 0) + 1;
 }
 
 // Classify web vitals into simple buckets (good/needs improvement/poor) per Web Vitals guidance
@@ -126,6 +133,9 @@ export function snapshot() {
       CLS: vitalSummary('CLS'),
       TTFB: vitalSummary('TTFB'),
       INP: vitalSummary('INP'),
+    },
+    tenants: {
+      counts: tenantRequestCounts,
     },
   };
 }

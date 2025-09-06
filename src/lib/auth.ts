@@ -85,7 +85,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
 
-  // 🚀 NETLIFY FIX: Production cookie configuration
+  // Let NextAuth manage secure cookies by environment
   useSecureCookies: process.env.NODE_ENV === 'production',
 
   // ✅ CRITICAL: Performance optimization for TTFB reduction
@@ -101,26 +101,8 @@ export const authOptions: NextAuthOptions = {
     secret: getAuthSecret(),
   },
 
-  cookies: {
-    sessionToken: {
-      name:
-        process.env.NODE_ENV === 'production'
-          ? '__Secure-next-auth.session-token'
-          : 'next-auth.session-token',
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: process.env.NODE_ENV === 'production',
-        // Use configurable cookie domain in production. If not provided, omit domain
-        // so cookies are scoped to the host. Allow overriding in any env if set.
-        domain:
-          process.env.COOKIE_DOMAIN && process.env.COOKIE_DOMAIN.trim().length > 0
-            ? process.env.COOKIE_DOMAIN
-            : undefined,
-      },
-    },
-  },
+  // Rely on NextAuth default cookie names and options to avoid mismatches.
+  // If production domain scoping is needed, re-enable with caution.
 
   providers: [
     CredentialsProvider({
@@ -218,6 +200,31 @@ export const authOptions: NextAuthOptions = {
             // They are already authenticated via their provider
           }
 
+          // Enforce seat limits (non-admin users)
+          try {
+            const enforce = process.env.SEAT_ENFORCEMENT === 'true';
+            if (enforce) {
+              const isAdmin = roles.includes('Administrator') || roles.includes('System Administrator');
+              if (!isAdmin) {
+                const { hasAvailableSeat, seats, activeUsers } = await (await import('./services/subscriptionService')).getSeatStatus(
+                  user.tenantId
+                );
+                if (!hasAvailableSeat) {
+                  logWarn('❌ Seat enforcement blocked sign-in', {
+                    tenantId: user.tenantId,
+                    seats,
+                    activeUsers,
+                    email: user.email,
+                  });
+                  throw new Error('Seat limit reached. Contact your administrator.');
+                }
+              }
+            }
+          } catch (err) {
+            logWarn('Seat enforcement check failed', { error: (err as Error)?.message });
+            throw err;
+          }
+
           // Update last login timestamp (non-blocking)
           updateLastLogin(user.id).catch(err => {
             logWarn('lastLogin update failed (non-blocking):', err);
@@ -289,6 +296,44 @@ export const authOptions: NextAuthOptions = {
             error: (err as Error)?.message,
           });
         }
+      } else {
+        // Hardening: if we don't get a fresh user (subsequent requests),
+        // make sure roles/permissions are present. If missing, repopulate
+        // from the secure session or database.
+        try {
+          const rolesArr = Array.isArray((token as any).roles)
+            ? ((token as any).roles as string[])
+            : [];
+          const permsArr = Array.isArray((token as any).permissions)
+            ? ((token as any).permissions as string[])
+            : [];
+
+          let needRefresh = rolesArr.length === 0; // permissions derive from roles
+
+          if (needRefresh && (token as any).sessionId) {
+            const session = await secureSessionManager.validateSession(
+              (token as any).sessionId as string
+            );
+            if (session) {
+              (token as any).roles = session.roles || [];
+              (token as any).permissions = session.permissions || [];
+              needRefresh = (token as any).roles.length === 0;
+            }
+          }
+
+          if (needRefresh && token.email) {
+            const freshUser = await getUserByEmail(token.email);
+            if (freshUser) {
+              const roles = freshUser.roles.map(r => r.role.name);
+              (token as any).roles = roles;
+              (token as any).permissions = generatePermissionsFromRoles(roles);
+            }
+          }
+        } catch (err) {
+          logWarn('[AUTH_DEBUG] Failed to refresh roles from session/db (continuing)', {
+            error: (err as Error)?.message,
+          });
+        }
       }
       if (AUTH_DEBUG_ENABLED) {
         logDebug('[AUTH_DEBUG] jwt callback output token (sanitized)', {
@@ -349,6 +394,33 @@ export const authOptions: NextAuthOptions = {
       session.user.tenantId = token.tenantId as any;
       session.user.roles = (token.roles as any) || [];
       session.user.permissions = (token.permissions as any) || [];
+      // Fallback: if roles are empty, try to repopulate using secure session or DB
+      try {
+        if (!Array.isArray(session.user.roles) || session.user.roles.length === 0) {
+          // Try secure session first
+          const sid = (token as any).sessionId as string | undefined;
+          if (sid) {
+            const s = await secureSessionManager.validateSession(sid);
+            if (s) {
+              session.user.roles = s.roles || [];
+              session.user.permissions = s.permissions || [];
+            }
+          }
+          // If still empty, fall back to DB lookup
+          if ((!Array.isArray(session.user.roles) || session.user.roles.length === 0) && token.email) {
+            const fresh = await getUserByEmail(token.email);
+            if (fresh) {
+              const roles = fresh.roles.map(r => r.role.name);
+              session.user.roles = roles;
+              session.user.permissions = generatePermissionsFromRoles(roles);
+            }
+          }
+        }
+      } catch (err) {
+        logWarn('[AUTH_DEBUG] Session role refresh failed (continuing)', {
+          error: (err as Error)?.message,
+        });
+      }
       // Expose sessionId only if needed on client; keep server-side by default
       // (Do not attach to session.user to avoid leaking internal IDs.)
 
@@ -418,8 +490,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
 
-  // Disable verbose debug to reduce overhead in development performance tests
-  debug: false,
+  // Debug logging is controlled via AUTH_DEBUG/NEXTAUTH_DEBUG env in this config
 };
 
 /**

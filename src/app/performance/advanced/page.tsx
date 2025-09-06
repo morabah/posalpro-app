@@ -6,6 +6,9 @@
  */
 
 import { Metadata } from 'next';
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout';
 import dynamic from 'next/dynamic';
 
 // Dynamic import for heavy performance dashboard
@@ -40,16 +43,22 @@ export const metadata: Metadata = {
 
 export default function AdvancedPerformancePage() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AdvancedPerformanceDashboard
-        showAdvancedMetrics={true}
-        enableRealTimeUpdates={true}
-        refreshInterval={15000}
-        userRole="developer"
-        enableMobileOptimization={true}
-        enableAutomaticOptimization={false}
-        className="w-full"
-      />
-    </div>
+    <ClientLayoutWrapper>
+      <AuthProvider>
+        <ProtectedLayout>
+          <div className="min-h-screen bg-gray-50">
+            <AdvancedPerformanceDashboard
+              showAdvancedMetrics={true}
+              enableRealTimeUpdates={true}
+              refreshInterval={15000}
+              userRole="developer"
+              enableMobileOptimization={true}
+              enableAutomaticOptimization={false}
+              className="w-full"
+            />
+          </div>
+        </ProtectedLayout>
+      </AuthProvider>
+    </ClientLayoutWrapper>
   );
 }

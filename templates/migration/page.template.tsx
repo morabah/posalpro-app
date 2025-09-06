@@ -9,6 +9,9 @@
 // ✅ IMPLEMENTS: Modern Next.js App Router patterns with suspense boundaries
 
 import React from 'react';
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout';
 import { __ENTITY__List_new } from '@/components/__RESOURCE__s_new/__ENTITY__List_new';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logInfo } from '@/lib/logger';
@@ -116,29 +119,35 @@ export default function __ENTITY__sNewPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
 
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Breadcrumb Navigation */}
-          <nav aria-label="Breadcrumb" className="mb-6">
-            <ol className="flex items-center space-x-2 text-sm text-gray-500">
-              <li>
-                <a href="/dashboard" className="hover:text-gray-700">
-                  Dashboard
-                </a>
-              </li>
-              <li aria-hidden="true">/</li>
-              <li className="text-gray-900 font-medium">__ENTITY__s</li>
-            </ol>
-          </nav>
+      <ClientLayoutWrapper>
+        <AuthProvider>
+          <ProtectedLayout>
+            <div className="min-h-screen bg-gray-50">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Breadcrumb Navigation */}
+                <nav aria-label="Breadcrumb" className="mb-6">
+                  <ol className="flex items-center space-x-2 text-sm text-gray-500">
+                    <li>
+                      <a href="/dashboard" className="hover:text-gray-700">
+                        Dashboard
+                      </a>
+                    </li>
+                    <li aria-hidden="true">/</li>
+                    <li className="text-gray-900 font-medium">__ENTITY__s</li>
+                  </ol>
+                </nav>
 
-          {/* Main Content with Suspense Boundary */}
-          <main>
-            <Suspense fallback={<__ENTITY__ListSkeleton />}>
-              <__ENTITY__ListClient />
-            </Suspense>
-          </main>
-        </div>
-      </div>
+                {/* Main Content with Suspense Boundary */}
+                <main>
+                  <Suspense fallback={<__ENTITY__ListSkeleton />}>
+                    <__ENTITY__ListClient />
+                  </Suspense>
+                </main>
+              </div>
+            </div>
+          </ProtectedLayout>
+        </AuthProvider>
+      </ClientLayoutWrapper>
     </>
   );
 }

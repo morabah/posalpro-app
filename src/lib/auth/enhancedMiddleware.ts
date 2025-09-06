@@ -7,6 +7,20 @@ import { withAuth } from 'next-auth/middleware';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { logDebug, logWarn } from '@/lib/logger';
+// Edge-safe tenant resolution (no Node APIs)
+const resolveTenantIdEdge = (req: NextAuthAugmentedRequest, token: any): string | null => {
+  const headerTenant = (req.headers.get('x-tenant-id') || '').trim();
+  if (headerTenant) return headerTenant;
+  const jwtTenant = token?.tenantId as string | undefined;
+  if (jwtTenant) return jwtTenant;
+  const host = req.headers.get('host') || '';
+  const parts = host.split(':')[0].split('.');
+  if (parts.length >= 3) return parts[0] || null;
+  if (process.env.NODE_ENV !== 'production') {
+    return process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default';
+  }
+  return null;
+};
 
 // Permission validation utility
 const hasPermission = (userPermissions: string[], requiredPermission: string): boolean => {
@@ -90,6 +104,26 @@ export default withAuth(
     const userPermissions = Array.isArray(tokenRaw.permissions)
       ? (tokenRaw.permissions as string[])
       : [];
+
+    // Tenant scoping: enforce token tenant matches resolved tenant context when available
+    try {
+      const tokenTenant = (tokenRaw as any)?.tenantId as string | undefined;
+      const resolved = resolveTenantIdEdge(req, tokenRaw);
+      if (tokenTenant && resolved && tokenTenant !== resolved) {
+        logWarn('[Security] Tenant mismatch denied', {
+          userId: tokenRaw.id,
+          tokenTenant,
+          resolvedTenant: resolved,
+          path: pathname,
+        });
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json({ error: 'Forbidden: tenant mismatch' }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL('/auth/error?error=TenantMismatch', req.url));
+      }
+    } catch {
+      // In development or for public paths, tenant context may be absent
+    }
 
     // Enhanced logging for security monitoring
     logDebug(`[Security] Access attempt: ${method} ${pathname}`, {

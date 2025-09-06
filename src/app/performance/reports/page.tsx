@@ -19,6 +19,9 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
+import { ClientLayoutWrapper } from '@/components/layout/ClientLayoutWrapper';
+import { AuthProvider } from '@/components/providers/AuthProvider';
+import { ProtectedLayout } from '@/components/layout';
 
 // Simple Alert component using design system Card
 const Alert = ({
@@ -123,7 +126,10 @@ export default function TestReportsPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
+    <ClientLayoutWrapper>
+      <AuthProvider>
+        <ProtectedLayout>
+          <div className="container mx-auto px-4 py-8 space-y-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Test Reports</h1>
         <p className="text-gray-600">
@@ -506,6 +512,9 @@ export default function TestReportsPage() {
           </div>
         </div>
       )}
-    </div>
+          </div>
+        </ProtectedLayout>
+      </AuthProvider>
+    </ClientLayoutWrapper>
   );
 }
