@@ -49,6 +49,46 @@ const buckets = new Map<string, { tokens: number; ts: number }>();
 const WINDOW_MS = 60_000;
 const LIMIT = 100;
 
+// CORS allowlist (dynamic). Prefer CORS_ORIGINS env; fallback to app URL or sensible defaults.
+const ALLOWED_ORIGINS: string[] = (
+  process.env.CORS_ORIGINS ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.NODE_ENV !== 'production'
+    ? 'http://localhost:3000,http://127.0.0.1:3000'
+    : 'https://posalpro.netlify.app')
+)
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+function getAllowedOrigin(req: NextRequest): string | null {
+  const origin = req.headers.get('origin');
+  if (!origin) return null;
+  return ALLOWED_ORIGINS.includes(origin) ? origin : null;
+}
+
+function applyCors(req: NextRequest, res: NextResponse): NextResponse {
+  const path = req.nextUrl.pathname;
+  if (!path.startsWith('/api/')) return res; // limit CORS headers to API routes
+
+  const allowedOrigin = getAllowedOrigin(req);
+  res.headers.set('Vary', ['Origin', 'Access-Control-Request-Method', 'Access-Control-Request-Headers'].join(', '));
+  if (allowedOrigin) {
+    res.headers.set('Access-Control-Allow-Origin', allowedOrigin);
+    res.headers.set('Access-Control-Allow-Credentials', 'true');
+  }
+  res.headers.set(
+    'Access-Control-Allow-Methods',
+    'GET, POST, PUT, DELETE, PATCH, OPTIONS'
+  );
+  res.headers.set(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Requested-With, X-Request-ID'
+  );
+  res.headers.set('Access-Control-Max-Age', '86400');
+  return res;
+}
+
 function rateLimitAdmin(req: NextRequest): NextResponse | null {
   const { pathname } = req.nextUrl;
   if (!(pathname.startsWith('/api/admin') || pathname.startsWith('/admin'))) return null;
@@ -159,6 +199,14 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
 }
 
 export async function middleware(req: NextRequest) {
+  // Handle CORS preflight for API routes early
+  if (req.method === 'OPTIONS' && req.nextUrl.pathname.startsWith('/api/')) {
+    const preflight = new NextResponse(null, { status: 204 });
+    const rid = req.headers.get('x-request-id') ?? generateUUID();
+    preflight.headers.set('x-request-id', rid);
+    return SecurityHeaders.applyToResponse(applyCors(req, preflight));
+  }
+
   // Basic token-bucket rate limiting for API routes
   if (ENABLE) {
     const ip = (req.headers.get('x-forwarded-for') ?? '127.0.0.1').split(',')[0].trim();
@@ -173,7 +221,7 @@ export async function middleware(req: NextRequest) {
       const rid = req.headers.get('x-request-id') ?? generateUUID();
       res.headers.set('x-request-id', rid);
       (globalThis as any).__requestId = rid;
-      return SecurityHeaders.applyToResponse(res);
+      return SecurityHeaders.applyToResponse(applyCors(req, res));
     }
   }
 
@@ -192,7 +240,7 @@ export async function middleware(req: NextRequest) {
   const securityResult = await securityMiddleware(req);
   if (securityResult.status === 429) {
     securityResult.headers.set('x-request-id', rid);
-    return securityResult;
+    return SecurityHeaders.applyToResponse(applyCors(req, securityResult));
   }
 
   // Allow CSP reports without auth
@@ -205,14 +253,14 @@ export async function middleware(req: NextRequest) {
   const rateLimited = rateLimitAdmin(req);
   if (rateLimited) {
     rateLimited.headers.set('x-request-id', rid);
-    return SecurityHeaders.applyToResponse(rateLimited);
+    return SecurityHeaders.applyToResponse(applyCors(req, rateLimited));
   }
 
   // Edge-level auth enforcement for admin routes
   const edgeAuthResult = await enforceEdgeAuth(req);
   if (edgeAuthResult) {
     edgeAuthResult.headers.set('x-request-id', rid);
-    return SecurityHeaders.applyToResponse(edgeAuthResult);
+    return SecurityHeaders.applyToResponse(applyCors(req, edgeAuthResult));
   }
 
   // RBAC and auth protection
@@ -220,15 +268,24 @@ export async function middleware(req: NextRequest) {
   if (r && r instanceof NextResponse) {
     // Apply security headers on RBAC response as well
     r.headers.set('x-request-id', rid);
-    return SecurityHeaders.applyToResponse(r);
+    return SecurityHeaders.applyToResponse(applyCors(req, r));
   }
 
   // Fallback: attach request id and headers
   const res = NextResponse.next();
   res.headers.set('x-request-id', rid);
-  return SecurityHeaders.applyToResponse(res);
+  return SecurityHeaders.applyToResponse(applyCors(req, res));
 }
 
 export const config = {
-  matcher: ['/api/:path*'],
+  // Align matcher with RBAC/page protections: include admin and key app pages
+  matcher: [
+    '/api/:path*',
+    '/admin/:path*',
+    '/proposals/create',
+    '/proposals/manage',
+    '/customers/:path*',
+    '/products/:path*',
+    '/analytics/:path*',
+  ],
 };

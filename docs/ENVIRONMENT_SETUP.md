@@ -32,7 +32,7 @@ createdb posalpro_mvp2
 
 ### 2. Environment Configuration
 
-Create a `.env` file in your project root:
+Create a `.env` file in your project root (development defaults shown; override in CI/hosting env):
 
 ```env
 # Database Configuration
@@ -54,16 +54,27 @@ BCRYPT_ROUNDS=12
 # Application
 NODE_ENV="development"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+# API base for SSR/server utilities (browser uses "/api")
+API_BASE_URL="http://localhost:3000/api"
+
+# CORS (comma-separated allowlist). Must include NEXT_PUBLIC_APP_URL
+CORS_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
+
+# Edge middleware rate limiting (enable in dev for parity)
+RATE_LIMIT=true
 
 # Analytics
 NEXT_PUBLIC_ANALYTICS_ENABLED=true
 NEXT_PUBLIC_HYPOTHESIS_TRACKING=true
 
-# Security
-API_RATE_LIMIT_WINDOW=900000
-API_RATE_LIMIT_MAX=100
+# Security / Cache
 PERFORMANCE_MONITORING_ENABLED=true
 AUDIT_LOG_RETENTION_DAYS=365
+USE_REDIS=false
+REDIS_URL=""
+
+# Session encryption (32 bytes; hex or base64). Example below is 64 hex chars
+SESSION_ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 # Accessibility
 ACCESSIBILITY_COMPLIANCE_LEVEL="AA"
@@ -116,7 +127,26 @@ npm run quality:check
 
 # Start development server
 npm run dev
+
+# Verify environment variables (exits non-zero if required keys missing)
+node scripts/verify-env.js
 ```
+
+## Required Environment Variables (Summary)
+
+- DATABASE_URL: PostgreSQL connection string
+- NEXTAUTH_SECRET: NextAuth HMAC/crypto secret (>=32 chars)
+- NEXTAUTH_URL: Public base URL for NextAuth callbacks
+- JWT_SECRET: JWT signing secret (>=32 chars)
+- CORS_ORIGINS: Comma-separated list of allowed origins
+- NEXT_PUBLIC_APP_URL: Public app URL; must be included in CORS_ORIGINS
+- API_BASE_URL: Server/SSR API base (browser uses /api)
+- RATE_LIMIT: Enable edge rate limiting ("true"/"1")
+- SESSION_ENCRYPTION_KEY: 32 bytes (64 hex chars or strong base64)
+
+Optional:
+- DIRECT_URL, USE_REDIS, REDIS_URL, DATABASE_CONNECTION_LIMIT, DATABASE_POOL_TIMEOUT,
+  PRISMA_CLIENT_ENGINE_TYPE, PRISMA_GENERATE_DATAPROXY
 
 ## Default System Access
 

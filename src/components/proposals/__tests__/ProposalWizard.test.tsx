@@ -17,6 +17,9 @@ import { ExpertiseArea, ProposalPriority } from '@/types/proposals';
 import * as router from 'next/navigation';
 import { ProposalWizard } from '../ProposalWizard';
 
+// Define constants outside mocks to avoid Jest scope issues
+const MOCK_PRIORITY_HIGH = Priority.HIGH;
+
 // Mock dependencies
 jest.mock('@/hooks/proposals/useProposalCreationAnalytics', () => ({
   useProposalCreationAnalytics: () => ({
@@ -56,7 +59,7 @@ jest.mock('@/lib/entities/proposal', () => ({
             },
             estimatedValue: 100000,
             deadline: new Date('2025-12-31'),
-            priority: Priority.HIGH,
+            priority: MOCK_PRIORITY_HIGH,
           },
         },
       }),

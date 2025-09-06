@@ -3,6 +3,37 @@
  * Global test environment setup
  */
 
+// Mock Prisma Client to prevent browser bundling issues in tests
+jest.mock('@prisma/client', () => ({
+  PrismaClient: jest.fn().mockImplementation(() => ({
+    $use: jest.fn(),
+    $connect: jest.fn(),
+    $disconnect: jest.fn(),
+    // Mock all Prisma models as needed
+    user: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
+    proposal: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
+    proposalVersion: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
+  })),
+}));
+
 // Import React for JSX transformations (prefixed with mock to satisfy Jest)
 const mockReact = require('react');
 
@@ -168,6 +199,28 @@ jest.mock('@tanstack/react-query', () => ({
     fetchStatus: 'idle',
     status: 'success',
   })),
+  useInfiniteQuery: jest.fn(() => ({
+    data: {
+      pages: [
+        {
+          items: [],
+          pagination: {
+            limit: 20,
+            hasNextPage: false,
+            nextCursor: null,
+          },
+        },
+      ],
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+    fetchNextPage: jest.fn(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    refetch: jest.fn(),
+    isRefetching: false,
+  })),
   useMutation: jest.fn(() => ({
     mutate: jest.fn(),
     mutateAsync: jest.fn(() => Promise.resolve()),
@@ -186,7 +239,7 @@ jest.mock('@tanstack/react-query', () => ({
     removeQueries: jest.fn(),
     clear: jest.fn(),
   })),
-  QueryClient: jest.fn().mockImplementation(() => ({
+  QueryClient: jest.fn().mockImplementation((options) => ({
     invalidateQueries: jest.fn(),
     setQueryData: jest.fn(),
     getQueryData: jest.fn(),
@@ -194,6 +247,7 @@ jest.mock('@tanstack/react-query', () => ({
     clear: jest.fn(),
     mount: jest.fn(),
     unmount: jest.fn(),
+    options,
   })),
   QueryClientProvider: jest.fn(({ children }) => children),
 }));
@@ -207,6 +261,19 @@ jest.mock('react-hot-toast', () => ({
     dismiss: jest.fn(),
   },
   Toaster: () => null,
+}));
+
+// Mock Toast components
+jest.mock('@/components/feedback/Toast/ToastProvider', () => ({
+  ToastProvider: ({ children }) => children,
+  useToast: () => ({
+    toast: {
+      success: jest.fn(),
+      error: jest.fn(),
+      loading: jest.fn(),
+      dismiss: jest.fn(),
+    },
+  }),
 }));
 
 // Mock window.matchMedia for responsive design tests (DOM only)

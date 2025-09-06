@@ -1,7 +1,6 @@
 /**
  * Proposal Workflow API Route - Modern Architecture
- * User Story: US-3.2 (Proposal Managemeimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-nt)
+ * User Story: US-3.2 (Proposal Management)
  * Hypothesis: H4 (Cross-Department Coordination)
  */
 

@@ -3,8 +3,7 @@
  * Enhanced product operations with authentication, RBAC, and analytics
  * Component Traceability: US-4.1, H5
  *
- * ✅ SCHEMA CONSOLimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-IDATION: All schemas imported from src/features/products/schemas.ts
+ * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/products/schemas.ts
  * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 

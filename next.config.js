@@ -64,7 +64,7 @@ const baseConfig = {
   compress: true,
   generateEtags: false,
 
-  // ✅ CRITICAL: Simplified webpack configuration for stability
+  // ✅ CRITICAL: Enhanced webpack configuration for bundle optimization
   webpack: (config, { dev, isServer }) => {
     // Exclude archived files from build
     config.module.rules.push({
@@ -95,11 +95,40 @@ const baseConfig = {
       };
     }
 
-    // Simplified bundle splitting for production only
+    // Enhanced bundle splitting for production only
     if (!dev && !isServer) {
       config.optimization.splitChunks = {
         chunks: 'all',
         cacheGroups: {
+          // Separate React and React DOM for better caching
+          react: {
+            test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/,
+            name: 'react',
+            chunks: 'all',
+            priority: 20,
+          },
+          // Separate Next.js core
+          next: {
+            test: /[\\/]node_modules[\\/](next|@next)[\\/]/,
+            name: 'next',
+            chunks: 'all',
+            priority: 20,
+          },
+          // Separate UI libraries
+          ui: {
+            test: /[\\/]node_modules[\\/](@radix-ui|@headlessui|lucide-react|framer-motion)[\\/]/,
+            name: 'ui',
+            chunks: 'all',
+            priority: 15,
+          },
+          // Separate charting libraries
+          charts: {
+            test: /[\\/]node_modules[\\/](chart\.js|recharts)[\\/]/,
+            name: 'charts',
+            chunks: 'all',
+            priority: 15,
+          },
+          // Other vendor libraries
           vendor: {
             test: /[\\/]node_modules[\\/]/,
             name: 'vendors',
@@ -108,6 +137,23 @@ const baseConfig = {
           },
         },
       };
+
+      // Enable tree shaking
+      config.optimization.usedExports = true;
+
+      // Add compression
+      if (TerserPlugin) {
+        config.optimization.minimizer = [
+          new TerserPlugin({
+            terserOptions: {
+              compress: {
+                drop_console: !dev,
+                drop_debugger: !dev,
+              },
+            },
+          }),
+        ];
+      }
     }
 
     return config;
@@ -123,14 +169,9 @@ const baseConfig = {
       {
         source: '/api/(.*)',
         headers: [
+          // Note: CORS is now handled dynamically in middleware to avoid wildcard '*' and
+          // properly support credentials with an allowlist. Keep caching headers only here.
           { key: 'Cache-Control', value: 'public, max-age=60, s-maxage=300' },
-          { key: 'Access-Control-Allow-Origin', value: '*' },
-          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, PATCH, OPTIONS' },
-          {
-            key: 'Access-Control-Allow-Headers',
-            value: 'Content-Type, Authorization, X-Requested-With',
-          },
-          { key: 'Access-Control-Max-Age', value: '86400' },
         ],
       },
     ];

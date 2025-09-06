@@ -29,7 +29,7 @@ import { useVersionHistoryStore } from '@/lib/store/versionHistoryStore';
 import { logDebug, logInfo, logError } from '@/lib/logger';
 
 // Mock UI components
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
@@ -42,7 +42,7 @@ jest.mock('@/lib/logger');
 jest.mock('@/hooks/useOptimizedAnalytics');
 
 // Mock UI components
-jest.mock('@/components/ui/Button', () => ({
+jest.mock('@/components/ui/forms/Button', () => ({
   Button: ({ children, onClick, disabled, ...props }: any) => (
     <button onClick={onClick} disabled={disabled} {...props}>
       {children}
@@ -726,11 +726,3 @@ describe('ProposalVersionHistoryPage', () => {
     });
   });
 });
-
-
-
-
-
-
-
-

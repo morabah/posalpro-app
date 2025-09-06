@@ -1,6 +1,5 @@
 /**
- * Dashboard Metrics API Route - Modern Arcimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-hitecture
+ * Dashboard Metrics API Route - Modern Architecture
  * User Story: US-3.2 (Proposal Management)
  * Hypothesis: H4 (Cross-Department Coordination)
  */

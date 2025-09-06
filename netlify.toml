@@ -9,12 +9,12 @@
   ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
 
 [build.environment]
-  # 🚨 CRITICAL: Environment variables that fix database and authentication issues
-  DIRECT_URL = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul.gwc.azure.neon.tech/neondb?sslmode=require"
-  SESSION_ENCRYPTION_KEY = "5a5f2da8d602760003727d7f1f34adbc9ddfbba5fbea225c597d002e73b627a0"
-  API_KEY = "568b1a88f0aa1cc52f64257643fc74bab1a6b7851d649a65120080248027bb5f"
+  # 🚨 IMPORTANT: Sensitive variables removed from VCS.
+  # Set the following in Netlify UI (Site settings > Environment variables):
+  #   DIRECT_URL, DATABASE_URL, NEXTAUTH_SECRET, JWT_SECRET, CSRF_SECRET,
+  #   SESSION_ENCRYPTION_KEY, API_KEY, REDIS_URL, NEXT_PUBLIC_APP_URL, NEXTAUTH_URL
 
-  # Align with production environment
+  # Align with production environment (non-secrets)
   NODE_VERSION = "22"
   # Increase memory for TypeScript compilation (2GB)
   NODE_OPTIONS = "--max-old-space-size=2048"
@@ -25,31 +25,20 @@
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)
   ANALYTICS_ENABLED = "true"
-  API_BASE_URL = "https://posalpro.netlify.app/api"
+  # Prefer configuring API_BASE_URL via Netlify UI; this is safe but optional
+  # API_BASE_URL = "https://posalpro.netlify.app/api"
 
-  # Keep existing working variables
-  DATABASE_URL = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require&pgbouncer=true&connection_limit=1"
-  NEXTAUTH_SECRET = "451f4701894a2f66265997fc8b7dd50c3529c3482c4606299b269708ed7d0212"
-  NEXTAUTH_URL = "https://posalpro.netlify.app"
-  JWT_SECRET = "2031cd23e1b1641d299d8174858f3e6be0e86d4d7716c0c9ba2c99021f645a4a"
-  CSRF_SECRET = "7467d9c3b1b7f713dd0c4430b513a3498087be6968979c7f49a6a5d79bee3ead"
-
-  # Force Prisma to use library (native) engines on Netlify (disable wasm/dataproxy)
+  # Prisma engine settings (non-secrets)
   PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
   PRISMA_CLIENT_ENGINE_TYPE = "library"
   PRISMA_GENERATE_DATAPROXY = "false"
   PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x"
 
-  # 🚨 CRITICAL: Prevent Prisma build-time connection issues
+  # Build toggles (non-secrets)
   PRISMA_GENERATE_SKIP_DOWNLOAD = "true"
   SKIP_PRISMA_GENERATE = "true"
-  # Build-time indicator for API routes
   NETLIFY_BUILD_TIME = "true"
-  # Force build-time mode to prevent database connections
   BUILD_MODE = "static"
-  REDIS_URL = "redis://disabled:6379"
-  USE_REDIS = "false"
-  NEXT_PUBLIC_APP_URL = "https://posalpro.netlify.app"
 
 # Explicit production-context overrides (non-secrets only)
 [context.production.environment]
@@ -79,9 +68,8 @@
   for = "/api/*"
   [headers.values]
     Content-Type = "application/json; charset=utf-8"
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
-    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    # CORS is handled dynamically in Next.js middleware with an origin allowlist.
+    # Remove static wildcard CORS headers to avoid conflicts.
     Cache-Control = "no-cache, no-store, must-revalidate"
     Pragma = "no-cache"
     Expires = "0"

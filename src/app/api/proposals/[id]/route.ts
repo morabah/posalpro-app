@@ -5,7 +5,6 @@
  */
 
 import { ProposalSchema, WizardProposalUpdateSchema } from '@/features/proposals/schemas';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
 import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';

@@ -1,6 +1,5 @@
 /**
- * Proposal Stats API Routes - Modern Archiimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-tecture
+ * Proposal Stats API Routes - Modern Architecture
  * User Story: US-3.2 (Proposal Management)
  * Hypothesis: H4 (Cross-Department Coordination), H7 (Deadline Management)
  */
