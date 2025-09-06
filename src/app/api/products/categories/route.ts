@@ -9,8 +9,8 @@ import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
-import { NextResponse } from 'next/server';
 import { Decimal } from '@prisma/client/runtime/library';
+import { NextResponse } from 'next/server';
 
 /**
  * Component Traceability Matrix:
@@ -126,7 +126,7 @@ export const GET = createRoute({}, async ({ req, user }) => {
       code: 'OK',
       route: '/api/products/categories',
       method: 'GET',
-      userIdHash: userIdToHash(session.user.id),
+      userIdHash: userIdToHash(user.id),
       totalCategories: categories.length,
     });
     recordLatency(duration);

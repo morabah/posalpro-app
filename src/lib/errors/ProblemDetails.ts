@@ -70,7 +70,7 @@ export const PROBLEM_TYPES = {
  */
 export function mapZodErrorsToFields(zodErrors: any[]): ProblemField[] {
   return zodErrors.map(error => ({
-    field: error.path.join('.'),
+    field: Array.isArray(error.path) ? error.path.join('.') : String(error.path || ''),
     message: error.message,
     code: error.code,
   }));

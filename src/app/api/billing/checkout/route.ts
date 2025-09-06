@@ -1,8 +1,7 @@
 import { createRoute } from '@/lib/api/route';
-import { isStripeReady, getStripe } from '@/lib/billing/stripe';
+import { getStripe, isStripeReady } from '@/lib/billing/stripe';
 import { prisma } from '@/lib/db/prisma';
 import { z } from 'zod';
-import type { User } from '@/lib/auth';
 
 const Body = z.object({
   priceId: z.string().min(1),

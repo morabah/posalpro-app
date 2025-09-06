@@ -78,7 +78,7 @@ export const GET = createRoute(
           userRole,
           userRoles,
           userPermissions,
-          userId: session.user.id,
+          userId: user.id,
           targetUserId: id, // For individual user access, we can check if user is accessing their own data
         }
       );

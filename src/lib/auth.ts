@@ -77,7 +77,7 @@ export const authOptions: NextAuthOptions = {
     error(code, metadata) {
       logError(`[NEXTAUTH] ${code}`, metadata as any);
     },
-    warn(code, metadata) {
+    warn(code, ...metadata) {
       logWarn(`[NEXTAUTH] ${code}`, metadata as any);
     },
     debug(code, metadata) {
@@ -452,21 +452,6 @@ export const authOptions: NextAuthOptions = {
     },
   },
 
-  // Minimal lifecycle events to aid debugging
-  events: {
-    async signIn(message) {
-      if (AUTH_DEBUG_ENABLED) logInfo('[AUTH_EVENT] signIn', message as any);
-    },
-    async signOut(message) {
-      if (AUTH_DEBUG_ENABLED) logInfo('[AUTH_EVENT] signOut', message as any);
-    },
-    async session(message) {
-      if (AUTH_DEBUG_ENABLED) logDebug('[AUTH_EVENT] session', message as any);
-    },
-    async error(error) {
-      logWarn('[AUTH_EVENT] error', error as any);
-    },
-  },
 
   pages: {
     signIn: '/auth/login',

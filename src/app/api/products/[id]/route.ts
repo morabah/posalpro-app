@@ -6,6 +6,8 @@
 
 import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
+import { authOptions } from '@/lib/auth';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import {
   createApiErrorResponse,
@@ -13,18 +15,11 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import {
-  customerQueries,
-  productQueries,
-  proposalQueries,
-  userQueries,
-  workflowQueries,
-  executeQuery,
-} from '@/lib/db/database';
 import { logError, logInfo, logWarn } from '@/lib/logger';
 import { securityAuditManager } from '@/lib/security/audit';
 import { apiRateLimiter } from '@/lib/security/hardening';
 import type { Prisma } from '@prisma/client';
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -100,19 +95,38 @@ export const GET = createRoute(
   { roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'] },
   async ({ req, user }) => {
     const id = req.url.split('/').pop()?.split('?')[0];
-    if (!id) return Response.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
+    if (!id)
+      return Response.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
 
     const product = await prisma.product.findUnique({
       where: { id },
       include: {
         relationships: {
           include: {
-            targetProduct: { select: { id: true, name: true, sku: true, price: true, currency: true, isActive: true } },
+            targetProduct: {
+              select: {
+                id: true,
+                name: true,
+                sku: true,
+                price: true,
+                currency: true,
+                isActive: true,
+              },
+            },
           },
         },
         relatedFrom: {
           include: {
-            sourceProduct: { select: { id: true, name: true, sku: true, price: true, currency: true, isActive: true } },
+            sourceProduct: {
+              select: {
+                id: true,
+                name: true,
+                sku: true,
+                price: true,
+                currency: true,
+                isActive: true,
+              },
+            },
           },
         },
         proposalProducts: {
@@ -120,7 +134,14 @@ export const GET = createRoute(
           orderBy: { createdAt: 'desc' },
           take: 10,
         },
-        _count: { select: { relationships: true, relatedFrom: true, proposalProducts: true, validationRules: true } },
+        _count: {
+          select: {
+            relationships: true,
+            relatedFrom: true,
+            proposalProducts: true,
+            validationRules: true,
+          },
+        },
       },
     });
 
@@ -204,13 +225,16 @@ export const GET = createRoute(
       ? validationResult.data
       : transformedProduct;
 
-    return NextResponse.json({ ok: true, data: validatedProductData }, {
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        Pragma: 'no-cache',
-        Expires: '0',
-      },
-    });
+    return NextResponse.json(
+      { ok: true, data: validatedProductData },
+      {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
+        },
+      }
+    );
   }
 );
 
@@ -226,7 +250,10 @@ export const PUT = createRoute(
   async ({ req, user, body }) => {
     try {
       const id = req.url.split('/').pop()?.split('?')[0];
-      if (!id) return NextResponse.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
+      if (!id)
+        return NextResponse.json(fail('VALIDATION_ERROR', 'Product ID is required'), {
+          status: 400,
+        });
 
       const validatedData = body!;
 
@@ -316,7 +343,9 @@ export const PUT = createRoute(
         });
       }
 
-      const validatedUpdatedData = validationResult.success ? validationResult.data : transformedProduct;
+      const validatedUpdatedData = validationResult.success
+        ? validationResult.data
+        : transformedProduct;
       return NextResponse.json({ ok: true, data: validatedUpdatedData });
     } catch (error) {
       errorHandlingService.processError(
@@ -351,7 +380,10 @@ export const DELETE = createRoute(
   async ({ req, user }) => {
     try {
       const id = req.url.split('/').pop()?.split('?')[0];
-      if (!id) return NextResponse.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
+      if (!id)
+        return NextResponse.json(fail('VALIDATION_ERROR', 'Product ID is required'), {
+          status: 400,
+        });
 
       const product = await prisma.product.findUnique({
         where: { id },
@@ -414,7 +446,9 @@ export const DELETE = createRoute(
           });
         }
 
-        const validatedArchivedData = validationResult.success ? validationResult.data : transformedProduct;
+        const validatedArchivedData = validationResult.success
+          ? validationResult.data
+          : transformedProduct;
         return NextResponse.json({ ok: true, data: validatedArchivedData });
       } else {
         await prisma.product.delete({ where: { id } });

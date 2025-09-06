@@ -6,6 +6,8 @@
 
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import {
   customerQueries,
   productQueries,
@@ -200,110 +202,57 @@ export const GET = createRoute(
   }
 );
 
-// POST /api/customers - Create a new customer (Direct Next.js route for testing)
-export const POST = async (request: Request) => {
-  let body: Record<string, unknown> = {};
-  try {
-    structuredLogInfo('Customer API route called', {
-      component: 'CustomerAPI',
-      operation: 'POST',
-      endpoint: '/api/customers',
-    });
-
-    body = await request.json();
-    structuredLogInfo('Processing customer creation request', {
-      component: 'CustomerAPI',
-      operation: 'POST',
-      bodyKeys: Object.keys(body),
-    });
-
-    if (!body) {
-      throw new Error('Request body is missing or empty');
-    }
-
-    if (!body.name) {
-      throw new Error('Customer name is required');
-    }
-
+// POST /api/customers - Create a new customer
+export const POST = createRoute(
+  {
+    body: z.object({
+      name: z.string().min(1, 'Customer name is required'),
+      email: z.string().email(),
+      industry: z.string().optional(),
+      status: z.nativeEnum(CustomerStatus).optional().default(CustomerStatus.ACTIVE),
+      tier: z.nativeEnum(CustomerTier).optional().default(CustomerTier.STANDARD),
+    }),
+    apiVersion: '1',
+  },
+  async ({ body, user }) => {
     logInfo('Creating customer', {
       component: 'CustomerAPI',
       operation: 'POST',
-      userId: 'anonymous',
-      customerName: body.name as string,
+      userId: user.id,
+      customerName: body.name,
     });
 
-    // Transform and prepare data for database insertion
     const customerData = {
-      tenantId: 'tenant_default',
-      name: body.name as string,
-      email: (body.email as string) || null,
-      phone: (body.phone as string) || null,
-      website: (body.website as string) || null,
-      address: (body.address as string) || null,
-      industry: (body.industry as string) || null,
-      companySize: (body.companySize as string) || null,
-      revenue: body.revenue ? new PrismaClient.Decimal(body.revenue as string | number) : null,
-      status: (body.status as string) || 'ACTIVE',
-      tier: (body.tier as string) || 'STANDARD',
-      tags: (body.tags as string[]) || [],
-      metadata: body.metadata || null,
-      segmentation: body.segmentation || null,
-      riskScore: body.riskScore
-        ? new PrismaClient.Decimal(body.riskScore as string | number)
-        : null,
-      ltv: body.ltv ? new PrismaClient.Decimal(body.ltv as string | number) : null,
-      lastContact: body.lastContact || null,
-      cloudId: (body.cloudId as string) || null,
-      lastSyncedAt: body.lastSyncedAt || null,
-      syncStatus: (body.syncStatus as string) || null,
+      name: body.name,
+      email: body.email,
+      industry: body.industry,
+      status: body.status,
+      tier: body.tier,
+      tenant: {
+        connect: {
+          id: (user as any).tenantId,
+        },
+      },
     };
 
-    structuredLogInfo('Customer data prepared for database', {
-      component: 'CustomerAPI',
-      operation: 'POST',
-      customerName: customerData.name,
-      hasEmail: !!customerData.email,
-    });
-
     const customer = await prisma.customer.create({
-      data: customerData as any, // Using any for Prisma create input compatibility
+      data: customerData,
       select: {
         id: true,
         name: true,
         email: true,
-        phone: true,
-        website: true,
-        address: true,
         industry: true,
-        companySize: true,
-        revenue: true,
         status: true,
         tier: true,
-        tags: true,
-        metadata: true,
-        segmentation: true,
-        riskScore: true,
-        ltv: true,
         createdAt: true,
         updatedAt: true,
-        lastContact: true,
-        cloudId: true,
-        lastSyncedAt: true,
-        syncStatus: true,
       },
-    });
-
-    structuredLogInfo('Customer created successfully', {
-      component: 'CustomerAPI',
-      operation: 'POST',
-      customerId: customer.id,
-      customerName: customer.name,
     });
 
     logInfo('Customer created successfully', {
       component: 'CustomerAPI',
       operation: 'POST',
-      userId: 'anonymous',
+      userId: user.id,
       customerId: customer.id,
       customerName: customer.name,
     });
@@ -318,22 +267,12 @@ export const POST = async (request: Request) => {
       });
     }
 
-    const responsePayload = {
-      ok: true,
-      data: validationResult.success ? validationResult.data : customer,
-    };
-    return new Response(JSON.stringify(responsePayload), {
-      status: 201,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    logError('Failed to create customer', {
-      component: 'CustomerAPI',
-      operation: 'POST',
-      userId: 'anonymous',
-      customerName: body?.name as string,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
+    return NextResponse.json(
+      {
+        ok: true,
+        data: validationResult.success ? validationResult.data : customer,
+      },
+      { status: 201 }
+    );
   }
-};
+);

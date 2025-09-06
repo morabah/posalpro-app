@@ -1,18 +1,9 @@
 import { createRoute } from '@/lib/api/route';
-import { logDebug, logError, logInfo, logWarn } from '@/lib/logger';
 import prisma from '@/lib/db/prisma';
-import { createApiErrorResponse, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import {
-  customerQueries,
-  productQueries,
-  proposalQueries,
-  userQueries,
-  workflowQueries,
-  executeQuery,
-} from '@/lib/db/database';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { NextRequest, NextResponse } from 'next/server';
+import { logDebug, logInfo, logWarn } from '@/lib/logger';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 const errorHandlingService = ErrorHandlingService.getInstance();
 

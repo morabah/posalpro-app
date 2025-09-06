@@ -4,8 +4,8 @@
  * Based on ADMIN_MIGRATION_ASSESSMENT.md and CORE_REQUIREMENTS.md
  */
 
-import { createRoute } from '@/lib/api/route';
 import { ok } from '@/lib/api/response';
+import { createRoute } from '@/lib/api/route';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import prisma from '@/lib/prisma';
 

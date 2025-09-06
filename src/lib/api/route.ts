@@ -299,7 +299,7 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         );
 
         // Add request ID and API headers to response
-        const responseHeaders = new Headers(response.headers);
+        const responseHeaders = new Headers((response as Response).headers);
         decorate(responseHeaders);
         if (user.tenantId) responseHeaders.set('x-tenant-id', user.tenantId);
 
@@ -307,12 +307,12 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         if (cacheKey) {
           try {
             const ttl = config.idempotency?.ttlSeconds ?? 60 * 60 * 24; // 24h
-            const bodyText = await response.clone().text();
+            const bodyText = await (response as Response).clone().text();
             await setCache(
               cacheKey,
               {
-                status: response.status,
-                headers: pickSafeHeaders(response.headers),
+                status: (response as Response).status,
+                headers: pickSafeHeaders((response as Response).headers),
                 body: bodyText,
               },
               ttl
@@ -331,14 +331,15 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         logInfo('route_request_success', {
           path: url.pathname,
           method: req.method,
-          status: response.status,
+          status: (response as Response).status,
           duration,
           requestId,
           userId: user.id,
         });
 
-        return new Response(response.body, {
-          ...response,
+        return new Response((response as Response).body, {
+          status: (response as Response).status,
+          statusText: (response as Response).statusText,
           headers: responseHeaders,
         });
       } else {
@@ -379,7 +380,7 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
           requestId,
         });
 
-        const responseHeaders = new Headers(response.headers);
+        const responseHeaders = new Headers((response as Response).headers);
         decorate(responseHeaders);
 
         // Idempotency (unauth path)
@@ -388,12 +389,12 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
           const cacheKey = `idemp:anonymous:${method}:${url.pathname}:${idempKeyUnauth}:${payloadHash}`;
           try {
             const ttl = config.idempotency?.ttlSeconds ?? 60 * 60 * 24; // 24h
-            const bodyText = await response.clone().text();
+            const bodyText = await (response as Response).clone().text();
             await setCache(
               cacheKey,
               {
-                status: response.status,
-                headers: pickSafeHeaders(response.headers),
+                status: (response as Response).status,
+                headers: pickSafeHeaders((response as Response).headers),
                 body: bodyText,
               },
               ttl
@@ -410,14 +411,15 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         logInfo('route_request_success', {
           path: url.pathname,
           method: req.method,
-          status: response.status,
+          status: (response as Response).status,
           duration,
           requestId,
           userId: 'anonymous',
         });
 
-        return new Response(response.body, {
-          ...response,
+        return new Response((response as Response).body, {
+          status: (response as Response).status,
+          statusText: (response as Response).statusText,
           headers: responseHeaders,
         });
       }

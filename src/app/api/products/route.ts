@@ -187,6 +187,11 @@ export const POST = createRoute(
             ? JSON.parse(JSON.stringify(body!.usageAnalytics))
             : undefined,
           userStoryMappings: body!.userStoryMappings,
+          tenant: {
+            connect: {
+              id: (user as any).tenantId,
+            },
+          },
         },
         select: {
           id: true,
