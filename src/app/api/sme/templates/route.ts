@@ -6,7 +6,14 @@
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
@@ -56,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: templates.map(t => ({
+      data: templates.map((t: any) => ({
         id: t.id,
         name: t.title,
         category: (t.category?.[0] ?? 'general').toLowerCase(),

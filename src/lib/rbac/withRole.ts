@@ -18,7 +18,12 @@ export function withRole(
     const errorHandlingService = ErrorHandlingService.getInstance();
 
     try {
-      const token = await getToken({ req });
+      const token = await getToken({
+        req,
+        secret:
+          process.env.NEXTAUTH_SECRET ||
+          'posalpro-mvp2-secret-key-for-jwt-signing-32-chars-minimum',
+      });
 
       if (!token) {
         return NextResponse.json({ error: 'Unauthorized - No token provided' }, { status: 401 });

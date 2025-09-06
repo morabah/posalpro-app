@@ -34,7 +34,7 @@ export const POST = createRoute(
       });
 
       // Use transaction for workflow update
-      const result = await prisma.$transaction(async tx => {
+      const result = await prisma.$transaction(async (tx: any) => {
         // Update proposal status
         const proposal = await tx.proposal.update({
           where: { id: body!.proposalId },
@@ -132,7 +132,7 @@ export const PUT = createRoute(
       });
 
       // Use transaction for bulk workflow update
-      const result = await prisma.$transaction(async tx => {
+      const result = await prisma.$transaction(async (tx: any) => {
         // Update all proposals
         const updatedProposals = await tx.proposal.updateMany({
           where: {

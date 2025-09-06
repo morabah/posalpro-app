@@ -19,6 +19,26 @@ import {
   ProductQuerySchema,
   ProductSchema,
 } from '@/features/products/schemas';
+import { Decimal } from '@prisma/client/runtime/library';
+
+// Define proper type for Prisma product query result
+type ProductQueryResult = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: Decimal | null;
+  currency: string | null;
+  category: string[];
+  tags: string[];
+  attributes: any; // JsonValue from Prisma
+  images: string[];
+  isActive: boolean;
+  version: number;
+  usageAnalytics: any; // JsonValue from Prisma
+  userStoryMappings: string[];
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 // GET /api/products_new - Retrieve products with filtering and cursor pagination
 export const GET = createRoute(
@@ -36,7 +56,7 @@ export const GET = createRoute(
       });
 
       // Build where clause
-      const where: any = {};
+      const where: Record<string, unknown> = {};
 
       if (query!.search) {
         where.OR = [
@@ -54,7 +74,7 @@ export const GET = createRoute(
       }
 
       // Build order by
-      const orderBy: any = [{ [query!.sortBy]: query!.sortOrder }];
+      const orderBy: Array<Record<string, string>> = [{ [query!.sortBy]: query!.sortOrder }];
 
       // Add secondary sort for cursor pagination
       if (query!.sortBy !== 'createdAt') {
@@ -92,7 +112,7 @@ export const GET = createRoute(
       const items = hasNextPage ? rows.slice(0, query!.limit) : rows;
 
       // Transform null values to appropriate defaults before validation
-      const transformedItems = items.map(item => ({
+      const transformedItems = items.map((item: ProductQueryResult) => ({
         ...item,
         description: item.description || '',
         price: item.price ?? 0,

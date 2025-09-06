@@ -30,7 +30,11 @@ export async function validateApiPermission(
   requiredPermission: string | PermissionCheck,
   context?: Record<string, unknown>
 ): Promise<AuthorizationContext> {
-  const token = await getToken({ req });
+  const token = await getToken({
+    req,
+    secret:
+      process.env.NEXTAUTH_SECRET || 'posalpro-mvp2-secret-key-for-jwt-signing-32-chars-minimum',
+  });
 
   if (!token) {
     // Normalize: do not log missing token at WARN level; return clean 401
@@ -146,7 +150,11 @@ export async function validateResourceOwnership(
   resourceOwnerId: string,
   fallbackPermission?: string
 ): Promise<AuthorizationContext> {
-  const token = await getToken({ req });
+  const token = await getToken({
+    req,
+    secret:
+      process.env.NEXTAUTH_SECRET || 'posalpro-mvp2-secret-key-for-jwt-signing-32-chars-minimum',
+  });
 
   if (!token) {
     throw new Error('Authentication required');

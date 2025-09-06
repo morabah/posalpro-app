@@ -46,6 +46,27 @@
     "archive/**",
     "src/archived/**",
     "temp-migration/**",
-    "backups/**"
+    "backups/**",
+    // Environment files
+    "**/.env*",
+    "production-env-vars.env",
+    // Session files
+    "**/.posalpro-cli-session*.json",
+    "**/.posalpro-ui-session*.json",
+    // System files
+    "**/.DS_Store",
+    // SQL files
+    "**/*.sql",
+    // Data files
+    "test_output.json",
+    "customers_*.json",
+    "products_*.json",
+    "database-integrity-report.json",
+    // IDE files
+    "**/.vscode/**",
+    "**/.idea/**",
+    // OS files
+    "**/Thumbs.db",
+    "**/*.log"
   ]
 }

@@ -294,8 +294,10 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(
     const triggerElement = isValidElement(children)
       ? cloneElement(children, {
           ...triggerHandlers[trigger],
-          ref: (node: HTMLElement) => {
-            triggerRef.current = node;
+          ref: (node: HTMLElement | null) => {
+            if (triggerRef.current !== node) {
+              (triggerRef as React.MutableRefObject<HTMLElement | null>).current = node;
+            }
           },
           'aria-describedby': isVisible
             ? `tooltip-${Math.random().toString(36).substr(2, 9)}`

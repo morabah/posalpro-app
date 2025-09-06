@@ -187,14 +187,14 @@ export class PermissionValidator {
       const permissions = new Set<string>();
 
       // Add direct user permissions
-      user.permissions.forEach(up => {
+      user.permissions.forEach((up: any) => {
         const perm = `${up.permission.resource}:${up.permission.action}`;
         permissions.add(perm);
       });
 
       // Add role-based permissions
-      user.roles.forEach(ur => {
-        ur.role.permissions.forEach(rp => {
+      user.roles.forEach((ur: any) => {
+        ur.role.permissions.forEach((rp: any) => {
           const perm = `${rp.permission.resource}:${rp.permission.action}`;
           permissions.add(perm);
         });
@@ -414,7 +414,7 @@ export class PermissionValidator {
 
         while (currentRole) {
           const hasPermission = currentRole.permissions.some(
-            rp => `${rp.permission.resource}:${rp.permission.action}` === requiredPermission
+            (rp: any) => `${rp.permission.resource}:${rp.permission.action}` === requiredPermission
           );
 
           if (hasPermission) {

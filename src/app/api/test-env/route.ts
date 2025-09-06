@@ -29,10 +29,10 @@ export async function GET(request: NextRequest) {
         ? '✅ All environment variables loaded successfully'
         : '❌ Some environment variables missing',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
       {
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
         envCheck: 'FAILED',
       },

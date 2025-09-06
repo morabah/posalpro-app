@@ -6,14 +6,39 @@
 
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import { logInfo as structuredLogInfo } from '@/lib/log';
 import { logError, logInfo } from '@/lib/logger';
+import { getCache, setCache } from '@/lib/redis';
 import type { Prisma } from '@prisma/client';
 import { CustomerStatus, CustomerTier, Prisma as PrismaClient } from '@prisma/client';
 
+// Define proper type for Prisma customer query result
+type CustomerQueryResult = {
+  id: string;
+  name: string;
+  email: string;
+  industry: string | null;
+  status: CustomerStatus;
+  tier: CustomerTier;
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 // Import consolidated schemas from feature folder
 import { CustomerListSchema, CustomerQuerySchema, CustomerSchema } from '@/features/customers';
+
+// Redis cache configuration for customers
+const CUSTOMERS_CACHE_PREFIX = 'customers';
+const CUSTOMERS_CACHE_TTL = 300; // 5 minutes
 
 // GET /api/customers - Retrieve customers with filtering and cursor pagination
 export const GET = createRoute(
@@ -29,6 +54,34 @@ export const GET = createRoute(
         userId: user.id,
         params: query,
       });
+
+      // Create cache key based on query parameters
+      const cacheKeyParams = {
+        search: query!.search,
+        status: query!.status,
+        tier: query!.tier,
+        sortBy: query!.sortBy,
+        sortOrder: query!.sortOrder,
+        limit: query!.limit,
+        tenantId: (user as any).tenantId,
+      };
+      const cacheKey = `${CUSTOMERS_CACHE_PREFIX}:${JSON.stringify(cacheKeyParams)}`;
+
+      // Check Redis cache first (only for non-cursor requests)
+      if (!query!.cursor) {
+        const cachedData = await getCache(cacheKey);
+        if (cachedData) {
+          logInfo('Customers served from cache', {
+            component: 'CustomerAPI',
+            operation: 'CACHE_HIT',
+            userId: user.id,
+          });
+          return new Response(JSON.stringify({ ok: true, data: cachedData }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      }
 
       // Build where clause with tenant isolation
       const where: Prisma.CustomerWhereInput = {
@@ -105,7 +158,7 @@ export const GET = createRoute(
       const items = hasNextPage ? rows.slice(0, query!.limit) : rows;
 
       // Transform null values to appropriate defaults before validation
-      const transformedItems = items.map(item => ({
+      const transformedItems = items.map((item: CustomerQueryResult) => ({
         ...item,
       }));
 
@@ -126,6 +179,11 @@ export const GET = createRoute(
       // Create the response data
       const responsePayload = { ok: true, data: validatedResponse };
 
+      // Cache the response for future requests (only for non-cursor requests)
+      if (!query!.cursor) {
+        await setCache(cacheKey, validatedResponse, CUSTOMERS_CACHE_TTL);
+      }
+
       return new Response(JSON.stringify(responsePayload), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -144,7 +202,7 @@ export const GET = createRoute(
 
 // POST /api/customers - Create a new customer (Direct Next.js route for testing)
 export const POST = async (request: Request) => {
-  let body: any = null;
+  let body: Record<string, unknown> = {};
   try {
     structuredLogInfo('Customer API route called', {
       component: 'CustomerAPI',
@@ -171,31 +229,33 @@ export const POST = async (request: Request) => {
       component: 'CustomerAPI',
       operation: 'POST',
       userId: 'anonymous',
-      customerName: body.name,
+      customerName: body.name as string,
     });
 
     // Transform and prepare data for database insertion
     const customerData = {
       tenantId: 'tenant_default',
-      name: body.name,
-      email: body.email || null,
-      phone: body.phone || null,
-      website: body.website || null,
-      address: body.address || null,
-      industry: body.industry || null,
-      companySize: body.companySize || null,
-      revenue: body.revenue ? new PrismaClient.Decimal(body.revenue) : null,
-      status: body.status || 'ACTIVE',
-      tier: body.tier || 'STANDARD',
-      tags: body.tags || [],
+      name: body.name as string,
+      email: (body.email as string) || null,
+      phone: (body.phone as string) || null,
+      website: (body.website as string) || null,
+      address: (body.address as string) || null,
+      industry: (body.industry as string) || null,
+      companySize: (body.companySize as string) || null,
+      revenue: body.revenue ? new PrismaClient.Decimal(body.revenue as string | number) : null,
+      status: (body.status as string) || 'ACTIVE',
+      tier: (body.tier as string) || 'STANDARD',
+      tags: (body.tags as string[]) || [],
       metadata: body.metadata || null,
       segmentation: body.segmentation || null,
-      riskScore: body.riskScore ? new PrismaClient.Decimal(body.riskScore) : null,
-      ltv: body.ltv ? new PrismaClient.Decimal(body.ltv) : null,
+      riskScore: body.riskScore
+        ? new PrismaClient.Decimal(body.riskScore as string | number)
+        : null,
+      ltv: body.ltv ? new PrismaClient.Decimal(body.ltv as string | number) : null,
       lastContact: body.lastContact || null,
-      cloudId: body.cloudId || null,
+      cloudId: (body.cloudId as string) || null,
       lastSyncedAt: body.lastSyncedAt || null,
-      syncStatus: body.syncStatus || null,
+      syncStatus: (body.syncStatus as string) || null,
     };
 
     structuredLogInfo('Customer data prepared for database', {
@@ -206,7 +266,7 @@ export const POST = async (request: Request) => {
     });
 
     const customer = await prisma.customer.create({
-      data: customerData,
+      data: customerData as any, // Using any for Prisma create input compatibility
       select: {
         id: true,
         name: true,
@@ -271,7 +331,7 @@ export const POST = async (request: Request) => {
       component: 'CustomerAPI',
       operation: 'POST',
       userId: 'anonymous',
-      customerName: body?.name,
+      customerName: body?.name as string,
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;

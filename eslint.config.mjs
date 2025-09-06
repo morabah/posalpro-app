@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
+import nextPlugin from '@next/eslint-plugin-next';
 
 export default tseslint.config(
   // Global ignores
@@ -27,6 +28,27 @@ export default tseslint.config(
       '**/__tests__/**',
       '**/__mocks__/**',
       '**/__snapshots__/**',
+      // Environment files
+      '**/.env*',
+      '**/production-env-vars.env',
+      // Session files
+      '**/.posalpro-cli-session*.json',
+      '**/.posalpro-ui-session*.json',
+      // System files
+      '**/.DS_Store',
+      // SQL files
+      '**/*.sql',
+      // Data files
+      '**/test_output.json',
+      '**/customers_*.json',
+      '**/products_*.json',
+      '**/database-integrity-report.json',
+      // IDE files
+      '**/.vscode/**',
+      '**/.idea/**',
+      // OS files
+      '**/Thumbs.db',
+      '**/*.log',
     ],
   },
 
@@ -35,6 +57,10 @@ export default tseslint.config(
 
   // TypeScript rules
   ...tseslint.configs.recommended,
+
+  // Next.js rules (Core Web Vitals)
+  // Uses the official flat config provided by @next/eslint-plugin-next
+  nextPlugin.flatConfig.coreWebVitals,
   {
     files: ['**/*.ts', '**/*.tsx'],
     rules: {

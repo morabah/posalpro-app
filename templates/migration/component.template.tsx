@@ -10,16 +10,10 @@
 
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Button } from '@/components/ui/forms/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { Input } from '@/components/ui/forms/Input';
+import { Select } from '@/components/ui/forms/Select';
 import { useDelete__ENTITY__sBulk, useInfinite__ENTITY__s } from '@/hooks/use__RESOURCE__s';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logInfo } from '@/lib/logger';
@@ -149,17 +143,17 @@ function __ENTITY__Filters({
         <label htmlFor="status-select" className="sr-only">
           Filter by status
         </label>
-        <Select value={filters.status || ''} onValueChange={handleStatusChange}>
-          <SelectTrigger id="status-select" className="w-full">
-            <SelectValue placeholder="All Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All Status</SelectItem>
-            <SelectItem value="ACTIVE">Active</SelectItem>
-            <SelectItem value="INACTIVE">Inactive</SelectItem>
-            <SelectItem value="PENDING">Pending</SelectItem>
-          </SelectContent>
-        </Select>
+        <Select
+          options={[
+            { value: '', label: 'All Status' },
+            { value: 'ACTIVE', label: 'Active' },
+            { value: 'INACTIVE', label: 'Inactive' },
+            { value: 'PENDING', label: 'Pending' },
+          ]}
+          value={filters.status || ''}
+          onChange={v => handleStatusChange(Array.isArray(v) ? v[0] : v || '')}
+          placeholder="All Status"
+        />
       </div>
 
       <Button

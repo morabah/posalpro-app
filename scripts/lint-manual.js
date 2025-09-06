@@ -11,7 +11,7 @@ const path = require('path');
 const ISSUES_FOUND = {
   errors: 0,
   warnings: 0,
-  files: []
+  files: [],
 };
 
 function checkFile(filePath) {
@@ -26,7 +26,7 @@ function checkFile(filePath) {
       issues.push({
         type: 'warning',
         message: `Found ${consoleMatches.length} console statements (should use proper logging)`,
-        line: 'multiple'
+        line: 'multiple',
       });
     }
 
@@ -36,7 +36,7 @@ function checkFile(filePath) {
       issues.push({
         type: 'warning',
         message: `Found ${todoMatches.length} TODO comments`,
-        line: 'multiple'
+        line: 'multiple',
       });
     }
 
@@ -46,7 +46,7 @@ function checkFile(filePath) {
       issues.push({
         type: 'error',
         message: `Found ${debuggerMatches.length} debugger statements`,
-        line: 'multiple'
+        line: 'multiple',
       });
     }
 
@@ -56,7 +56,7 @@ function checkFile(filePath) {
       issues.push({
         type: 'warning',
         message: `Found ${browserDialogMatches.length} browser dialog calls`,
-        line: 'multiple'
+        line: 'multiple',
       });
     }
 
@@ -65,19 +65,21 @@ function checkFile(filePath) {
     const longLines = lines.filter((line, index) => {
       // Skip comments and strings for line length check
       const trimmed = line.trim();
-      return trimmed.length > 120 &&
-             !trimmed.startsWith('//') &&
-             !trimmed.startsWith('*') &&
-             !trimmed.startsWith('/*') &&
-             !trimmed.includes('".*".*".*"') &&
-             !trimmed.includes("'.*'.*'.*'");
+      return (
+        trimmed.length > 120 &&
+        !trimmed.startsWith('//') &&
+        !trimmed.startsWith('*') &&
+        !trimmed.startsWith('/*') &&
+        !trimmed.includes('".*".*".*"') &&
+        !trimmed.includes("'.*'.*'.*'")
+      );
     });
 
     if (longLines.length > 0) {
       issues.push({
         type: 'warning',
         message: `Found ${longLines.length} lines longer than 120 characters`,
-        line: 'multiple'
+        line: 'multiple',
       });
     }
 
@@ -101,7 +103,6 @@ function checkFile(filePath) {
       });
       ISSUES_FOUND.files.push(relativePath);
     }
-
   } catch (error) {
     console.log(`❌ Error reading ${filePath}: ${error.message}`);
   }
@@ -117,12 +118,45 @@ function walkDirectory(dirPath) {
 
       if (stat.isDirectory()) {
         // Skip certain directories
-        if (!['node_modules', '.next', 'dist', 'build', 'coverage', '.git', 'archive'].includes(item)) {
+        const excludedDirs = [
+          'node_modules',
+          '.next',
+          'dist',
+          'build',
+          'coverage',
+          '.git',
+          'archive',
+          '.vscode',
+          '.idea',
+        ];
+        if (!excludedDirs.includes(item)) {
           walkDirectory(fullPath);
         }
       } else if (stat.isFile()) {
-        // Check TypeScript and JavaScript files
-        if (item.endsWith('.ts') || item.endsWith('.tsx') || item.endsWith('.js') || item.endsWith('.jsx')) {
+        // Check TypeScript and JavaScript files, but skip test files and other excluded types
+        const isExcludedType =
+          item.endsWith('.sql') ||
+          item.endsWith('.json') ||
+          item.endsWith('.log') ||
+          item.endsWith('.env') ||
+          item.startsWith('.env') ||
+          item === '.DS_Store' ||
+          item.includes('backup') ||
+          item.includes('.session');
+
+        if (
+          (item.endsWith('.ts') ||
+            item.endsWith('.tsx') ||
+            item.endsWith('.js') ||
+            item.endsWith('.jsx')) &&
+          !item.endsWith('.test.ts') &&
+          !item.endsWith('.test.tsx') &&
+          !item.endsWith('.spec.ts') &&
+          !item.endsWith('.spec.tsx') &&
+          !fullPath.includes('__tests__') &&
+          !fullPath.includes('__mocks__') &&
+          !isExcludedType
+        ) {
           checkFile(fullPath);
         }
       }

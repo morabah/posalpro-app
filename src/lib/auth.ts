@@ -15,6 +15,7 @@
  */
 
 import { secureSessionManager } from '@/lib/auth/secureSessionManager';
+import { AUTH_DEBUG_ENABLED, getAuthSecret } from '@/lib/auth/secret';
 import { logDebug, logError, logInfo, logWarn } from '@/lib/logger';
 import { NextAuthOptions, type User as NextAuthUser, type Session } from 'next-auth';
 import type { JWT as NextAuthJWT } from 'next-auth/jwt';
@@ -65,9 +66,24 @@ declare module 'next-auth/jwt' {
 }
 
 export const authOptions: NextAuthOptions = {
-  // Secret for JWT signing - use environment variable or fallback
-  secret:
-    process.env.NEXTAUTH_SECRET || 'posalpro-mvp2-secret-key-for-jwt-signing-32-chars-minimum',
+  // Secret for JWT signing (centralized)
+  secret: getAuthSecret(),
+
+  // Enable built-in NextAuth debug logs when AUTH_DEBUG/NEXTAUTH_DEBUG is true
+  debug: AUTH_DEBUG_ENABLED,
+
+  // Route NextAuth internal logs through our structured logger
+  logger: {
+    error(code, metadata) {
+      logError(`[NEXTAUTH] ${code}`, metadata as any);
+    },
+    warn(code, metadata) {
+      logWarn(`[NEXTAUTH] ${code}`, metadata as any);
+    },
+    debug(code, metadata) {
+      if (AUTH_DEBUG_ENABLED) logDebug(`[NEXTAUTH] ${code}`, metadata as any);
+    },
+  },
 
   // 🚀 NETLIFY FIX: Production cookie configuration
   useSecureCookies: process.env.NODE_ENV === 'production',
@@ -82,6 +98,7 @@ export const authOptions: NextAuthOptions = {
 
   jwt: {
     maxAge: 24 * 60 * 60, // 24 hours
+    secret: getAuthSecret(),
   },
 
   cookies: {
@@ -95,9 +112,11 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
+        // Use configurable cookie domain in production. If not provided, omit domain
+        // so cookies are scoped to the host. Allow overriding in any env if set.
         domain:
-          process.env.NODE_ENV === 'production'
-            ? '.windsurf.build' // Allow cookies for all windsurf.build subdomains
+          process.env.COOKIE_DOMAIN && process.env.COOKIE_DOMAIN.trim().length > 0
+            ? process.env.COOKIE_DOMAIN
             : undefined,
       },
     },
@@ -234,6 +253,12 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async jwt({ token, user }: { token: NextAuthJWT; user?: NextAuthUser | null }) {
+      if (AUTH_DEBUG_ENABLED) {
+        logDebug('[AUTH_DEBUG] jwt callback invoked', {
+          hasUser: Boolean(user),
+          prevTokenKeys: Object.keys(token || {}),
+        });
+      }
       // Persist user data in JWT token
       if (user) {
         token.id = user.id;
@@ -241,8 +266,11 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name;
         token.department = user.department;
         token.tenantId = user.tenantId;
-        token.roles = user.roles;
-        token.permissions = user.permissions;
+        // roles/permissions from authorize() are already string arrays
+        token.roles = Array.isArray((user as any).roles) ? ((user as any).roles as string[]) : [];
+        token.permissions = Array.isArray((user as any).permissions)
+          ? ((user as any).permissions as string[])
+          : [];
 
         // Ensure enhanced RBAC sessionId for middleware validation
         try {
@@ -262,11 +290,30 @@ export const authOptions: NextAuthOptions = {
           });
         }
       }
+      if (AUTH_DEBUG_ENABLED) {
+        logDebug('[AUTH_DEBUG] jwt callback output token (sanitized)', {
+          id: token.id,
+          email: token.email,
+          rolesCount: Array.isArray((token as any).roles) ? (token as any).roles.length : 0,
+          permissionsCount: Array.isArray((token as any).permissions)
+            ? (token as any).permissions.length
+            : 0,
+          hasSessionId: Boolean((token as any).sessionId),
+        });
+      }
       return token;
     },
 
     async session({ session, token }: { session: Session; token: NextAuthJWT }) {
+      if (AUTH_DEBUG_ENABLED) {
+        logDebug('[AUTH_DEBUG] session callback invoked', {
+          hasToken: Boolean(token),
+          tokenKeys: Object.keys(token || {}),
+        });
+      }
+      // Temporarily disabled session cache for JWT debugging
       // Dev-only ultra-short TTL throttle to smooth bursts
+      /*
       if (process.env.NODE_ENV === 'development') {
         const throttleKey = `dev-session-throttle-${token.email}-${token.id}`;
         const now = Date.now();
@@ -277,31 +324,36 @@ export const authOptions: NextAuthOptions = {
         }
         // After building session below, we will set this throttle entry
       }
+      */
       // ✅ CRITICAL: Session caching for TTFB optimization
       // Following Lesson #30: Authentication Performance Optimization
       const cacheKey = `${token.email}-${token.id}`;
       const now = Date.now();
 
-      // Check cache first
+      // Check cache first (temporarily disabled for debugging)
+      /*
       const cached = sessionCache.get(cacheKey);
       if (cached && now - cached.timestamp < SESSION_CACHE_TTL) {
         logInfo('📦 [Auth Cache] Returning cached session for:', token.email);
         return cached.session;
       }
+      */
 
       // Send user data to client (token is always provided in NextAuth session callback)
-      session.user.id = token.id;
-      session.user.email = token.email;
-      session.user.name = token.name;
-      session.user.department = token.department;
-      session.user.tenantId = token.tenantId;
-      session.user.roles = token.roles;
-      session.user.permissions = token.permissions;
+      // Guard against transient undefined user object
+      (session as any).user = (session as any).user || ({} as any);
+      session.user.id = token.id as any;
+      session.user.email = token.email as any;
+      session.user.name = token.name as any;
+      session.user.department = token.department as any;
+      session.user.tenantId = token.tenantId as any;
+      session.user.roles = (token.roles as any) || [];
+      session.user.permissions = (token.permissions as any) || [];
       // Expose sessionId only if needed on client; keep server-side by default
       // (Do not attach to session.user to avoid leaking internal IDs.)
 
-      // Cache the session
-      sessionCache.set(cacheKey, { session, timestamp: now });
+      // Cache the session (temporarily disabled for debugging)
+      // sessionCache.set(cacheKey, { session, timestamp: now });
 
       // Dev throttle cache
       if (process.env.NODE_ENV === 'development') {
@@ -325,6 +377,22 @@ export const authOptions: NextAuthOptions = {
       if (url.startsWith('/')) return `${baseUrl}${url}`;
       if (new URL(url).origin === baseUrl) return url;
       return baseUrl;
+    },
+  },
+
+  // Minimal lifecycle events to aid debugging
+  events: {
+    async signIn(message) {
+      if (AUTH_DEBUG_ENABLED) logInfo('[AUTH_EVENT] signIn', message as any);
+    },
+    async signOut(message) {
+      if (AUTH_DEBUG_ENABLED) logInfo('[AUTH_EVENT] signOut', message as any);
+    },
+    async session(message) {
+      if (AUTH_DEBUG_ENABLED) logDebug('[AUTH_EVENT] session', message as any);
+    },
+    async error(error) {
+      logWarn('[AUTH_EVENT] error', error as any);
     },
   },
 

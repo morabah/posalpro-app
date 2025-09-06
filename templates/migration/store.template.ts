@@ -10,13 +10,13 @@
 
 import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
+import { logDebug } from '@/lib/logger';
 
 // ====================
 // Import Analytics
 // ====================
 
-// TODO: Replace with actual imports when implementing
-// import { logDebug } from '@/lib/logger';
+// NOTE: logDebug imported from '@/lib/logger'
 
 // ====================
 // Enhanced Types with Better TypeScript Support

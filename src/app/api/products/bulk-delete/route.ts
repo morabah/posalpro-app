@@ -10,6 +10,19 @@ import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logInfo } from '@/lib/logger';
 import { ProductBulkDeleteSchema } from '@/features/products/schemas';
+import type { Prisma } from '@prisma/client';
+
+// Define proper types for bulk delete operations
+type ProductForDeletion = {
+  id: string;
+  name: string;
+  sku: string;
+};
+
+type BulkDeleteResult = {
+  deleted: number;
+  products: ProductForDeletion[];
+};
 
 // Schema for bulk delete request (centralized)
 const BulkDeleteSchema = ProductBulkDeleteSchema;
@@ -33,7 +46,7 @@ export const POST = createRoute(
     });
 
     // Perform bulk delete in transaction
-    const result = await prisma.$transaction(async tx => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // First, get the products to be deleted (for logging)
       const productsToDelete = await tx.product.findMany({
         where: {
@@ -68,7 +81,11 @@ export const POST = createRoute(
       component: 'ProductBulkDeleteRoute',
       operation: 'POST',
       deletedCount: result.deleted,
-      deletedProducts: result.products.map(p => ({ id: p.id, name: p.name, sku: p.sku })),
+      deletedProducts: result.products.map((p: ProductForDeletion) => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+      })),
       userId: user.id,
       requestId,
     });
@@ -76,7 +93,7 @@ export const POST = createRoute(
     return Response.json(
       ok({
         deleted: result.deleted,
-        products: result.products.map(p => ({
+        products: result.products.map((p: ProductForDeletion) => ({
           id: p.id,
           name: p.name,
           sku: p.sku,

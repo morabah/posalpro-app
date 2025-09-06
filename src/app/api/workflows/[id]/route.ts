@@ -132,8 +132,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const executionStats = (workflow.executionStats as any) || {};
     const performanceMetrics = (workflow.performanceMetrics as any) || {};
 
-    const completedExecutions = workflow.executions.filter(e => e.status === 'COMPLETED');
-    const activeExecutions = workflow.executions.filter(e => e.status === 'IN_PROGRESS');
+    const completedExecutions = workflow.executions.filter((e: any) => e.status === 'COMPLETED');
+    const activeExecutions = workflow.executions.filter((e: any) => e.status === 'IN_PROGRESS');
 
     const enhancedWorkflow = {
       ...workflow,
@@ -150,9 +150,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             : 0,
         lastUsed: workflow.executions[0]?.startedAt || null,
       },
-      complexity: workflow.stages.length + workflow.stages.filter(s => s.isParallel).length * 0.5,
-      criticalPathLength: workflow.stages.filter(s => !s.isOptional).length,
-      recentExecutions: workflow.executions.slice(0, 5).map(execution => ({
+      complexity:
+        workflow.stages.length + workflow.stages.filter((s: any) => s.isParallel).length * 0.5,
+      criticalPathLength: workflow.stages.filter((s: any) => !s.isOptional).length,
+      recentExecutions: workflow.executions.slice(0, 5).map((execution: any) => ({
         id: execution.id,
         status: execution.status,
         startedAt: execution.startedAt,
@@ -216,7 +217,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
     // Check if workflow has active executions
     const hasActiveExecutions = existingWorkflow.executions.some(
-      execution => execution.status === 'IN_PROGRESS' || execution.status === 'PENDING'
+      (execution: any) => execution.status === 'IN_PROGRESS' || execution.status === 'PENDING'
     );
 
     if (hasActiveExecutions && validatedData.stages) {
@@ -247,7 +248,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // Update workflow with stages in transaction
-    const updatedWorkflow = await prisma.$transaction(async tx => {
+    const updatedWorkflow = await prisma.$transaction(async (tx: any) => {
       // Update the workflow
       const workflowData: any = {};
       if (validatedData.name !== undefined) workflowData.name = validatedData.name;
@@ -372,7 +373,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     // Check if workflow has active executions
     const hasActiveExecutions = workflow.executions.some(
-      execution => execution.status === 'IN_PROGRESS' || execution.status === 'PENDING'
+      (execution: any) => execution.status === 'IN_PROGRESS' || execution.status === 'PENDING'
     );
 
     if (hasActiveExecutions) {
@@ -416,7 +417,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       });
     } else {
       // Hard delete if no executions
-      await prisma.$transaction(async tx => {
+      await prisma.$transaction(async (tx: any) => {
         // Delete stages first
         await tx.workflowStage.deleteMany({
           where: { workflowId: id },

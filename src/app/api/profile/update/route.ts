@@ -6,7 +6,14 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -146,11 +153,13 @@ export async function PUT(request: NextRequest) {
           },
           include: { preferences: true },
         });
-        logger.info(`✅ Created user in database for profile update: ${existingUser.name} (${session.user.email})`);
+        logger.info(
+          `✅ Created user in database for profile update: ${existingUser.name} (${session.user.email})`
+        );
       }
 
       // Use transaction to update both User and UserPreferences
-      const result = await prisma.$transaction(async prisma => {
+      const result = await prisma.$transaction(async (prisma: any) => {
         // Update basic User fields that exist in schema
         const updatedUser = await prisma.user.update({
           where: {

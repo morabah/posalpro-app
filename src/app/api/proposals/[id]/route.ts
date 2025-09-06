@@ -258,7 +258,7 @@ export const PUT = createRoute(
 
       // Use transaction for data consistency
       const proposal = await prisma.$transaction(
-        async tx => {
+        async (tx: Prisma.TransactionClient) => {
           const currentUserId = user.id;
 
           // 1. Update the proposal
@@ -414,8 +414,8 @@ export const PUT = createRoute(
             : undefined,
         products: proposal.products
           ? proposal.products
-              .filter(pp => pp.product)
-              .map(pp => ({
+              .filter((pp: any) => pp.product)
+              .map((pp: any) => ({
                 ...pp,
                 // ✅ FIX: Convert numeric fields from strings to numbers
                 unitPrice:
@@ -619,8 +619,8 @@ export const PATCH = createRoute(
           : undefined,
         products: updatedProposal.products
           ? updatedProposal.products
-              .filter(pp => pp.product)
-              .map(pp => ({
+              .filter((pp: any) => pp.product)
+              .map((pp: any) => ({
                 ...pp,
                 // ✅ FIX: Convert numeric fields from strings to numbers
                 unitPrice:
@@ -695,7 +695,7 @@ export const DELETE = createRoute(
       });
 
       // Use transaction to ensure all related data is cleaned up
-      await prisma.$transaction(async tx => {
+      await prisma.$transaction(async (tx: any) => {
         // Delete related records first due to foreign key constraints
         await tx.proposalVersion.deleteMany({
           where: { proposalId: id },

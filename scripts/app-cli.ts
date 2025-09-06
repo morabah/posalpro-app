@@ -75,7 +75,6 @@
 */
 
 import { config } from 'dotenv';
-import fetchOrig from 'node-fetch';
 import fs from 'node:fs';
 import path from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
@@ -160,7 +159,7 @@ function normalizeBaseUrl(url: string): string {
   return normalized;
 }
 
-// ✅ ENHANCED: HTTPS fetch wrapper with proper configuration
+// ✅ ENHANCED: HTTPS fetch wrapper using Node 20+ native fetch
 async function httpsFetch(url: string, options: any = {}) {
   const urlObj = new URL(url);
   const isHttps = urlObj.protocol === 'https:';
@@ -172,11 +171,11 @@ async function httpsFetch(url: string, options: any = {}) {
     ...(isHttps &&
       {
         // For HTTPS requests, we might need to handle SSL certificates
-        // This is handled by node-fetch automatically, but we can add custom logic here
+        // Node 18+ native fetch (undici) handles TLS verification by default
       }),
   };
 
-  return fetchOrig(url, enhancedOptions);
+  return fetch(url, enhancedOptions as RequestInit);
 }
 
 function slugify(value: string): string {
@@ -372,7 +371,9 @@ class ApiClient {
         );
       }
 
-      const rawSetCookie: string[] | undefined = (csrfRes.headers as any).raw?.()['set-cookie'];
+      const rawSetCookie: string[] | undefined =
+        (csrfRes.headers as any).getSetCookie?.() ??
+        ((csrfRes.headers.get('set-cookie') && [csrfRes.headers.get('set-cookie')!]) || undefined);
       this.jar.setFromSetCookie(rawSetCookie);
       const csrfData = (await csrfRes.json()) as { csrfToken: string };
 
@@ -399,7 +400,10 @@ class ApiClient {
         body: params.toString(),
         redirect: 'manual',
       });
-      const loginSetCookie: string[] | undefined = (loginRes.headers as any).raw?.()['set-cookie'];
+      const loginSetCookie: string[] | undefined =
+        (loginRes.headers as any).getSetCookie?.() ??
+        ((loginRes.headers.get('set-cookie') && [loginRes.headers.get('set-cookie')!]) ||
+          undefined);
       this.jar.setFromSetCookie(loginSetCookie);
 
       if (loginRes.status !== 302 && loginRes.status !== 200) {
@@ -1482,7 +1486,7 @@ async function execute(tokens: string[], api: ApiClient) {
     }
     case 'health:api': {
       const startApi = Date.now();
-      const r = await fetchOrig(`${(api as any).baseUrl}/api/health`);
+      const r = await fetch(`${(api as any).baseUrl}/api/health`);
       console.log(`API ${r.status} (${Date.now() - startApi}ms)`);
       break;
     }

@@ -7,7 +7,7 @@ import { PrismaClient } from '@prisma/client';
 
 // Global variable to prevent multiple Prisma clients in development
 declare global {
-  let __prisma: PrismaClient | undefined;
+  var __prisma: PrismaClient | undefined;
 }
 
 // Create Prisma client with optimized configuration

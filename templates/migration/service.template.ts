@@ -4,54 +4,32 @@
 import { http } from '@/lib/http';
 import { z } from 'zod';
 
-// ====================
-// Zod Schemas
-// ====================
+// Import domain schemas/types from feature module (MANDATORY)
+// TODO: Replace __RESOURCE__ and exported identifiers with actual names
+// import {
+//   __ENTITY__Schema,
+//   __ENTITY__ListSchema,
+//   create__ENTITY__Schema,
+//   update__ENTITY__Schema,
+//   __ENTITY__QuerySchema,
+//   type __ENTITY__,
+//   type __ENTITY__List,
+//   type Create__ENTITY__Data,
+//   type Update__ENTITY__Data,
+// } from '@/features/__RESOURCE__/schemas';
 
-export const __ENTITY__Schema = z.object({
-  id: z.string(),
-  // Add entity-specific fields here
-  // Example for Customer:
-  // name: z.string().min(1, 'Name is required'),
-  // email: z.string().email('Invalid email format'),
-  // phone: z.string().optional(),
-  // status: z.enum(['ACTIVE', 'INACTIVE', 'PENDING']),
-  // createdAt: z.string().datetime(),
-  // updatedAt: z.string().datetime(),
-});
-
-export const __ENTITY__ListSchema = z.object({
-  items: z.array(__ENTITY__Schema),
-  nextCursor: z.string().nullable(),
-});
-
-export const create__ENTITY__Schema = z.object({
-  // Add entity-specific fields here
-  // Example for Customer:
-  // name: z.string().min(1, 'Name is required'),
-  // email: z.string().email('Invalid email format'),
-  // phone: z.string().optional(),
-});
-
-export const update__ENTITY__Schema = create__ENTITY__Schema.partial();
-
-export const __ENTITY__QuerySchema = z.object({
-  search: z.string().optional(),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  sortBy: z.enum(['createdAt', 'name']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  cursor: z.string().optional(),
-});
-
-// ====================
-// TypeScript Types
-// ====================
-
-export type __ENTITY__ = z.infer<typeof __ENTITY__Schema>;
-export type __ENTITY__List = z.infer<typeof __ENTITY__ListSchema>;
-export type Create__ENTITY__Data = z.infer<typeof create__ENTITY__Schema>;
-export type Update__ENTITY__Data = z.infer<typeof update__ENTITY__Schema>;
-export type __ENTITY__Query = z.infer<typeof __ENTITY__QuerySchema>;
+// Fallback type placeholders (remove once feature schemas are in place)
+export type __ENTITY__ = any;
+export type __ENTITY__List = { items: __ENTITY__[]; nextCursor: string | null };
+export type Create__ENTITY__Data = Record<string, unknown>;
+export type Update__ENTITY__Data = Partial<Create__ENTITY__Data>;
+export type __ENTITY__Query = Partial<{
+  search: string;
+  limit: number;
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
+  cursor: string;
+}>;
 
 // ====================
 // Service Functions
@@ -70,40 +48,34 @@ export const __ENTITY__Service = {
     if (params.sortOrder) searchParams.append('sortOrder', params.sortOrder);
     if (params.cursor) searchParams.append('cursor', params.cursor);
 
-    const response = await http<{ ok: true; data: __ENTITY__List }>(
-      `/api/__RESOURCE__?${searchParams.toString()}`
-    );
-    return response.data;
+    return http<__ENTITY__List>(`/api/__RESOURCE__?${searchParams.toString()}`);
   },
 
   /**
    * Get single entity by ID
    */
   async get__ENTITY__(id: string): Promise<__ENTITY__> {
-    const response = await http<{ ok: true; data: __ENTITY__ }>(`/api/__RESOURCE__/${id}`);
-    return response.data;
+    return http<__ENTITY__>(`/api/__RESOURCE__/${id}`);
   },
 
   /**
    * Create new entity
    */
   async create__ENTITY__(data: Create__ENTITY__Data): Promise<__ENTITY__> {
-    const response = await http<{ ok: true; data: __ENTITY__ }>('/api/__RESOURCE__', {
+    return http<__ENTITY__>('/api/__RESOURCE__', {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    return response.data;
   },
 
   /**
    * Update existing entity
    */
   async update__ENTITY__(id: string, data: Update__ENTITY__Data): Promise<__ENTITY__> {
-    const response = await http<{ ok: true; data: __ENTITY__ }>(`/api/__RESOURCE__/${id}`, {
+    return http<__ENTITY__>(`/api/__RESOURCE__/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
-    return response.data;
   },
 
   /**
@@ -119,14 +91,10 @@ export const __ENTITY__Service = {
    * Bulk delete entities
    */
   async delete__ENTITY__sBulk(ids: string[]): Promise<{ deleted: number }> {
-    const response = await http<{ ok: true; data: { deleted: number } }>(
-      '/api/__RESOURCE__/bulk-delete',
-      {
-        method: 'POST',
-        body: JSON.stringify({ ids }),
-      }
-    );
-    return response.data;
+    return http<{ deleted: number }>('/api/__RESOURCE__/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
   },
 
   /**
@@ -138,8 +106,7 @@ export const __ENTITY__Service = {
     inactive: number;
     // Add entity-specific stats
   }> {
-    const response = await http<{ ok: true; data: any }>('/api/__RESOURCE__/stats');
-    return response.data;
+    return http<any>('/api/__RESOURCE__/stats');
   },
 
   /**
@@ -155,10 +122,7 @@ export const __ENTITY__Service = {
       });
     }
 
-    const response = await http<{ ok: true; data: __ENTITY__[] }>(
-      `/api/__RESOURCE__/search?${searchParams.toString()}`
-    );
-    return response.data;
+    return http<__ENTITY__[]>(`/api/__RESOURCE__/search?${searchParams.toString()}`);
   },
 };
 

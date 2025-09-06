@@ -10,8 +10,13 @@ import { PrismaClient } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getCache, setCache, deleteCache } from '@/lib/redis';
 
 const prisma = new PrismaClient();
+
+// Redis cache configuration for user preferences
+const USER_PREFERENCES_CACHE_PREFIX = 'user_preferences';
+const USER_PREFERENCES_CACHE_TTL = 600; // 10 minutes
 
 // Validation schema for user preferences
 const PreferencesSchema = z.object({
@@ -27,6 +32,21 @@ export async function GET() {
 
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Check Redis cache first
+    const cacheKey = `${USER_PREFERENCES_CACHE_PREFIX}:${session.user.email}`;
+    const cachedPreferences = await getCache(cacheKey);
+    if (cachedPreferences) {
+      logDebug('User preferences served from cache', {
+        component: 'UserPreferencesAPI',
+        operation: 'CACHE_HIT',
+        email: session.user.email,
+      });
+      return NextResponse.json({
+        success: true,
+        data: cachedPreferences,
+      });
     }
 
     // First check if user exists, create if not
@@ -53,9 +73,9 @@ export async function GET() {
     // Auto-sync: Create user in database if authenticated but not found
     if (!user) {
       logInfo('Auto-syncing authenticated user', {
-  email: session.user.email,
-  component: 'UserPreferencesAPI'
-});
+        email: session.user.email,
+        component: 'UserPreferencesAPI',
+      });
 
       // Use tenantId from session, or default tenant for auto-synced users
       const tenantId = session.user.tenantId || process.env.DEFAULT_TENANT_ID || 'tenant_default';
@@ -74,7 +94,7 @@ export async function GET() {
         name: user.name,
         email: session.user.email,
         tenantId: tenantId,
-        component: 'UserPreferencesAPI'
+        component: 'UserPreferencesAPI',
       });
     }
 
@@ -99,6 +119,9 @@ export async function GET() {
         language: prefs?.language ?? 'en',
       };
     });
+
+    // Cache the user preferences for future requests
+    await setCache(cacheKey, result, USER_PREFERENCES_CACHE_TTL);
 
     return NextResponse.json({
       success: true,
@@ -160,9 +183,9 @@ export async function PUT(request: NextRequest) {
     // Auto-sync: Create user in database if authenticated but not found
     if (!user) {
       logInfo('Auto-syncing authenticated user', {
-  email: session.user.email,
-  component: 'UserPreferencesAPI'
-});
+        email: session.user.email,
+        component: 'UserPreferencesAPI',
+      });
       user = await prisma.user.create({
         data: {
           tenantId: 'tenant_default',
@@ -176,7 +199,7 @@ export async function PUT(request: NextRequest) {
       logInfo('Created user in database', {
         name: user.name,
         email: session.user.email,
-        component: 'UserPreferencesAPI'
+        component: 'UserPreferencesAPI',
       });
     }
 
@@ -227,6 +250,10 @@ export async function PUT(request: NextRequest) {
         language,
       };
     });
+
+    // Clear cache after updating preferences
+    const cacheKey = `${USER_PREFERENCES_CACHE_PREFIX}:${session.user.email}`;
+    await deleteCache(cacheKey);
 
     return NextResponse.json({
       success: true,

@@ -6,7 +6,6 @@
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
@@ -58,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: resources.map(r => ({
+      data: resources.map((r: any) => ({
         id: r.id,
         name: r.title,
         type: 'documentation',

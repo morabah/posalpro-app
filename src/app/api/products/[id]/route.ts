@@ -14,7 +14,14 @@ import {
   errorHandlingService,
   StandardError,
 } from '@/lib/errors';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import { logError, logInfo, logWarn } from '@/lib/logger';
 import { securityAuditManager } from '@/lib/security/audit';
 import { apiRateLimiter } from '@/lib/security/hardening';
@@ -25,6 +32,56 @@ import { z } from 'zod';
 
 // Import consolidated schemas from feature folder
 import { ProductSchema, ProductUpdateSchema } from '@/features/products/schemas';
+import { Decimal } from '@prisma/client/runtime/library';
+
+// Define proper types for complex Prisma query results
+type ProductProposal = {
+  proposal: {
+    id: string;
+    title: string;
+    status: string;
+    customer: {
+      id: string;
+      name: string;
+    };
+  };
+  quantity: number;
+  unitPrice: Decimal;
+  total: Decimal;
+  createdAt: Date;
+};
+
+type ProductRelationship = {
+  id: string;
+  type: string;
+  quantity: number | null;
+  condition: any; // JsonValue from Prisma
+  targetProduct: {
+    id: string;
+    name: string;
+    sku: string;
+    price: Decimal | null;
+    currency: string | null;
+    isActive: boolean;
+  };
+  createdAt: Date;
+};
+
+type ProductRelatedFrom = {
+  id: string;
+  type: string;
+  quantity: number | null;
+  condition: any; // JsonValue from Prisma
+  sourceProduct: {
+    id: string;
+    name: string;
+    sku: string;
+    price: Decimal | null;
+    currency: string | null;
+    isActive: boolean;
+  };
+  createdAt: Date;
+};
 
 /**
  * Component Traceability Matrix:
@@ -203,7 +260,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         usageInProposals: product._count.proposalProducts,
         validationRulesCount: product._count.validationRules,
       },
-      recentUsage: product.proposalProducts.map(pp => ({
+      recentUsage: product.proposalProducts.map((pp: ProductProposal) => ({
         proposalId: pp.proposal.id,
         proposalTitle: pp.proposal.title,
         proposalStatus: pp.proposal.status,
@@ -214,7 +271,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         usedAt: pp.createdAt,
       })),
       allRelationships: [
-        ...product.relationships.map(rel => ({
+        ...product.relationships.map((rel: ProductRelationship) => ({
           id: rel.id,
           type: rel.type,
           direction: 'outgoing' as const,
@@ -223,7 +280,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           relatedProduct: rel.targetProduct,
           createdAt: rel.createdAt,
         })),
-        ...product.relatedFrom.map((rel: any) => ({
+        ...product.relatedFrom.map((rel: ProductRelatedFrom) => ({
           id: rel.id,
           type: rel.type,
           direction: 'incoming' as const,

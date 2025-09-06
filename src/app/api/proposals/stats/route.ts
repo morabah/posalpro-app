@@ -7,16 +7,21 @@
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
+import { getCache, setCache } from '@/lib/redis';
 
 // ====================
 // GET /api/proposals/stats - Get proposal statistics
 // ====================
 
+// Redis cache configuration for proposal stats
+const PROPOSAL_STATS_CACHE_KEY = 'proposal_stats';
+const PROPOSAL_STATS_CACHE_TTL = 300; // 5 minutes
+
 export const GET = createRoute(
   {
     roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'],
   },
-  async ({ user }) => {
+  async ({ req, user }) => {
     try {
       logInfo('Fetching proposal stats', {
         component: 'ProposalStatsAPI',
@@ -26,67 +31,75 @@ export const GET = createRoute(
         hypothesis: 'H4',
       });
 
-      // Get total proposals
-      const total = await prisma.proposal.count();
+      // Check Redis cache first
+      const forceFresh = new URL(req.url).searchParams.has('fresh');
+      if (!forceFresh) {
+        const cachedStats = await getCache(PROPOSAL_STATS_CACHE_KEY);
+        if (cachedStats) {
+          logInfo('Proposal stats served from cache', {
+            component: 'ProposalStatsAPI',
+            operation: 'CACHE_HIT',
+            userId: user.id,
+            userStory: 'US-3.2',
+            hypothesis: 'H4',
+          });
+          return new Response(JSON.stringify({ ok: true, data: cachedStats }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      }
 
-      // Get proposals by status
-      const statusCounts = await prisma.proposal.groupBy({
-        by: ['status'],
-        _count: {
-          status: true,
-        },
-      });
+      // Consolidated query: Get all stats in a single optimized query
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      // Get overdue proposals (dueDate < now and status not in final states)
-      const overdue = await prisma.proposal.count({
-        where: {
-          dueDate: {
-            lt: new Date(),
-          },
-          status: {
-            notIn: ['APPROVED', 'REJECTED', 'ACCEPTED', 'DECLINED'],
-          },
-        },
-      });
+      const [total, statusCounts, overdue, totalValueResult, recentActivity] = await Promise.all([
+        // Total proposals
+        prisma.proposal.count(),
 
-      // Get total value
-      const totalValueResult = await prisma.proposal.aggregate({
-        _sum: {
-          value: true,
-        },
-        where: {
-          value: {
-            not: null,
+        // Status counts
+        prisma.proposal.groupBy({
+          by: ['status'],
+          _count: { status: true },
+        }),
+
+        // Overdue count
+        prisma.proposal.count({
+          where: {
+            dueDate: { lt: new Date() },
+            status: { notIn: ['APPROVED', 'REJECTED', 'ACCEPTED', 'DECLINED'] },
           },
-        },
-      });
+        }),
+
+        // Total value
+        prisma.proposal.aggregate({
+          _sum: { value: true },
+          where: { value: { not: null } },
+        }),
+
+        // Recent activity
+        prisma.proposal.count({
+          where: { updatedAt: { gte: thirtyDaysAgo } },
+        }),
+      ]);
 
       const totalValue = totalValueResult._sum.value || 0;
 
-      // Calculate win rate (ACCEPTED / (ACCEPTED + DECLINED))
-      const acceptedCount = statusCounts.find(s => s.status === 'ACCEPTED')?._count.status || 0;
-      const declinedCount = statusCounts.find(s => s.status === 'DECLINED')?._count.status || 0;
+      // Calculate win rate
+      const acceptedCount =
+        statusCounts.find((s: any) => s.status === 'ACCEPTED')?._count.status || 0;
+      const declinedCount =
+        statusCounts.find((s: any) => s.status === 'DECLINED')?._count.status || 0;
       const winRate =
         acceptedCount + declinedCount > 0
           ? (acceptedCount / (acceptedCount + declinedCount)) * 100
           : 0;
 
-      // Get recent activity (proposals updated in last 30 days)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const recentActivity = await prisma.proposal.count({
-        where: {
-          updatedAt: {
-            gte: thirtyDaysAgo,
-          },
-        },
-      });
-
       const stats = {
         total,
         byStatus: statusCounts.reduce(
-          (acc, item) => {
+          (acc: Record<string, number>, item: any) => {
             acc[item.status] = item._count.status;
             return acc;
           },
@@ -112,6 +125,9 @@ export const GET = createRoute(
         userStory: 'US-3.2',
         hypothesis: 'H4',
       });
+
+      // Cache the stats for future requests
+      await setCache(PROPOSAL_STATS_CACHE_KEY, stats, PROPOSAL_STATS_CACHE_TTL);
 
       const responsePayload = { ok: true, data: stats };
       return new Response(JSON.stringify(responsePayload), {

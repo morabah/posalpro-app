@@ -11,7 +11,9 @@
 
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
-import usePerformanceOptimization, { type PerformanceMetrics } from '@/hooks/usePerformanceOptimization';
+import usePerformanceOptimization, {
+  type PerformanceMetrics,
+} from '@/hooks/usePerformanceOptimization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { LoggingService } from '@/lib/logging/LoggingService';
@@ -124,8 +126,6 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     [config]
   );
 
-  
-
   // Performance service hooks
   const {
     metrics: webVitalsMetrics,
@@ -141,8 +141,6 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     enableMemoryMonitoring: true,
     reportingInterval: integrationConfig.monitoringInterval,
   });
-
-  
 
   const {
     executeQuery: executeOptimizedQuery,
@@ -174,10 +172,16 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
 
   // Refs to avoid cyclic deps and TDZ in callbacks
   const calculateOverallScoreRef = useRef<((m: OverallScoreInput) => number) | null>(null);
-  const calculatePerformanceTrendsRef = useRef<((h: number[]) => { improvement: number; degradation: number; stability: number; }) | null>(null);
-  const generateIntegratedRecommendationsRef = useRef<((d: RecommendationInput) => string[]) | null>(null);
+  const calculatePerformanceTrendsRef = useRef<
+    ((h: number[]) => { improvement: number; degradation: number; stability: number }) | null
+  >(null);
+  const generateIntegratedRecommendationsRef = useRef<
+    ((d: RecommendationInput) => string[]) | null
+  >(null);
   const checkPerformanceAlertsRef = useRef<((m: AlertsMetrics) => PerformanceAlert[]) | null>(null);
-  const triggerComprehensiveOptimizationRef = useRef<() => Promise<OptimizationResult> | null>(null);
+  const triggerComprehensiveOptimizationRef = useRef<(() => Promise<OptimizationResult>) | null>(
+    null
+  );
 
   // Real-time monitoring
   const collectIntegratedMetrics = useCallback(async (): Promise<void> => {
@@ -194,7 +198,13 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       await collectWebVitalsMetrics();
 
       // Calculate overall performance score
-      const overallScore = (calculateOverallScoreRef.current ?? ((m: OverallScoreInput) => { void m; return 0; }))({
+      const overallScore = (
+        calculateOverallScoreRef.current ??
+        ((m: OverallScoreInput) => {
+          void m;
+          return 0;
+        })
+      )({
         webVitals: optimizationScore,
         database: dbMetrics,
         // Removed apiMetrics to comply with core requirements
@@ -209,10 +219,22 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       });
 
       // Calculate trends
-      const trends = (calculatePerformanceTrendsRef.current ?? ((h: number[]) => { void h; return { improvement: 0, degradation: 0, stability: 100 }; }))(performanceHistory);
+      const trends = (
+        calculatePerformanceTrendsRef.current ??
+        ((h: number[]) => {
+          void h;
+          return { improvement: 0, degradation: 0, stability: 100 };
+        })
+      )(performanceHistory);
 
       // Generate recommendations
-      const recommendations = (generateIntegratedRecommendationsRef.current ?? ((d: RecommendationInput) => { void d; return []; }))({
+      const recommendations = (
+        generateIntegratedRecommendationsRef.current ??
+        ((d: RecommendationInput) => {
+          void d;
+          return [];
+        })
+      )({
         webVitals: webVitalsRecommendations,
         database: dbMetrics,
         // Removed apiMetrics to comply with core requirements
@@ -221,7 +243,13 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       });
 
       // Check for alerts
-      const newAlerts = (checkPerformanceAlertsRef.current ?? ((m: AlertsMetrics) => { void m; return []; }))({
+      const newAlerts = (
+        checkPerformanceAlertsRef.current ??
+        ((m: AlertsMetrics) => {
+          void m;
+          return [];
+        })
+      )({
         webVitals: optimizationScore,
         database: dbMetrics,
         // Removed apiMetrics to comply with core requirements
@@ -260,17 +288,21 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
 
       // Analytics tracking (throttled to prevent infinite loops)
       if (Date.now() - lastAnalyticsLog > 60000) {
-        analytics('integrated_performance_metrics_collected', {
-          userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
-          hypotheses: ['H8', 'H11', 'H12', 'H13'],
-          overallScore,
-          webVitalsScore: optimizationScore,
-          databaseAvgTime: dbMetrics.averageExecutionTime,
-          // Removed apiCacheHitRate to comply with core requirements
-          // apiCacheHitRate: apiMetrics.cacheHitRate,
-          memoryUsage: webVitalsMetrics.memoryMetrics.memoryUsagePercentage,
-          alertsTriggered: newAlerts.length,
-        }, 'low');
+        analytics(
+          'integrated_performance_metrics_collected',
+          {
+            userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
+            hypotheses: ['H8', 'H11', 'H12', 'H13'],
+            overallScore,
+            webVitalsScore: optimizationScore,
+            databaseAvgTime: dbMetrics.averageExecutionTime,
+            // Removed apiCacheHitRate to comply with core requirements
+            // apiCacheHitRate: apiMetrics.cacheHitRate,
+            memoryUsage: webVitalsMetrics.memoryMetrics.memoryUsagePercentage,
+            alertsTriggered: newAlerts.length,
+          },
+          'low'
+        );
         setLastAnalyticsLog(Date.now());
       }
 
@@ -315,8 +347,6 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     // calculateOverallScore, calculatePerformanceTrends, generateIntegratedRecommendations, checkPerformanceAlerts
     lastAnalyticsLog,
   ]);
-
-  
 
   // Comprehensive optimization
   const triggerComprehensiveOptimization = useCallback(async (): Promise<OptimizationResult> => {
@@ -377,7 +407,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
           database: Math.max(
             0,
             integrationConfig.alertThresholds.database -
-              (integratedMetrics.database && typeof integratedMetrics.database.averageExecutionTime === 'number'
+              (integratedMetrics.database &&
+              typeof integratedMetrics.database.averageExecutionTime === 'number'
                 ? integratedMetrics.database.averageExecutionTime
                 : 0)
           ),
@@ -385,7 +416,8 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
           memory: Math.max(
             0,
             integrationConfig.alertThresholds.memory -
-              (integratedMetrics.memory && typeof integratedMetrics.memory.memoryUsagePercentage === 'number'
+              (integratedMetrics.memory &&
+              typeof integratedMetrics.memory.memoryUsagePercentage === 'number'
                 ? integratedMetrics.memory.memoryUsagePercentage
                 : 0)
           ),
@@ -411,16 +443,20 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       });
 
       // Analytics tracking
-      analytics('comprehensive_optimization_completed', {
-        userStories: ['US-6.1', 'US-6.2'],
-        hypotheses: ['H8', 'H11', 'H12', 'H13'],
-        initialScore,
-        finalScore,
-        improvement: result.estimatedImpact,
-        success: result.success,
-        actions,
-        duration,
-      }, 'medium');
+      analytics(
+        'comprehensive_optimization_completed',
+        {
+          userStories: ['US-6.1', 'US-6.2'],
+          hypotheses: ['H8', 'H11', 'H12', 'H13'],
+          initialScore,
+          finalScore,
+          improvement: result.estimatedImpact,
+          success: result.success,
+          actions,
+          duration,
+        },
+        'medium'
+      );
 
       return result;
     } catch (error) {
@@ -456,7 +492,7 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
 
   // Keep optimization ref in sync after declaration
   useEffect(() => {
-    triggerComprehensiveOptimizationRef.current = () => triggerComprehensiveOptimization();
+    triggerComprehensiveOptimizationRef.current = triggerComprehensiveOptimization;
   }, [triggerComprehensiveOptimization]);
 
   // Helper functions
@@ -476,15 +512,18 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     };
 
     const webVitalsScore = typeof metrics.webVitals === 'number' ? metrics.webVitals : 0;
-    const databaseScore = metrics.database && typeof metrics.database.averageExecutionTime === 'number'
-      ? Math.max(0, 100 - metrics.database.averageExecutionTime / 10)
-      : 0;
-    const apiScore = metrics.api && typeof metrics.api.cacheHitRate === 'number'
-      ? metrics.api.cacheHitRate * 100
-      : 0;
-    const memoryScore = metrics.memory && typeof metrics.memory.memoryUsagePercentage === 'number'
-      ? Math.max(0, 100 - metrics.memory.memoryUsagePercentage)
-      : 0;
+    const databaseScore =
+      metrics.database && typeof metrics.database.averageExecutionTime === 'number'
+        ? Math.max(0, 100 - metrics.database.averageExecutionTime / 10)
+        : 0;
+    const apiScore =
+      metrics.api && typeof metrics.api.cacheHitRate === 'number'
+        ? metrics.api.cacheHitRate * 100
+        : 0;
+    const memoryScore =
+      metrics.memory && typeof metrics.memory.memoryUsagePercentage === 'number'
+        ? Math.max(0, 100 - metrics.memory.memoryUsagePercentage)
+        : 0;
 
     return (
       webVitalsScore * weights.webVitals +
@@ -531,10 +570,18 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     }
 
     // Database recommendations
-    if (data.database && typeof data.database.averageExecutionTime === 'number' && data.database.averageExecutionTime > 500) {
+    if (
+      data.database &&
+      typeof data.database.averageExecutionTime === 'number' &&
+      data.database.averageExecutionTime > 500
+    ) {
       recommendations.push('Consider adding database indexes for better query performance');
     }
-    if (data.database && typeof data.database.slowQueries === 'number' && data.database.slowQueries > 5) {
+    if (
+      data.database &&
+      typeof data.database.slowQueries === 'number' &&
+      data.database.slowQueries > 5
+    ) {
       recommendations.push('Optimize slow queries or implement query result caching');
     }
 
@@ -542,7 +589,11 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
     if (data.api && typeof data.api.cacheHitRate === 'number' && data.api.cacheHitRate < 0.7) {
       recommendations.push('Improve API caching strategy to increase hit rate');
     }
-    if (data.api && typeof data.api.averageResponseTime === 'number' && data.api.averageResponseTime > 300) {
+    if (
+      data.api &&
+      typeof data.api.averageResponseTime === 'number' &&
+      data.api.averageResponseTime > 300
+    ) {
       recommendations.push('Optimize API response times with compression or CDN');
     }
 
@@ -673,11 +724,15 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
         prev.map(alert => (alert.id === alertId ? { ...alert, acknowledged: true } : alert))
       );
 
-      analytics('performance_alert_acknowledged', {
-        userStories: ['US-6.1', 'US-6.2'],
-        hypotheses: ['H8', 'H11', 'H12', 'H13'],
-        alertId,
-      }, 'low');
+      analytics(
+        'performance_alert_acknowledged',
+        {
+          userStories: ['US-6.1', 'US-6.2'],
+          hypotheses: ['H8', 'H11', 'H12', 'H13'],
+          alertId,
+        },
+        'low'
+      );
     },
     [analytics]
   );
@@ -721,12 +776,16 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      analytics('integrated_performance_report_generated', {
-        userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
-        hypotheses: ['H8', 'H11', 'H12', 'H13'],
-        reportSize: JSON.stringify(integratedReport).length,
-        overallScore: integratedMetrics.overallScore,
-      }, 'low');
+      analytics(
+        'integrated_performance_report_generated',
+        {
+          userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
+          hypotheses: ['H8', 'H11', 'H12', 'H13'],
+          reportSize: JSON.stringify(integratedReport).length,
+          overallScore: integratedMetrics.overallScore,
+        },
+        'low'
+      );
 
       return integratedReport;
     } catch (error) {
@@ -776,11 +835,15 @@ export function usePerformanceIntegration(config: Partial<PerformanceIntegration
 
   // Track hook initialization
   useEffect(() => {
-    analytics('performance_integration_initialized', {
-      userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
-      hypotheses: ['H8', 'H11', 'H12', 'H13'],
-      config: integrationConfig,
-    }, 'low');
+    analytics(
+      'performance_integration_initialized',
+      {
+        userStories: ['US-6.1', 'US-6.2', 'US-4.1'],
+        hypotheses: ['H8', 'H11', 'H12', 'H13'],
+        config: integrationConfig,
+      },
+      'low'
+    );
   }, [analytics, integrationConfig]);
 
   return {

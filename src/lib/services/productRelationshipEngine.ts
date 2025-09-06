@@ -54,7 +54,7 @@ export class ProductRelationshipEngine {
       },
       select: { id: true, sku: true },
     });
-    const resolvedIds = new Set(products.map(p => p.id));
+    const resolvedIds = new Set(products.map((p: { id: string; sku: string }) => p.id));
 
     const rules = await prisma.productRelationshipRule.findMany({
       where: {
@@ -72,8 +72,8 @@ export class ProductRelationshipEngine {
     const explain: Array<{ ruleId: string; because: string }> = [];
 
     const getSkuFromIdOrSku = (idOrSku: string): string => {
-      const byId = products.find(p => p.id === idOrSku);
-      const bySku = products.find(p => p.sku === idOrSku);
+      const byId = products.find((p: { id: string; sku: string }) => p.id === idOrSku);
+      const bySku = products.find((p: { id: string; sku: string }) => p.sku === idOrSku);
       return byId?.sku || bySku?.sku || idOrSku;
     };
 

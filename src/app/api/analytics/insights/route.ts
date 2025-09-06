@@ -11,17 +11,18 @@ const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {
   // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
-  const isBuildTime = process.env.NETLIFY_BUILD_TIME === 'true' ||
-                     (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL);
+  const isBuildTime =
+    process.env.NETLIFY_BUILD_TIME === 'true' ||
+    (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL);
 
   if (isBuildTime) {
     logWarn('Analytics insights accessed without database configuration - returning empty data');
     return NextResponse.json({
       data: {
         insights: [],
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       },
-      message: 'Analytics data not available during build process'
+      message: 'Analytics data not available during build process',
     });
   }
 
@@ -64,17 +65,17 @@ export async function GET(request: NextRequest) {
 
     // Simple derived insights from events and proposals
     const insights = [
-      ...events.map(e => ({
+      ...events.map((e: any) => ({
         id: `evt-${e.id}`,
         type: 'optimization' as const,
-        message: `Recent validation for ${e.hypothesis}: +${Math.round(
-          (e.performanceImprovement ?? 0
-        ) * 100) / 100}% improvement`,
+        message: `Recent validation for ${e.hypothesis}: +${
+          Math.round((e.performanceImprovement ?? 0) * 100) / 100
+        }% improvement`,
         confidence: 0.85,
         priority: 'Medium' as const,
         actionable: false,
       })),
-      ...recentProposals.map(p => ({
+      ...recentProposals.map((p: any) => ({
         id: `pr-${p.id}`,
         type: 'risk' as const,
         message: `Proposal "${p.title}" status: ${p.status}`,

@@ -9,6 +9,7 @@ import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
+import type { Prisma } from '@prisma/client';
 import { ProposalBulkDeleteSchema } from '@/features/proposals/schemas';
 
 // POST /api/proposals/bulk-delete - Delete multiple proposals
@@ -28,7 +29,7 @@ export const POST = createRoute(
       });
 
       // Use transaction for bulk delete to ensure consistency
-      const result = await prisma.$transaction(async tx => {
+      const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // Delete proposal products first (due to foreign key constraints)
         await tx.proposalProduct.deleteMany({
           where: {

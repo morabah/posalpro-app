@@ -6,12 +6,12 @@ import { recordError, recordLatency } from '@/lib/observability/metricsStore';
  * Component Traceability: US-3.1, US-3.2, H3
  */
 
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { Decimal } from '@prisma/client/runtime/library';
 
 /**
  * Component Traceability Matrix:
@@ -21,6 +21,18 @@ import { NextRequest, NextResponse } from 'next/server';
  * - Methods: getProductCategories(), getCategoryStats()
  * - Test Cases: TC-H3-004
  */
+
+// Define proper types for Prisma query results
+type ProductWithCategory = {
+  id: string;
+  category: string[];
+  price: Decimal | null;
+  currency: string | null;
+  isActive: boolean;
+  _count: {
+    proposalProducts: number;
+  };
+};
 
 /**
  * GET /api/products/categories - Get all product categories with statistics
@@ -71,8 +83,8 @@ export async function GET(request: NextRequest) {
       }
     >();
 
-    products.forEach(product => {
-      product.category.forEach(cat => {
+    products.forEach((product: ProductWithCategory) => {
+      product.category.forEach((cat: string) => {
         if (!categoryMap.has(cat)) {
           categoryMap.set(cat, {
             name: cat,
@@ -97,8 +109,13 @@ export async function GET(request: NextRequest) {
 
     // Calculate average prices
     categoryMap.forEach((categoryData, categoryName) => {
-      const categoryProducts = products.filter(p => p.category.includes(categoryName));
-      const totalPrice = categoryProducts.reduce((sum, p) => sum + Number(p.price), 0);
+      const categoryProducts = products.filter((p: ProductWithCategory) =>
+        p.category.includes(categoryName)
+      );
+      const totalPrice = categoryProducts.reduce(
+        (sum: number, p: ProductWithCategory) => sum + Number(p.price || 0),
+        0
+      );
       categoryData.avgPrice =
         categoryProducts.length > 0 ? totalPrice / categoryProducts.length : 0;
     });

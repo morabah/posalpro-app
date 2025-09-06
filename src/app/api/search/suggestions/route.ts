@@ -6,7 +6,14 @@ import { logError, logInfo } from '@/lib/logger'; /**
 
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -118,7 +125,7 @@ async function getContentSuggestions(searchTerm: string, limit: number) {
       take: limit,
     });
 
-    return contents.map(content => ({
+    return contents.map((content: any) => ({
       text: content.title,
       type: 'content',
       subtype: content.type,
@@ -152,7 +159,7 @@ async function getProductSuggestions(searchTerm: string, limit: number) {
       take: limit,
     });
 
-    return products.map(product => ({
+    return products.map((product: any) => ({
       text: product.name,
       type: 'product',
       subtype: product.category[0] || 'product',
@@ -187,7 +194,7 @@ async function getCustomerSuggestions(searchTerm: string, limit: number) {
       take: limit,
     });
 
-    return customers.map(customer => ({
+    return customers.map((customer: any) => ({
       text: customer.name,
       type: 'customer',
       subtype: customer.industry || 'business',
@@ -234,7 +241,10 @@ async function getTagSuggestions(searchTerm: string, limit: number) {
     ]);
 
     // Extract and filter matching tags
-    const allTags = [...contentTags.flatMap(c => c.tags), ...productTags.flatMap(p => p.tags)];
+    const allTags = [
+      ...contentTags.flatMap((c: any) => c.tags),
+      ...productTags.flatMap((p: any) => p.tags),
+    ];
 
     const matchingTags = allTags
       .filter(tag => tag.toLowerCase().includes(searchTerm))
@@ -280,7 +290,7 @@ async function getRecentSearches(userId: string, searchTerm: string, limit: numb
 
     // Extract search queries and filter for matches
     const searchQueries = recentEvents
-      .map(event => {
+      .map((event: any) => {
         const data = event.measurementData as any;
         return {
           query: data?.query || '',
@@ -288,14 +298,14 @@ async function getRecentSearches(userId: string, searchTerm: string, limit: numb
         };
       })
       .filter(
-        item =>
+        (item: any) =>
           item.query &&
           item.query.toLowerCase().includes(searchTerm) &&
           item.query.toLowerCase() !== searchTerm // Don't suggest exact same query
       )
       .slice(0, limit);
 
-    return searchQueries.map(item => ({
+    return searchQueries.map((item: any) => ({
       text: item.query,
       type: 'recent',
       subtype: 'search_history',

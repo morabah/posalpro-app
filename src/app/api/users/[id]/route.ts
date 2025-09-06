@@ -182,7 +182,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       language: user.communicationPrefs?.language || user.preferences?.language || 'en',
       theme: user.preferences?.theme || 'system',
       analyticsConsent: user.preferences?.analyticsConsent || false,
-      roles: user.roles.map(ur => ({
+      roles: user.roles.map((ur: any) => ({
         name: ur.role.name,
         description: ur.role.description,
         level: ur.role.level,
@@ -265,7 +265,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
       // Combine and format activity
       const combinedActivity = [
-        ...auditLogs.map(log => ({
+        ...auditLogs.map((log: any) => ({
           id: log.id,
           type: 'audit',
           action: log.action,
@@ -275,7 +275,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           severity: 'info', // Default severity since it doesn't exist
           timestamp: log.at, // Use 'at' instead of timestamp
         })),
-        ...hypothesisEvents.map(event => ({
+        ...hypothesisEvents.map((event: any) => ({
           id: event.id,
           type: 'hypothesis',
           action: event.action,
@@ -284,7 +284,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           improvement: event.performanceImprovement,
           timestamp: event.timestamp,
         })),
-        ...proposalActivity.map(proposal => ({
+        ...proposalActivity.map((proposal: any) => ({
           id: proposal.id,
           type: 'proposal',
           action: proposal.createdBy === id ? 'created' : 'updated',

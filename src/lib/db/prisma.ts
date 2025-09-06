@@ -13,9 +13,9 @@ import { PrismaClient } from '@prisma/client';
 
 declare global {
   // Reuse Prisma client across HMR cycles in dev
-  let prisma: PrismaClient | undefined;
+  var prisma: PrismaClient | undefined;
   // Track middleware registration to avoid duplicate $use calls in dev
-  let prismaMiddlewareRegistered: boolean | undefined;
+  var prismaMiddlewareRegistered: boolean | undefined;
 }
 
 // Configure Prisma client with appropriate database URL based on environment
@@ -126,60 +126,70 @@ export { prisma };
 // Observability: Prisma middleware to record per-query timings (no PII)
 // Note: Middleware registration should be idempotent in dev
 if (!globalThis.prismaMiddlewareRegistered) {
-  prisma.$use(async (params, next) => {
-    const start = Date.now();
-    try {
-      // next has a return type of Promise<any>; cast to Promise<unknown> to satisfy strict lint rules
-      const safeNext = next as unknown as (p: Prisma.MiddlewareParams) => Promise<unknown>;
-      const result = await safeNext(params);
-      const ms = Date.now() - start;
-      recordDbLatency(ms);
-      if (process.env.NODE_ENV !== 'production') {
-        logger.debug('DB query', {
+  prisma.$use(
+    async (
+      params: Prisma.MiddlewareParams,
+      next: (params: Prisma.MiddlewareParams) => Promise<unknown>
+    ) => {
+      const start = Date.now();
+      try {
+        // next has a return type of Promise<any>; cast to Promise<unknown> to satisfy strict lint rules
+        const safeNext = next as unknown as (p: Prisma.MiddlewareParams) => Promise<unknown>;
+        const result = await safeNext(params);
+        const ms = Date.now() - start;
+        recordDbLatency(ms);
+        if (process.env.NODE_ENV !== 'production') {
+          logger.debug('DB query', {
+            model: params.model,
+            action: params.action,
+            dbMs: ms,
+          });
+        }
+        return result;
+      } catch (err) {
+        const ms = Date.now() - start;
+        recordDbLatency(ms);
+        logger.warn('DB query error', {
           model: params.model,
           action: params.action,
           dbMs: ms,
         });
+        throw err;
       }
-      return result;
-    } catch (err) {
-      const ms = Date.now() - start;
-      recordDbLatency(ms);
-      logger.warn('DB query error', {
-        model: params.model,
-        action: params.action,
-        dbMs: ms,
-      });
-      throw err;
     }
-  });
+  );
 
   // Audit logging middleware - lightweight write operation tracking
-  prisma.$use(async (params, next) => {
-    const write = ['create', 'update', 'delete', 'upsert'];
-    const isWrite = write.includes(params.action.toLowerCase());
+  prisma.$use(
+    async (
+      params: Prisma.MiddlewareParams,
+      next: (params: Prisma.MiddlewareParams) => Promise<unknown>
+    ) => {
+      const write = ['create', 'update', 'delete', 'upsert'];
+      const isWrite = write.includes(params.action.toLowerCase());
 
-    // Skip audit logging for AuditLog operations to prevent infinite recursion
-    const isAuditLogOperation = params.model?.toLowerCase() === 'auditlog';
+      // Skip audit logging for AuditLog operations to prevent infinite recursion
+      const isAuditLogOperation = params.model?.toLowerCase() === 'auditlog';
 
-    const result = await next(params);
-    if (isWrite && !isAuditLogOperation) {
-      // Fire and forget - don't block the main operation
-      prisma.auditLog
-        .create({
-          data: {
-            model: params.model ?? 'Unknown',
-            action: params.action,
-            targetId: (result as any)?.id ?? null,
-            diff: { params: params.args },
-          },
-        })
-        .catch(() => {
-          // Silently ignore audit log errors to not impact main flow
-        });
+      const result = await next(params);
+      if (isWrite && !isAuditLogOperation) {
+        // Fire and forget - don't block the main operation
+        prisma.auditLog
+          .create({
+            data: {
+              model: params.model ?? 'Unknown',
+              action: params.action,
+              targetId: (result as any)?.id ?? null,
+              diff: { params: params.args },
+            },
+          })
+          .catch(() => {
+            // Silently ignore audit log errors to not impact main flow
+          });
+      }
+      return result;
     }
-    return result;
-  });
+  );
 
   globalThis.prismaMiddlewareRegistered = true;
 }

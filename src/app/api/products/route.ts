@@ -19,6 +19,22 @@ import {
   ProductQuerySchema,
   ProductSchema,
 } from '@/features/products';
+import { Decimal } from '@prisma/client/runtime/library';
+
+// Define proper type for Prisma product query result
+type ProductQueryResult = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: Decimal | null;
+  currency: string | null;
+  sku: string;
+  category: string[];
+  tags: string[];
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 // GET /api/products - Retrieve products with filtering and cursor pagination
 export const GET = createRoute(
@@ -89,7 +105,7 @@ export const GET = createRoute(
       const nextCursor = hasMore ? items[items.length - 1]?.id || null : null;
 
       // Transform null values to appropriate defaults before validation
-      const transformedItems = items.map(item => ({
+      const transformedItems = items.map((item: ProductQueryResult) => ({
         ...item,
         description: item.description || '',
         price: item.price ? Number(item.price) : 0,
@@ -172,7 +188,9 @@ export const POST = createRoute(
           stockQuantity: body!.stockQuantity,
           status: body!.status,
           version: body!.version,
-          usageAnalytics: body!.usageAnalytics ? JSON.parse(JSON.stringify(body!.usageAnalytics)) : undefined,
+          usageAnalytics: body!.usageAnalytics
+            ? JSON.parse(JSON.stringify(body!.usageAnalytics))
+            : undefined,
           userStoryMappings: body!.userStoryMappings,
         },
         select: {

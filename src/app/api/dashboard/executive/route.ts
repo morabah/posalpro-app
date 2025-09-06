@@ -4,6 +4,7 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
+import { getCache, setCache } from '@/lib/redis';
 
 // Import centralized types from dashboard schemas (CORE_REQUIREMENTS.md compliance)
 import type {
@@ -12,6 +13,10 @@ import type {
   TeamPerformance,
   PipelineStage,
 } from '@/features/dashboard/schemas';
+
+// Redis cache configuration for executive dashboard
+const EXECUTIVE_CACHE_KEY_PREFIX = 'executive_dashboard';
+const EXECUTIVE_CACHE_TTL = 600; // 10 minutes
 
 export const GET = createRoute(
   {
@@ -27,6 +32,33 @@ export const GET = createRoute(
         timeframe: query?.timeframe ?? '3M',
         includeForecasts: (query?.includeForecasts as unknown as boolean) ?? true,
       };
+
+      // Check Redis cache first
+      const forceFresh = new URL(req.url).searchParams.has('fresh');
+      const cacheKey = `${EXECUTIVE_CACHE_KEY_PREFIX}:${queryParams.timeframe}:${queryParams.includeForecasts}`;
+
+      if (!forceFresh) {
+        const cachedData = await getCache(cacheKey);
+        if (cachedData) {
+          return NextResponse.json(
+            {
+              success: true,
+              data: cachedData,
+              meta: {
+                requestId: crypto.randomUUID(),
+                timestamp: new Date().toISOString(),
+                cached: true,
+              },
+            },
+            {
+              status: 200,
+              headers: {
+                'Cache-Control': 'public, max-age=60, s-maxage=180',
+              },
+            }
+          );
+        }
+      }
 
       // Calculate date ranges based on timeframe
       const now = new Date();
@@ -237,6 +269,17 @@ export const GET = createRoute(
           timestamp: new Date().toISOString(),
         },
       };
+
+      // Cache the executive dashboard data
+      const cacheData = {
+        metrics: transformedMetrics,
+        revenueChart: chartData,
+        teamPerformance: teamData,
+        pipelineStages: pipelineStages,
+        lastUpdated: new Date().toISOString(),
+        timeframe: queryParams.timeframe,
+      };
+      await setCache(cacheKey, cacheData, EXECUTIVE_CACHE_TTL);
 
       const res = NextResponse.json(response, {
         status: 200,

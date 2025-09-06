@@ -34,8 +34,12 @@ const ApprovalQueueQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
   assignee: z.string().optional(),
   priority: z.array(z.enum(['Critical', 'High', 'Medium', 'Low'])).optional(),
-  stageType: z.array(z.enum(['Technical', 'Legal', 'Finance', 'Executive', 'Security', 'Compliance'])).optional(),
-  status: z.array(z.enum(['Pending', 'In Review', 'Needs Info', 'Escalated', 'Blocked'])).optional(),
+  stageType: z
+    .array(z.enum(['Technical', 'Legal', 'Finance', 'Executive', 'Security', 'Compliance']))
+    .optional(),
+  status: z
+    .array(z.enum(['Pending', 'In Review', 'Needs Info', 'Escalated', 'Blocked']))
+    .optional(),
   riskLevel: z.array(z.enum(['Low', 'Medium', 'High', 'Critical'])).optional(),
   urgency: z.array(z.enum(['Immediate', 'Today', 'This Week', 'Next Week'])).optional(),
   showOverdueOnly: z.coerce.boolean().default(false),
@@ -63,9 +67,9 @@ export async function GET(request: NextRequest) {
       data: {
         items: [],
         totalCount: 0,
-        hasMore: false
+        hasMore: false,
       },
-      message: 'Approval queue data not available during build process'
+      message: 'Approval queue data not available during build process',
     });
   }
 
@@ -134,13 +138,13 @@ export async function GET(request: NextRequest) {
     });
 
     // Transform executions into approval queue items
-    const queueItems = executions.map(execution => {
+    const queueItems = executions.map((execution: any) => {
       const workflow = execution.workflow;
       const proposal = execution.proposal;
 
       // Find current stage from workflow stages
       const currentStageId = execution.currentStage;
-      const currentStage = workflow?.stages?.find(stage => stage.id === currentStageId);
+      const currentStage = workflow?.stages?.find((stage: any) => stage.id === currentStageId);
 
       // For now, we'll use a placeholder assignee since the assignment logic is complex
       const assignee = null;
@@ -210,12 +214,23 @@ export async function GET(request: NextRequest) {
         proposalName: proposal?.title || 'Unknown Proposal',
         client: proposal?.customer?.name || 'Unknown Client',
         currentStage: currentStage?.name || 'Unknown Stage',
-        stageType: (currentStage?.name?.includes('Technical') ? 'Technical' :
-                   currentStage?.name?.includes('Legal') ? 'Legal' :
-                   currentStage?.name?.includes('Finance') ? 'Finance' :
-                   currentStage?.name?.includes('Executive') ? 'Executive' :
-                   currentStage?.name?.includes('Security') ? 'Security' : 'Compliance') as
-                   'Technical' | 'Legal' | 'Finance' | 'Executive' | 'Security' | 'Compliance',
+        stageType: (currentStage?.name?.includes('Technical')
+          ? 'Technical'
+          : currentStage?.name?.includes('Legal')
+            ? 'Legal'
+            : currentStage?.name?.includes('Finance')
+              ? 'Finance'
+              : currentStage?.name?.includes('Executive')
+                ? 'Executive'
+                : currentStage?.name?.includes('Security')
+                  ? 'Security'
+                  : 'Compliance') as
+          | 'Technical'
+          | 'Legal'
+          | 'Finance'
+          | 'Executive'
+          | 'Security'
+          | 'Compliance',
         assignee: 'Unassigned', // Placeholder - assignee logic would be implemented with proper user assignment system
         priority,
         urgency,
@@ -242,11 +257,15 @@ export async function GET(request: NextRequest) {
     let filteredItems = [...queueItems];
 
     if (validatedQuery.priority && validatedQuery.priority.length > 0) {
-      filteredItems = filteredItems.filter(item => validatedQuery.priority!.includes(item.priority));
+      filteredItems = filteredItems.filter(item =>
+        validatedQuery.priority!.includes(item.priority)
+      );
     }
 
     if (validatedQuery.stageType && validatedQuery.stageType.length > 0) {
-      filteredItems = filteredItems.filter(item => validatedQuery.stageType!.includes(item.stageType));
+      filteredItems = filteredItems.filter(item =>
+        validatedQuery.stageType!.includes(item.stageType)
+      );
     }
 
     if (validatedQuery.status && validatedQuery.status.length > 0) {
@@ -254,7 +273,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (validatedQuery.riskLevel && validatedQuery.riskLevel.length > 0) {
-      filteredItems = filteredItems.filter(item => validatedQuery.riskLevel!.includes(item.riskLevel));
+      filteredItems = filteredItems.filter(item =>
+        validatedQuery.riskLevel!.includes(item.riskLevel)
+      );
     }
 
     if (validatedQuery.urgency && validatedQuery.urgency.length > 0) {
@@ -276,8 +297,8 @@ export async function GET(request: NextRequest) {
       switch (validatedQuery.sortBy) {
         case 'priority': {
           const priorityOrder = { Critical: 4, High: 3, Medium: 2, Low: 1 };
-          aValue = priorityOrder[a.priority];
-          bValue = priorityOrder[b.priority];
+          aValue = priorityOrder[a.priority as keyof typeof priorityOrder];
+          bValue = priorityOrder[b.priority as keyof typeof priorityOrder];
           break;
         }
         case 'deadline':
@@ -454,7 +475,9 @@ export async function POST(request: NextRequest) {
         }
         updatedCount++;
       } catch (error) {
-        errors.push(`Failed to ${action} item ${itemId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        errors.push(
+          `Failed to ${action} item ${itemId}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     }
 
@@ -469,17 +492,12 @@ export async function POST(request: NextRequest) {
       message: `Bulk ${action} completed: ${updatedCount}/${itemIds.length} items processed`,
     });
   } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Bulk action failed',
-      ErrorCodes.DATA.UPDATE_FAILED,
-      {
-        component: 'ApprovalQueueAPI',
-        operation: 'POST',
-        userStories: ['US-4.3'],
-        hypotheses: ['H7'],
-      }
-    );
+    errorHandlingService.processError(error, 'Bulk action failed', ErrorCodes.DATA.UPDATE_FAILED, {
+      component: 'ApprovalQueueAPI',
+      operation: 'POST',
+      userStories: ['US-4.3'],
+      hypotheses: ['H7'],
+    });
 
     if (error instanceof StandardError) {
       return createApiErrorResponse(error);

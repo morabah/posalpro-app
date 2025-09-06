@@ -270,7 +270,7 @@ export async function getIdempotencyStats() {
       total,
       active,
       expired,
-      byRoute: byRoute.map(item => ({
+      byRoute: byRoute.map((item: any) => ({
         route: item.route,
         count: item._count.id,
       })),

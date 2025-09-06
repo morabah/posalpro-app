@@ -40,66 +40,268 @@ export class RBACIntegrationManager {
   // Route permission mappings
   private routePermissions: RoutePermissionConfig[] = [
     // Admin routes
-    { path: '/admin', requiredRoles: ['Administrator', 'System Administrator'], requiredPermissions: ['admin:access'], riskLevel: RiskLevel.HIGH },
-    { path: '/admin/users', requiredPermissions: ['users:read', 'admin:access'], riskLevel: RiskLevel.HIGH },
-    { path: '/admin/roles', requiredPermissions: ['roles:read', 'admin:access'], riskLevel: RiskLevel.HIGH },
-    { path: '/admin/metrics', requiredPermissions: ['metrics:read', 'admin:access'], riskLevel: RiskLevel.MEDIUM },
+    {
+      path: '/admin',
+      requiredRoles: ['Administrator', 'System Administrator'],
+      requiredPermissions: ['admin:access'],
+      riskLevel: RiskLevel.HIGH,
+    },
+    {
+      path: '/admin/users',
+      requiredPermissions: ['users:read', 'admin:access'],
+      riskLevel: RiskLevel.HIGH,
+    },
+    {
+      path: '/admin/roles',
+      requiredPermissions: ['roles:read', 'admin:access'],
+      riskLevel: RiskLevel.HIGH,
+    },
+    {
+      path: '/admin/metrics',
+      requiredPermissions: ['metrics:read', 'admin:access'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
 
     // API routes
-    { path: '/api/admin', method: 'GET', requiredPermissions: ['admin:access'], riskLevel: RiskLevel.HIGH },
-    { path: '/api/admin', method: 'POST', requiredPermissions: ['admin:write'], riskLevel: RiskLevel.HIGH },
-    { path: '/api/admin', method: 'PUT', requiredPermissions: ['admin:write'], riskLevel: RiskLevel.HIGH },
-    { path: '/api/admin', method: 'DELETE', requiredPermissions: ['admin:delete'], riskLevel: RiskLevel.CRITICAL },
+    {
+      path: '/api/admin',
+      method: 'GET',
+      requiredPermissions: ['admin:access'],
+      riskLevel: RiskLevel.HIGH,
+    },
+    {
+      path: '/api/admin',
+      method: 'POST',
+      requiredPermissions: ['admin:write'],
+      riskLevel: RiskLevel.HIGH,
+    },
+    {
+      path: '/api/admin',
+      method: 'PUT',
+      requiredPermissions: ['admin:write'],
+      riskLevel: RiskLevel.HIGH,
+    },
+    {
+      path: '/api/admin',
+      method: 'DELETE',
+      requiredPermissions: ['admin:delete'],
+      riskLevel: RiskLevel.CRITICAL,
+    },
 
     // Admin users/roles granularity
-    { path: '/api/admin/users/roles', method: 'GET', requiredPermissions: ['users:read', 'roles:read'], riskLevel: RiskLevel.HIGH },
-    { path: '/api/admin/users/roles', method: 'POST', requiredPermissions: ['roles:update'], riskLevel: RiskLevel.HIGH },
-    { path: '/api/admin/users/roles', method: 'DELETE', requiredPermissions: ['roles:update'], riskLevel: RiskLevel.HIGH },
+    {
+      path: '/api/admin/users/roles',
+      method: 'GET',
+      requiredPermissions: ['users:read', 'roles:read'],
+      riskLevel: RiskLevel.HIGH,
+    },
+    {
+      path: '/api/admin/users/roles',
+      method: 'POST',
+      requiredPermissions: ['roles:update'],
+      riskLevel: RiskLevel.HIGH,
+    },
+    {
+      path: '/api/admin/users/roles',
+      method: 'DELETE',
+      requiredPermissions: ['roles:update'],
+      riskLevel: RiskLevel.HIGH,
+    },
 
-    { path: '/api/users', method: 'GET', requiredPermissions: ['users:read'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/users', method: 'POST', requiredPermissions: ['users:create'], riskLevel: RiskLevel.HIGH },
-    { path: '/api/users', method: 'PUT', requiredPermissions: ['users:update'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/users', method: 'DELETE', requiredPermissions: ['users:delete'], riskLevel: RiskLevel.HIGH },
+    {
+      path: '/api/users',
+      method: 'GET',
+      requiredPermissions: ['users:read'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/users',
+      method: 'POST',
+      requiredPermissions: ['users:create'],
+      riskLevel: RiskLevel.HIGH,
+    },
+    {
+      path: '/api/users',
+      method: 'PUT',
+      requiredPermissions: ['users:update'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/users',
+      method: 'DELETE',
+      requiredPermissions: ['users:delete'],
+      riskLevel: RiskLevel.HIGH,
+    },
 
-    { path: '/api/proposals', method: 'GET', requiredPermissions: ['proposals:read'], riskLevel: RiskLevel.LOW },
-    { path: '/api/proposals', method: 'POST', requiredPermissions: ['proposals:create'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/proposals', method: 'PUT', requiredPermissions: ['proposals:update'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/proposals', method: 'DELETE', requiredPermissions: ['proposals:delete'], riskLevel: RiskLevel.HIGH },
+    {
+      path: '/api/proposals',
+      method: 'GET',
+      requiredPermissions: ['proposals:read'],
+      riskLevel: RiskLevel.LOW,
+    },
+    {
+      path: '/api/proposals',
+      method: 'POST',
+      requiredPermissions: ['proposals:create'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/proposals',
+      method: 'PUT',
+      requiredPermissions: ['proposals:update'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/proposals',
+      method: 'DELETE',
+      requiredPermissions: ['proposals:delete'],
+      riskLevel: RiskLevel.HIGH,
+    },
 
     // Proposal subroutes
-    { path: '/api/proposals/stats', method: 'GET', requiredPermissions: ['proposals:read'], riskLevel: RiskLevel.LOW },
-    { path: '/api/proposals/versions', method: 'GET', requiredPermissions: ['proposals:read'], riskLevel: RiskLevel.LOW },
+    {
+      path: '/api/proposals/stats',
+      method: 'GET',
+      requiredPermissions: ['proposals:read'],
+      riskLevel: RiskLevel.LOW,
+    },
+    {
+      path: '/api/proposals/versions',
+      method: 'GET',
+      requiredPermissions: ['proposals:read'],
+      riskLevel: RiskLevel.LOW,
+    },
 
     // Dashboard routes
-    { path: '/api/dashboard/stats', method: 'GET', requiredPermissions: ['proposals:read'], riskLevel: RiskLevel.LOW },
-    { path: '/api/dashboard/enhanced-stats', method: 'GET', requiredPermissions: ['proposals:read'], riskLevel: RiskLevel.LOW },
+    {
+      path: '/api/dashboard/stats',
+      method: 'GET',
+      requiredPermissions: ['proposals:read'],
+      riskLevel: RiskLevel.LOW,
+    },
+    {
+      path: '/api/dashboard/enhanced-stats',
+      method: 'GET',
+      requiredPermissions: ['proposals:read'],
+      riskLevel: RiskLevel.LOW,
+    },
 
-    { path: '/api/customers', method: 'GET', requiredPermissions: ['customers:read'], riskLevel: RiskLevel.LOW },
-    { path: '/api/customers', method: 'POST', requiredPermissions: ['customers:create'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/customers', method: 'PUT', requiredPermissions: ['customers:update'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/customers', method: 'DELETE', requiredPermissions: ['customers:delete'], riskLevel: RiskLevel.HIGH },
+    {
+      path: '/api/customers',
+      method: 'GET',
+      requiredPermissions: ['customers:read'],
+      riskLevel: RiskLevel.LOW,
+    },
+    {
+      path: '/api/customers',
+      method: 'POST',
+      requiredPermissions: ['customers:create'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/customers',
+      method: 'PUT',
+      requiredPermissions: ['customers:update'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/customers',
+      method: 'DELETE',
+      requiredPermissions: ['customers:delete'],
+      riskLevel: RiskLevel.HIGH,
+    },
 
     // Workflow routes
-    { path: '/api/workflows', method: 'GET', requiredPermissions: ['workflows:read'], riskLevel: RiskLevel.LOW },
-    { path: '/api/workflows', method: 'POST', requiredPermissions: ['workflows:create'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/workflows', method: 'PUT', requiredPermissions: ['workflows:update'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/workflows', method: 'DELETE', requiredPermissions: ['workflows:delete'], riskLevel: RiskLevel.HIGH },
+    {
+      path: '/api/workflows',
+      method: 'GET',
+      requiredPermissions: ['workflows:read'],
+      riskLevel: RiskLevel.LOW,
+    },
+    {
+      path: '/api/workflows',
+      method: 'POST',
+      requiredPermissions: ['workflows:create'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/workflows',
+      method: 'PUT',
+      requiredPermissions: ['workflows:update'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/workflows',
+      method: 'DELETE',
+      requiredPermissions: ['workflows:delete'],
+      riskLevel: RiskLevel.HIGH,
+    },
 
     // Content routes
-    { path: '/api/content', method: 'GET', requiredPermissions: ['content:read'], riskLevel: RiskLevel.LOW },
-    { path: '/api/content', method: 'POST', requiredPermissions: ['content:create'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/content', method: 'PUT', requiredPermissions: ['content:update'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/content', method: 'DELETE', requiredPermissions: ['content:delete'], riskLevel: RiskLevel.MEDIUM },
+    {
+      path: '/api/content',
+      method: 'GET',
+      requiredPermissions: ['content:read'],
+      riskLevel: RiskLevel.LOW,
+    },
+    {
+      path: '/api/content',
+      method: 'POST',
+      requiredPermissions: ['content:create'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/content',
+      method: 'PUT',
+      requiredPermissions: ['content:update'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/content',
+      method: 'DELETE',
+      requiredPermissions: ['content:delete'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
 
     // Products routes
-    { path: '/api/products', method: 'GET', requiredPermissions: ['products:read'], riskLevel: RiskLevel.LOW },
-    { path: '/api/products', method: 'POST', requiredPermissions: ['products:create'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/products', method: 'PUT', requiredPermissions: ['products:update'], riskLevel: RiskLevel.MEDIUM },
-    { path: '/api/products', method: 'DELETE', requiredPermissions: ['products:delete'], riskLevel: RiskLevel.MEDIUM },
+    {
+      path: '/api/products',
+      method: 'GET',
+      requiredPermissions: ['products:read'],
+      riskLevel: RiskLevel.LOW,
+    },
+    {
+      path: '/api/products',
+      method: 'POST',
+      requiredPermissions: ['products:create'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/products',
+      method: 'PUT',
+      requiredPermissions: ['products:update'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
+    {
+      path: '/api/products',
+      method: 'DELETE',
+      requiredPermissions: ['products:delete'],
+      riskLevel: RiskLevel.MEDIUM,
+    },
 
     // Profile routes
-    { path: '/api/profile', method: 'GET', requiredPermissions: ['profile:read'], riskLevel: RiskLevel.LOW },
-    { path: '/api/profile', method: 'PUT', requiredPermissions: ['profile:write'], riskLevel: RiskLevel.LOW },
+    {
+      path: '/api/profile',
+      method: 'GET',
+      requiredPermissions: ['profile:read'],
+      riskLevel: RiskLevel.LOW,
+    },
+    {
+      path: '/api/profile',
+      method: 'PUT',
+      requiredPermissions: ['profile:write'],
+      riskLevel: RiskLevel.LOW,
+    },
 
     // Public routes
     { path: '/api/health', allowPublic: true, riskLevel: RiskLevel.LOW },
@@ -129,7 +331,9 @@ export class RBACIntegrationManager {
       // Get JWT token
       const token = await getToken({
         req: request,
-        secret: process.env.NEXTAUTH_SECRET
+        secret:
+          process.env.NEXTAUTH_SECRET ||
+          'posalpro-mvp2-secret-key-for-jwt-signing-32-chars-minimum',
       });
 
       // Check if route requires authentication
@@ -145,7 +349,7 @@ export class RBACIntegrationManager {
         logger.info('[RBAC] No token found for protected route', {
           pathname,
           method,
-          hasAuthHeader: !!request.headers.get('authorization')
+          hasAuthHeader: !!request.headers.get('authorization'),
         });
 
         await securityAuditManager.logSecurityEvent({
@@ -167,7 +371,7 @@ export class RBACIntegrationManager {
         userId: token.sub || '',
         roles: (token.roles as string[]) || [],
         permissions: (token.permissions as string[]) || [],
-        sessionId: token.sessionId as string || '',
+        sessionId: (token.sessionId as string) || '',
         ipAddress,
         userAgent,
         isSuperAdmin: this.isSuperAdmin(token.roles as string[]),
@@ -184,13 +388,11 @@ export class RBACIntegrationManager {
         roles: rbacContext.roles,
         userId: rbacContext.userId,
         pathname,
-        willSkipValidation: isDev && isSystemAdmin
+        willSkipValidation: isDev && isSystemAdmin,
       });
 
       if (!(isDev && isSystemAdmin)) {
-        const sessionValid = await secureSessionManager.validateSession(
-          rbacContext.sessionId
-        );
+        const sessionValid = await secureSessionManager.validateSession(rbacContext.sessionId);
 
         if (!sessionValid) {
           await securityAuditManager.logSecurityEvent({
@@ -226,7 +428,10 @@ export class RBACIntegrationManager {
         }
 
         // Log successful access for high-risk routes
-        if (routeConfig.riskLevel === RiskLevel.HIGH || routeConfig.riskLevel === RiskLevel.CRITICAL) {
+        if (
+          routeConfig.riskLevel === RiskLevel.HIGH ||
+          routeConfig.riskLevel === RiskLevel.CRITICAL
+        ) {
           await securityAuditManager.logDataAccess(
             rbacContext.userId,
             pathname,
@@ -249,7 +454,6 @@ export class RBACIntegrationManager {
       });
 
       return null; // Allow access
-
     } catch (error) {
       logger.error('[RBAC] Authentication error', { pathname, method, error });
 
@@ -281,7 +485,12 @@ export class RBACIntegrationManager {
     }
   ): Promise<{ authorized: boolean; context?: RBACContext; error?: string }> {
     try {
-      const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+      const token = await getToken({
+        req: request,
+        secret:
+          process.env.NEXTAUTH_SECRET ||
+          'posalpro-mvp2-secret-key-for-jwt-signing-32-chars-minimum',
+      });
 
       if (!token) {
         return { authorized: false, error: 'No authentication token' };
@@ -291,7 +500,7 @@ export class RBACIntegrationManager {
         userId: token.sub || '',
         roles: (token.roles as string[]) || [],
         permissions: (token.permissions as string[]) || [],
-        sessionId: token.sessionId as string || '',
+        sessionId: (token.sessionId as string) || '',
         ipAddress: this.getClientIP(request),
         userAgent: request.headers.get('user-agent') || 'unknown',
         isSuperAdmin: this.isSuperAdmin(token.roles as string[]),
@@ -325,7 +534,6 @@ export class RBACIntegrationManager {
       }
 
       return { authorized: true, context: rbacContext };
-
     } catch (error) {
       logger.error('[RBAC] API authorization error', { error });
       return { authorized: false, error: 'Authorization system error' };
@@ -335,7 +543,10 @@ export class RBACIntegrationManager {
   /**
    * Check if user has access to route
    */
-  private async checkRouteAccess(context: RBACContext, config: RoutePermissionConfig): Promise<boolean> {
+  private async checkRouteAccess(
+    context: RBACContext,
+    config: RoutePermissionConfig
+  ): Promise<boolean> {
     // Super admin override
     if (context.isSuperAdmin) {
       return true;

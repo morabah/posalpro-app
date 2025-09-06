@@ -15,6 +15,42 @@ import { logError, logInfo } from '@/lib/logger';
 
 // Import consolidated schemas from feature folder
 import { CustomerSchema, CustomerUpdateSchema } from '@/features/customers/schemas';
+import { Decimal } from '@prisma/client/runtime/library';
+
+// Define proper types for complex Prisma query results
+type CustomerProposal = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string | null;
+  value: Decimal | null;
+  currency: string | null;
+  dueDate: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  creator: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    department: string | null;
+  };
+  _count: {
+    products: number;
+    sections: number;
+  };
+};
+
+type CustomerContact = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+  department: string | null;
+  isPrimary: boolean;
+  createdAt: Date;
+};
 
 // ====================
 // GET Route - Get Customer by ID
@@ -105,27 +141,34 @@ export const GET = createRoute(
       const now = new Date();
       const proposalStatistics = {
         totalProposals: customer._count.proposals,
-        totalValue: customer.proposals.reduce((sum, p) => sum + Number(p.value || 0), 0),
+        totalValue: customer.proposals.reduce(
+          (sum: number, p: CustomerProposal) => sum + Number(p.value || 0),
+          0
+        ),
         averageValue:
           customer.proposals.length > 0
-            ? customer.proposals.reduce((sum, p) => sum + Number(p.value || 0), 0) /
-              customer.proposals.length
+            ? customer.proposals.reduce(
+                (sum: number, p: CustomerProposal) => sum + Number(p.value || 0),
+                0
+              ) / customer.proposals.length
             : 0,
         statusBreakdown: customer.proposals.reduce(
-          (acc, p) => {
+          (acc: Record<string, number>, p: CustomerProposal) => {
             acc[p.status] = (acc[p.status] || 0) + 1;
             return acc;
           },
           {} as Record<string, number>
         ),
         priorityBreakdown: customer.proposals.reduce(
-          (acc, p) => {
-            acc[p.priority] = (acc[p.priority] || 0) + 1;
+          (acc: Record<string, number>, p: CustomerProposal) => {
+            if (p.priority) {
+              acc[p.priority] = (acc[p.priority] || 0) + 1;
+            }
             return acc;
           },
           {} as Record<string, number>
         ),
-        recentActivity: customer.proposals.slice(0, 5).map(p => ({
+        recentActivity: customer.proposals.slice(0, 5).map((p: CustomerProposal) => ({
           proposalId: p.id,
           title: p.title,
           status: p.status,
@@ -145,7 +188,10 @@ export const GET = createRoute(
           contactsCount: customer._count.contacts,
           ...proposalStatistics,
         },
-        primaryContact: customer.contacts.find(c => c.isPrimary) || customer.contacts[0] || null,
+        primaryContact:
+          customer.contacts.find((c: CustomerContact) => c.isPrimary) ||
+          customer.contacts[0] ||
+          null,
         allContacts: customer.contacts,
         // Remove _count as it's now in statistics
         _count: undefined,

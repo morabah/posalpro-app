@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
     process.env.NETLIFY_BUILD_TIME === 'true' ||
     process.env.BUILD_MODE === 'static' ||
     !process.env.DATABASE_URL ||
-    process.env.NODE_ENV === 'production' && !process.env.NETLIFY;
+    (process.env.NODE_ENV === 'production' && !process.env.NETLIFY);
 
   // Always return early if no database URL (covers most build scenarios)
   if (!process.env.DATABASE_URL) {
@@ -93,9 +93,9 @@ export async function GET(request: NextRequest) {
       data: {
         userMetrics: [],
         sessionData: [],
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       },
-      message: 'Analytics data not available during build process'
+      message: 'Analytics data not available during build process',
     });
   }
 
@@ -141,98 +141,206 @@ export async function GET(request: NextRequest) {
       dateFilters.lte = new Date(validatedQuery.dateTo);
     }
 
-    // Get user analytics data
-    const userFilter = validatedQuery.userId ? { id: validatedQuery.userId } : {};
+    // Consolidated, optimized queries using JOINs and aggregations
+    type UserAggRow = {
+      id: string;
+      name: string;
+      email: string;
+      department: string;
+      lastLogin: Date | null;
+      createdAt: Date;
+      roles: string[];
+      eventCount: number;
+      lastActivity: Date | null;
+      avgPerformanceImprovement: number;
+    };
 
-    const [users, events, metrics] = await Promise.all([
-      // Get users with basic info
-      prisma.user.findMany({
-        where: userFilter,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          department: true,
-          lastLogin: true,
-          createdAt: true,
-          roles: {
-            select: {
-              role: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-        },
-        take: validatedQuery.limit,
-        orderBy: { lastLogin: 'desc' },
-      }),
+    const eventWhereParts: Prisma.Sql[] = [];
+    if (validatedQuery.userId)
+      eventWhereParts.push(Prisma.sql`e."userId" = ${validatedQuery.userId}`);
+    if (dateFilters.gte) eventWhereParts.push(Prisma.sql`e."timestamp" >= ${dateFilters.gte}`);
+    if (dateFilters.lte) eventWhereParts.push(Prisma.sql`e."timestamp" <= ${dateFilters.lte}`);
+    const eventWhere =
+      eventWhereParts.length > 0
+        ? Prisma.sql`WHERE ${Prisma.join(eventWhereParts, ' AND ')}`
+        : Prisma.empty;
 
-      // Get user events if requested
-      validatedQuery.includeEvents
-        ? prisma.hypothesisValidationEvent.findMany({
-            where: {
-              ...(validatedQuery.userId && { userId: validatedQuery.userId }),
-              ...(Object.keys(dateFilters).length > 0 && { timestamp: dateFilters }),
-            },
-            select: {
-              id: true,
-              userId: true,
-              hypothesis: true,
-              userStoryId: true,
-              componentId: true,
-              action: true,
-              actualValue: true,
-              targetValue: true,
-              performanceImprovement: true,
-              timestamp: true,
-            },
-            orderBy: { timestamp: 'desc' },
-            take: 100,
-          })
-        : [],
+    const userWhere = validatedQuery.userId
+      ? Prisma.sql`WHERE u."id" = ${validatedQuery.userId}`
+      : Prisma.empty;
 
-      // Get user story metrics if requested
-      validatedQuery.includeMetrics
-        ? prisma.userStoryMetrics.findMany({
-            where: {
-              ...(Object.keys(dateFilters).length > 0 && { createdAt: dateFilters }),
-            },
-            select: {
-              id: true,
-              userStoryId: true,
-              hypothesis: true,
-              acceptanceCriteria: true,
-              performanceTargets: true,
-              actualPerformance: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 50,
-          })
-        : [],
-    ]);
+    const usersWithAgg = await prisma.$queryRaw<UserAggRow[]>`
+      WITH role_agg AS (
+        SELECT ur."userId" AS user_id, array_agg(DISTINCT r."name") AS roles
+        FROM "user_roles" ur
+        JOIN "roles" r ON r."id" = ur."roleId"
+        WHERE ur."isActive" = true
+        GROUP BY ur."userId"
+      ),
+      event_agg AS (
+        SELECT e."userId" AS user_id,
+               COUNT(*) AS event_count,
+               MAX(e."timestamp") AS last_activity,
+               AVG(e."performanceImprovement") AS avg_improvement
+        FROM "hypothesis_validation_events" e
+        ${eventWhere}
+        GROUP BY e."userId"
+      )
+      SELECT u."id" AS id,
+             u."name" AS name,
+             u."email" AS email,
+             u."department" AS department,
+             u."lastLogin" AS "lastLogin",
+             u."createdAt" AS "createdAt",
+             COALESCE(ra.roles, ARRAY[]::text[]) AS roles,
+             COALESCE(ea.event_count, 0)::int AS "eventCount",
+             COALESCE(ea.last_activity, u."lastLogin") AS "lastActivity",
+             COALESCE(ea.avg_improvement, 0) AS "avgPerformanceImprovement"
+      FROM "users" u
+      LEFT JOIN role_agg ra ON ra.user_id = u."id"
+      LEFT JOIN event_agg ea ON ea.user_id = u."id"
+      ${userWhere}
+      ORDER BY u."lastLogin" DESC NULLS LAST
+      LIMIT ${validatedQuery.limit}
+    `;
 
-    // Calculate analytics summary
+    // Compact summary in a single round trip
+    type SummaryRow = {
+      totalUsers: number;
+      activeUsers: number;
+      totalEvents: number;
+      totalMetrics: number;
+      avgPerformanceImprovement: number;
+    };
+
+    const dateNowMinus7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const userWhereForSummary = validatedQuery.userId
+      ? Prisma.sql`WHERE u."id" = ${validatedQuery.userId}`
+      : Prisma.empty;
+    const eventsWhereForSummary = eventWhere; // reuse same filter
+
+    const activeWhereParts: Prisma.Sql[] = [];
+    if (validatedQuery.userId) activeWhereParts.push(Prisma.sql`u."id" = ${validatedQuery.userId}`);
+    activeWhereParts.push(Prisma.sql`u."lastLogin" IS NOT NULL`);
+    activeWhereParts.push(Prisma.sql`u."lastLogin" > ${dateNowMinus7}`);
+    const activeUsersWhere = Prisma.sql`${activeWhereParts.length ? Prisma.sql`WHERE ${Prisma.join(activeWhereParts, ' AND ')}` : Prisma.empty}`;
+
+    const [summaryRow] = await prisma.$queryRaw<SummaryRow[]>`
+      SELECT
+        (SELECT COUNT(*) FROM "users" u ${userWhereForSummary})::int AS "totalUsers",
+        (SELECT COUNT(*) FROM "users" u ${activeUsersWhere})::int AS "activeUsers",
+        ${
+          validatedQuery.includeEvents
+            ? Prisma.sql`(SELECT COUNT(*) FROM "hypothesis_validation_events" e ${eventsWhereForSummary})::int`
+            : Prisma.sql`0`
+        } AS "totalEvents",
+        (SELECT COUNT(*) FROM "user_story_metrics" m
+          ${
+            dateFilters.gte || dateFilters.lte
+              ? Prisma.sql`WHERE ${Prisma.join(
+                  [
+                    ...(dateFilters.gte ? [Prisma.sql`m."createdAt" >= ${dateFilters.gte}`] : []),
+                    ...(dateFilters.lte ? [Prisma.sql`m."createdAt" <= ${dateFilters.lte}`] : []),
+                  ],
+                  ' AND '
+                )}`
+              : Prisma.empty
+          })::int AS "totalMetrics",
+        ${
+          validatedQuery.includeEvents
+            ? Prisma.sql`COALESCE((SELECT AVG(e."performanceImprovement") FROM "hypothesis_validation_events" e ${eventsWhereForSummary}), 0)`
+            : Prisma.sql`0`
+        } AS "avgPerformanceImprovement"
+    `;
+
+    // Optional detailed lists
+    type EventRow = {
+      id: string;
+      userId: string;
+      hypothesis: string;
+      userStoryId: string;
+      componentId: string;
+      action: string;
+      actualValue: number | null;
+      targetValue: number | null;
+      performanceImprovement: number | null;
+      timestamp: Date;
+    };
+
+    const events: EventRow[] = validatedQuery.includeEvents
+      ? await prisma.$queryRaw<EventRow[]>`
+          SELECT e."id", e."userId", e."hypothesis"::text AS "hypothesis", e."userStoryId", e."componentId",
+                 e."action", e."actualValue", e."targetValue", e."performanceImprovement", e."timestamp"
+          FROM "hypothesis_validation_events" e
+          ${eventsWhereForSummary}
+          ORDER BY e."timestamp" DESC
+          LIMIT 100
+        `
+      : [];
+
+    type MetricRow = {
+      id: string;
+      userStoryId: string;
+      hypothesis: string[];
+      acceptanceCriteria: string[];
+      performanceTargets: any;
+      actualPerformance: any;
+      createdAt: Date;
+    };
+
+    const metrics: MetricRow[] = validatedQuery.includeMetrics
+      ? await prisma.$queryRaw<MetricRow[]>`
+          SELECT m."id", m."userStoryId", m."hypothesis", m."acceptanceCriteria",
+                 m."performanceTargets", m."actualPerformance", m."createdAt"
+          FROM "user_story_metrics" m
+          ${
+            dateFilters.gte || dateFilters.lte
+              ? Prisma.sql`WHERE ${Prisma.join(
+                  [
+                    ...(dateFilters.gte ? [Prisma.sql`m."createdAt" >= ${dateFilters.gte}`] : []),
+                    ...(dateFilters.lte ? [Prisma.sql`m."createdAt" <= ${dateFilters.lte}`] : []),
+                  ],
+                  ' AND '
+                )}`
+              : Prisma.empty
+          }
+          ORDER BY m."createdAt" DESC
+          LIMIT 50
+        `
+      : [];
+
+    // Build response using already-aggregated data
     const analytics = {
       summary: {
-        totalUsers: users.length,
-        activeUsers: users.filter(
-          u => u.lastLogin && new Date(u.lastLogin) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-        ).length,
-        totalEvents: events.length,
-        totalMetrics: metrics.length,
-        avgPerformanceImprovement:
-          events.length > 0
-            ? events.reduce((sum, e) => sum + (e.performanceImprovement || 0), 0) / events.length
-            : 0,
+        totalUsers: Number(summaryRow?.totalUsers ?? usersWithAgg.length),
+        activeUsers: Number(
+          summaryRow?.activeUsers ??
+            usersWithAgg.filter((u: any) => u.lastLogin && new Date(u.lastLogin) > dateNowMinus7)
+              .length
+        ),
+        totalEvents: Number(
+          summaryRow?.totalEvents ?? (validatedQuery.includeEvents ? events.length : 0)
+        ),
+        totalMetrics: Number(
+          summaryRow?.totalMetrics ?? (validatedQuery.includeMetrics ? metrics.length : 0)
+        ),
+        avgPerformanceImprovement: Number(
+          summaryRow?.avgPerformanceImprovement ??
+            (validatedQuery.includeEvents && events.length > 0
+              ? events.reduce((sum, e) => sum + (e.performanceImprovement || 0), 0) / events.length
+              : 0)
+        ),
       },
-      users: users.map(user => ({
-        ...user,
-        roles: user.roles.map((r: { role: { name: string } }) => r.role.name),
-        eventCount: events.filter(e => e.userId === user.id).length,
-        lastActivity: events.find(e => e.userId === user.id)?.timestamp || user.lastLogin,
+      users: usersWithAgg.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        department: u.department,
+        lastLogin: u.lastLogin,
+        createdAt: u.createdAt,
+        roles: u.roles,
+        eventCount: u.eventCount,
+        lastActivity: u.lastActivity,
       })),
       events: validatedQuery.includeEvents ? events : [],
       metrics: validatedQuery.includeMetrics ? metrics : [],
@@ -248,7 +356,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: analytics,
-      message: `Retrieved analytics for ${users.length} users`,
+      message: `Retrieved analytics for ${usersWithAgg.length} users`,
     });
   } catch (error) {
     const responseTime = Date.now() - startTime;

@@ -7,7 +7,14 @@
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
@@ -73,8 +80,8 @@ export async function GET(request: NextRequest) {
       }
     >();
 
-    products.forEach(product => {
-      product.tags.forEach(tag => {
+    products.forEach((product: any) => {
+      product.tags.forEach((tag: any) => {
         if (!tagMap.has(tag)) {
           tagMap.set(tag, {
             name: tag,
@@ -99,8 +106,8 @@ export async function GET(request: NextRequest) {
 
     // Calculate average prices
     tagMap.forEach((tagData, tagName) => {
-      const tagProducts = products.filter(p => p.tags.includes(tagName));
-      const totalPrice = tagProducts.reduce((sum, p) => sum + Number(p.price), 0);
+      const tagProducts = products.filter((p: any) => p.tags.includes(tagName));
+      const totalPrice = tagProducts.reduce((sum: number, p: any) => sum + Number(p.price), 0);
       tagData.avgPrice = tagProducts.length > 0 ? totalPrice / tagProducts.length : 0;
     });
 

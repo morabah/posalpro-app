@@ -10,6 +10,8 @@
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
+import type { Prisma } from '@prisma/client';
+import { getCache, setCache } from '@/lib/redis';
 import { assertIdempotent } from '@/server/api/idempotency';
 
 // Import consolidated schemas from feature folder
@@ -19,6 +21,43 @@ import {
   ProposalQuerySchema,
   ProposalSchema,
 } from '@/features/proposals';
+import { Decimal } from '@prisma/client/runtime/library';
+
+// Define proper types for Prisma proposal query results
+type ProposalQueryResult = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  customerId: string;
+  createdBy: string;
+  dueDate: Date | null;
+  submittedAt: Date | null;
+  approvedAt: Date | null;
+  validUntil: Date | null;
+  priority: string | null;
+  value: Decimal | null;
+  currency: string | null;
+  status: string;
+  tags: string[];
+  userStoryTracking: any; // JsonValue from Prisma
+  createdAt: Date;
+  updatedAt: Date;
+  customer: {
+    id: string;
+    name: string;
+    email: string | null;
+    industry: string | null;
+  } | null;
+  creator: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  };
+};
+
+// Redis cache configuration for proposals
+const PROPOSALS_CACHE_PREFIX = 'proposals';
+const PROPOSALS_CACHE_TTL = 180; // 3 minutes
 
 // GET /api/proposals - Retrieve proposals with filtering and cursor pagination
 export const GET = createRoute(
@@ -34,6 +73,38 @@ export const GET = createRoute(
         userId: user.id,
         params: query,
       });
+
+      // Create cache key based on query parameters (excluding cursor for pagination)
+      const cacheKeyParams = {
+        search: query!.search,
+        status: query!.status,
+        priority: query!.priority,
+        customerId: query!.customerId,
+        assignedTo: query!.assignedTo,
+        dueBefore: query!.dueBefore,
+        dueAfter: query!.dueAfter,
+        openOnly: query!.openOnly,
+        sortBy: query!.sortBy,
+        sortOrder: query!.sortOrder,
+        limit: query!.limit,
+      };
+      const cacheKey = `${PROPOSALS_CACHE_PREFIX}:${JSON.stringify(cacheKeyParams)}`;
+
+      // Check Redis cache first (only for non-cursor requests)
+      if (!query!.cursor) {
+        const cachedData = await getCache(cacheKey);
+        if (cachedData) {
+          logInfo('Proposals served from cache', {
+            component: 'ProposalAPI',
+            operation: 'CACHE_HIT',
+            userId: user.id,
+          });
+          return new Response(JSON.stringify({ ok: true, data: cachedData }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+      }
 
       // Build where clause
       const where: Record<string, unknown> = {};
@@ -137,7 +208,7 @@ export const GET = createRoute(
       const items = hasNextPage ? rows.slice(0, query!.limit) : rows;
 
       // Transform null values to appropriate defaults before validation
-      const transformedItems = items.map(item => ({
+      const transformedItems = items.map((item: ProposalQueryResult) => ({
         ...item,
         value: item.value ? Number(item.value) : undefined,
         description: item.description || '',
@@ -173,6 +244,11 @@ export const GET = createRoute(
 
       // Create the response data
       const responsePayload = { ok: true, data: validatedResponse };
+
+      // Cache the response for future requests (only for non-cursor requests)
+      if (!query!.cursor) {
+        await setCache(cacheKey, validatedResponse, PROPOSALS_CACHE_TTL);
+      }
 
       return new Response(JSON.stringify(responsePayload), {
         status: 200,
@@ -226,7 +302,7 @@ export const POST = createRoute(
         body!.productData.products.length > 0 ? totalValue : body!.basicInfo.value || 0;
 
       // Create proposal with transaction support for complex operations
-      const proposal = await prisma.$transaction(async tx => {
+      const proposal = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // Create the main proposal
         const proposal = await tx.proposal.create({
           data: {

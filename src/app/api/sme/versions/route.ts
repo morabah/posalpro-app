@@ -6,7 +6,14 @@
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
@@ -46,7 +53,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const versions = sections.map((s, idx) => ({
+    const versions = sections.map((s: any, idx: number) => ({
       id: s.id,
       assignmentId: s.proposalId,
       version: idx + 1,

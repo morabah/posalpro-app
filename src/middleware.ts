@@ -4,6 +4,7 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
 import { createSecurityMiddleware, SecurityHeaders } from '@/lib/security/hardening';
 import { getToken } from 'next-auth/jwt';
+import { getAuthSecret } from '@/lib/auth/secret';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Compose security + RBAC + request id
@@ -72,15 +73,15 @@ function applyCors(req: NextRequest, res: NextResponse): NextResponse {
   if (!path.startsWith('/api/')) return res; // limit CORS headers to API routes
 
   const allowedOrigin = getAllowedOrigin(req);
-  res.headers.set('Vary', ['Origin', 'Access-Control-Request-Method', 'Access-Control-Request-Headers'].join(', '));
+  res.headers.set(
+    'Vary',
+    ['Origin', 'Access-Control-Request-Method', 'Access-Control-Request-Headers'].join(', ')
+  );
   if (allowedOrigin) {
     res.headers.set('Access-Control-Allow-Origin', allowedOrigin);
     res.headers.set('Access-Control-Allow-Credentials', 'true');
   }
-  res.headers.set(
-    'Access-Control-Allow-Methods',
-    'GET, POST, PUT, DELETE, PATCH, OPTIONS'
-  );
+  res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.headers.set(
     'Access-Control-Allow-Headers',
     'Content-Type, Authorization, X-Requested-With, X-Request-ID'
@@ -143,7 +144,7 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
 
     // Step 2: Full validation only if cheap check passes
     try {
-      const token = await getToken({ req });
+      const token = await getToken({ req, secret: getAuthSecret() });
 
       if (!token) {
         return NextResponse.json('Invalid authentication token', { status: 401 });

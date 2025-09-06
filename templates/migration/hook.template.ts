@@ -8,10 +8,10 @@
 // ✅ ALIGNS: Analytics tracking with user story and hypothesis validation
 // ✅ IMPLEMENTS: Performance monitoring and structured logging
 
-import { useHttpClient } from '@/hooks/useHttpClient';
+import { http } from '@/lib/http';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logError, logInfo } from '@/lib/logger';
-import { __RESOURCE__Service, type Update__ENTITY__Data } from '@/services/__RESOURCE__Service';
+// import { __ENTITY__Service, type Update__ENTITY__Data } from '@/services/__RESOURCE__Service';
 import {
   useInfiniteQuery,
   useMutation,
@@ -42,8 +42,6 @@ export function useInfinite__ENTITY__s({
   // category,
   // status,
 } = {}) {
-  const { get } = useHttpClient();
-
   return useInfiniteQuery({
     queryKey: qk.__RESOURCE__.list(search, limit, sortBy as any, sortOrder as any),
     queryFn: async ({ pageParam }) => {
@@ -59,6 +57,7 @@ export function useInfinite__ENTITY__s({
         hypothesis: '__HYPOTHESIS__',
       });
 
+      const startTime = Date.now();
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (limit) params.append('limit', limit.toString());
@@ -66,11 +65,11 @@ export function useInfinite__ENTITY__s({
       if (sortOrder) params.append('sortOrder', sortOrder);
       if (pageParam) params.append('cursor', pageParam);
 
-      const response = await get<{ items: any[]; nextCursor: string | null }>(
+      const response = await http<{ items: any[]; nextCursor: string | null }>(
         `/api/__RESOURCE__?${params.toString()}`
       );
 
-      const loadTime = Date.now() - start;
+      const loadTime = Date.now() - startTime;
 
       logInfo('__RESOURCE__ fetched successfully', {
         component: 'useInfinite__ENTITY__s',
@@ -97,8 +96,6 @@ export function useInfinite__ENTITY__s({
  * Hook to fetch single entity by ID
  */
 export function use__ENTITY__(id: string) {
-  const { get } = useHttpClient();
-
   return useQuery({
     queryKey: qk.__RESOURCE__.byId(id),
     queryFn: async () => {
@@ -110,8 +107,7 @@ export function use__ENTITY__(id: string) {
         hypothesis: '__HYPOTHESIS__',
       });
 
-      const response = await get(`/api/__RESOURCE__/${id}`);
-      return response;
+      return http(`/api/__RESOURCE__/${id}`);
     },
     enabled: !!id,
     staleTime: 30000,
@@ -125,8 +121,6 @@ export function use__ENTITY__(id: string) {
  * Hook to fetch entity statistics
  */
 export function use__ENTITY__Stats() {
-  const { get } = useHttpClient();
-
   return useQuery({
     queryKey: qk.__RESOURCE__.stats(),
     queryFn: async () => {
@@ -137,8 +131,7 @@ export function use__ENTITY__Stats() {
         hypothesis: '__HYPOTHESIS__',
       });
 
-      const response = await get('/api/__RESOURCE__/stats');
-      return response;
+      return http('/api/__RESOURCE__/stats');
     },
     staleTime: 60000, // 1 minute
     gcTime: 300000, // 5 minutes
@@ -151,8 +144,6 @@ export function use__ENTITY__Stats() {
  * Hook to search entities
  */
 export function use__ENTITY__Search(query: string, limit: number = 10) {
-  const { get } = useHttpClient();
-
   return useQuery({
     queryKey: qk.__RESOURCE__.search(query, limit),
     queryFn: async () => {
@@ -165,10 +156,7 @@ export function use__ENTITY__Search(query: string, limit: number = 10) {
         hypothesis: '__HYPOTHESIS__',
       });
 
-      const response = await get(
-        `/api/__RESOURCE__/search?q=${encodeURIComponent(query)}&limit=${limit}`
-      );
-      return response;
+      return http(`/api/__RESOURCE__/search?q=${encodeURIComponent(query)}&limit=${limit}`);
     },
     enabled: !!query && query.length >= 2,
     staleTime: 30000,
@@ -187,7 +175,6 @@ export function use__ENTITY__Search(query: string, limit: number = 10) {
  */
 export function useCreate__ENTITY__() {
   const queryClient = useQueryClient();
-  const { post } = useHttpClient();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   return useMutation({
@@ -201,7 +188,10 @@ export function useCreate__ENTITY__() {
 
       try {
         const startTime = Date.now();
-        const response = await post(`/api/__RESOURCE__`, data);
+        const response = await http(`/api/__RESOURCE__`, {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
         const loadTime = Date.now() - startTime;
 
         logInfo('__RESOURCE__ created successfully', {
@@ -248,7 +238,6 @@ export function useCreate__ENTITY__() {
  */
 export function useUpdate__ENTITY__() {
   const queryClient = useQueryClient();
-  const { put } = useHttpClient();
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Update__ENTITY__Data }) => {
@@ -262,7 +251,10 @@ export function useUpdate__ENTITY__() {
 
       try {
         const startTime = Date.now();
-        const response = await put(`/api/__RESOURCE__/${id}`, data);
+        const response = await http(`/api/__RESOURCE__/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
         const loadTime = Date.now() - startTime;
 
         logInfo('__RESOURCE__ updated successfully', {
@@ -311,7 +303,6 @@ export function useUpdate__ENTITY__() {
  */
 export function useDelete__ENTITY__() {
   const queryClient = useQueryClient();
-  const { delete: del } = useHttpClient();
 
   return useMutation({
     mutationFn: async (id: string) => {
@@ -325,7 +316,7 @@ export function useDelete__ENTITY__() {
 
       try {
         const startTime = Date.now();
-        await del(`/api/__RESOURCE__/${id}`);
+        await http(`/api/__RESOURCE__/${id}`, { method: 'DELETE' });
         const loadTime = Date.now() - startTime;
 
         logInfo('__RESOURCE__ deleted successfully', {
@@ -442,8 +433,6 @@ export function useDelete__ENTITY__sBulk() {
  * Hook to get entity by ID with fallback to list search
  */
 export function use__ENTITY__ByIdOrSearch(id?: string, searchTerm?: string) {
-  const { get } = useHttpClient();
-
   return useQuery({
     queryKey: ['__RESOURCE__', 'byIdOrSearch', id, searchTerm],
     queryFn: async () => {
@@ -456,8 +445,7 @@ export function use__ENTITY__ByIdOrSearch(id?: string, searchTerm?: string) {
           hypothesis: '__HYPOTHESIS__',
         });
 
-        const response = await __RESOURCE__Service.get__ENTITY__(id);
-        return response;
+        return http(`/api/__RESOURCE__/${id}`);
       } else if (searchTerm) {
         logDebug('Searching __RESOURCE__', {
           component: 'use__ENTITY__ByIdOrSearch',
@@ -467,8 +455,7 @@ export function use__ENTITY__ByIdOrSearch(id?: string, searchTerm?: string) {
           hypothesis: '__HYPOTHESIS__',
         });
 
-        const response = await __RESOURCE__Service.search__ENTITY__s(searchTerm);
-        return response;
+        return http(`/api/__RESOURCE__/search?q=${encodeURIComponent(searchTerm)}`);
       }
       return null;
     },
@@ -482,8 +469,6 @@ export function use__ENTITY__ByIdOrSearch(id?: string, searchTerm?: string) {
  * Hook to get multiple entities by IDs using useQueries
  */
 export function use__ENTITY__sByIds(ids: string[]) {
-  const { get } = useHttpClient();
-
   const results = useQueries({
     queries: ids.map(id => ({
       queryKey: qk.__RESOURCE__.byId(id),
@@ -496,8 +481,7 @@ export function use__ENTITY__sByIds(ids: string[]) {
           hypothesis: '__HYPOTHESIS__',
         });
 
-        const response = await get(`/api/__RESOURCE__/${id}`);
-        return response;
+        return http(`/api/__RESOURCE__/${id}`);
       },
       enabled: !!id,
       staleTime: 30000,

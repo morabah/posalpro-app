@@ -1,18 +1,24 @@
-import { logger } from '@/lib/logger';/**
+import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Workflow Executions API Routes
  * Enhanced workflow execution management with authentication and analytics
  * Component Traceability: US-4.1, US-4.3, H7
  */
 
 import { authOptions } from '@/lib/auth';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import { ExecutionStatus, Prisma } from '@prisma/client';
 import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-
 
 /**
  * Component Traceability Matrix:
@@ -91,10 +97,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         skip,
         take: validatedQuery.limit,
       }),
-      prisma.approvalExecution.count({ where })
+      prisma.approvalExecution.count({ where }),
     ]);
 
-    const transformedExecutions = executions.map(execution => {
+    const transformedExecutions = executions.map((execution: any) => {
       const stageExecutions = Array.isArray(execution.stageExecution)
         ? execution.stageExecution
         : execution.stageExecution
@@ -110,7 +116,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             )
           : null;
 
-      const completedStages = stageExecutions?.filter(s => s.status === 'COMPLETED').length || 0;
+      const completedStages =
+        stageExecutions?.filter((s: any) => s.status === 'COMPLETED').length || 0;
       const totalStages = stageExecutions?.length || 0;
       const progress = totalStages > 0 ? (completedStages / totalStages) * 100 : 0;
 
@@ -121,7 +128,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
           progress,
           completedStages,
           totalStages,
-          currentStage: stageExecutions?.find(s => s.status === 'ACTIVE')?.stage?.name || null,
+          currentStage:
+            stageExecutions?.find((s: any) => s.status === 'ACTIVE')?.stage?.name || null,
         },
       };
     });
@@ -219,7 +227,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       );
     }
 
-    const newExecution = await prisma.$transaction(async tx => {
+    const newExecution = await prisma.$transaction(async (tx: any) => {
       const newExecution = await tx.approvalExecution.create({
         data: {
           workflowId: workflowId,

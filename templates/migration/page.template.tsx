@@ -8,6 +8,7 @@
 // ✅ ALIGNS: Analytics integration and performance monitoring
 // ✅ IMPLEMENTS: Modern Next.js App Router patterns with suspense boundaries
 
+import React from 'react';
 import { __ENTITY__List_new } from '@/components/__RESOURCE__s_new/__ENTITY__List_new';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logInfo } from '@/lib/logger';

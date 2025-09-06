@@ -9,7 +9,14 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { createApiErrorResponse, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -73,9 +80,9 @@ async function checkUserPermissions(userId: string, action: string, scope: strin
       },
     });
 
-    const hasPermission = userRoles.some(userRole =>
+    const hasPermission = userRoles.some((userRole: any) =>
       userRole.role.permissions.some(
-        rolePermission =>
+        (rolePermission: any) =>
           rolePermission.permission.resource === 'content' &&
           rolePermission.permission.action === action &&
           (rolePermission.permission.scope === 'ALL' || rolePermission.permission.scope === scope)
@@ -266,7 +273,7 @@ export async function GET(request: NextRequest) {
       ]);
 
       // Transform database content to match frontend interface (no mock fields)
-      const content = rawContent.map(item => ({
+      const content = rawContent.map((item: any) => ({
         id: item.id,
         title: item.title,
         type: transformContentType(item.type),

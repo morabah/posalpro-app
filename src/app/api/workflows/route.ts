@@ -9,7 +9,14 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { createApiErrorResponse, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { EntityType, Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
@@ -123,7 +130,7 @@ export async function GET(request: NextRequest) {
     const useCursor = Boolean(cursorId) || !url.searchParams.has('page');
 
     let total = 0;
-    let workflows: any[] = [];
+    let workflows: any[] = []; // Complex Prisma query result with nested includes
     if (useCursor) {
       const take = validatedQuery.limit + 1;
       const list = await prisma.approvalWorkflow.findMany({

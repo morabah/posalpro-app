@@ -1,5 +1,36 @@
 # CORE REQUIREMENTS (Non-Negotiable)
 
+## ✅ Future Compliance (Important)
+
+To keep the codebase aligned with these core requirements as it evolves, the
+following items are mandatory moving forward:
+
+- Auth/JWT secret consistency: All signing and verification must resolve the
+  secret via a single source of truth. Use `getAuthSecret()` everywhere
+  (NextAuth `secret`, JWT `secret`, and any `getToken` calls).
+  - References: `src/lib/auth/secret.ts`, `src/lib/auth.ts`,
+    `src/middleware.ts`, `src/app/api/auth/debug/route.ts`
+- Auth observability: When `AUTH_DEBUG` or `NEXTAUTH_DEBUG` is true, NextAuth
+  debug and structured logging must be enabled and routed through the project
+  logger for traceability.
+  - References: `src/lib/auth.ts`, `src/lib/logger.ts`
+- Session integrity: With a valid token in `Authorization` or session cookie,
+  `/api/auth/debug` must return a populated token and `/api/auth/session` must
+  return a populated session.
+  - References: `src/app/api/auth/debug/route.ts`,
+    `src/app/api/auth/[...nextauth]/route.ts`
+- Environment validation: Keep NEXTAuth-related vars validated and documented
+  (e.g., `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, optional `JWT_SECRET` for parity)
+  and avoid per-route divergences.
+  - References: `src/env.mjs`, `src/env.ts`, `.env.local`
+- Cookie security: Continue to use secure cookie settings in production
+  (`useSecureCookies`, `__Secure-` prefix, optional domain scoping) to prevent
+  cross-domain/session issues.
+  - References: `src/lib/auth.ts`
+
+These practices are now treated as non-negotiable and must be preserved in
+future changes and reviews.
+
 ## 🚨 **CRITICAL: THINK FEATURE-FIRST, DATABASE-FIRST**
 
 **🔍 MANDATORY: Complete Analysis Before Implementation**
@@ -391,7 +422,7 @@ export function addRequestIdToHeaders(
 }
 
 // ✅ CORRECT: Request ID integration with logging
-import { logInfo, logError } from '@/lib/log';
+import { logInfo, logError } from '@/lib/logger';
 
 logInfo('Operation successful', {
   component: 'ServiceName',
@@ -411,6 +442,26 @@ logInfo('Operation successful', {
 - [ ] Add request IDs to response headers for debugging
 
 **📍 Reference Implementation**: `src/lib/requestId.ts`
+
+### Authorization & RBAC
+
+**Standard Authorization (MANDATORY)**
+
+- Use `validateApiPermission(req, permission)` for API endpoints to enforce
+  permissions; prefer capability strings like `"users:read"`,
+  `"proposals:update"`.
+- For simple role gates, `withRole([roles], handler)` is acceptable; admins
+  (`System Administrator` or `Administrator`) bypass checks.
+- Never read roles/permissions directly from headers; always derive from the
+  NextAuth token.
+- Central modules: `src/lib/auth/apiAuthorization.ts`,
+  `src/lib/rbac/withRole.ts`.
+
+Acceptance
+
+- [ ] Protected routes call `validateApiPermission` or `withRole`
+- [ ] Admin bypass honored; 401/403 semantics consistent
+- [ ] No route-local ad hoc role checks
 
 ### **Platform Safeguards Checklist**
 
@@ -441,7 +492,7 @@ logInfo('Operation successful', {
 ```typescript
 // ✅ CORRECT: Always use ErrorHandlingService + Structured Logger
 import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
-import { logInfo, logError } from '@/lib/log'; // ✅ Automatic request ID inclusion
+import { logInfo, logError } from '@/lib/logger'; // ✅ Automatic request ID inclusion
 
 try {
   const result = await operation();
@@ -764,6 +815,18 @@ return useInfiniteQuery({
   }),
   getNextPageParam: (lastPage) => lastPage.nextCursor,
 });
+
+### Server Caching & Redis
+
+- Use `src/lib/redis.ts` helpers for server-side caching; do not implement ad hoc caches.
+- Redis is enabled in production via `USE_REDIS` and falls back to an in-memory cache in dev.
+- Record metrics via `metricsStore` (cache hits/misses, latency).
+- Never cache sensitive PII; choose short TTLs for auth/session data.
+
+Acceptance
+
+- [ ] Server routes/services use `getCache/setCache` where appropriate
+- [ ] No route-local in-memory Maps for shared caching concerns
 ```
 
 ## 🧩 **CODE USABILITY (NEW COMPONENTS)**
@@ -803,6 +866,69 @@ return useInfiniteQuery({
 
 > Rationale: Usability standards ensure new components are easy to adopt,
 > accessible, and performant, reducing future rework and onboarding cost.
+
+## 🔌 **API ROUTES STANDARD**
+
+**Route Wrapper (MANDATORY)**
+
+- Use `createRoute(config, handler)` from `src/lib/api/route.ts` for new API
+  endpoints.
+- Configure `requireAuth`, `roles`, `query` (Zod), `body` (Zod), and
+  `idempotency` options.
+- The wrapper adds request-id headers, deprecation/version headers, consistent
+  error handling, and idempotent replay.
+
+Example
+
+```ts
+import { z } from 'zod';
+import { createRoute } from '@/lib/api/route';
+import { single } from '@/lib/api/response';
+
+const Query = z.object({ id: z.string().uuid() });
+
+export const GET = createRoute(
+  { requireAuth: true, query: Query },
+  async ({ query }) => {
+    const item = await repo.getById(query.id);
+    return single(item);
+  }
+);
+```
+
+Idempotency
+
+- For POST/PUT/PATCH/DELETE, the wrapper auto-caches by `Idempotency-Key` when
+  present.
+- For custom flows use `src/server/api/idempotency.ts` helpers directly.
+
+Acceptance
+
+- [ ] New API routes use `createRoute`
+- [ ] Zod schemas validated in wrapper, not route body
+- [ ] Idempotency honored for mutating endpoints
+
+### API Response Envelope
+
+- API endpoints return `{ ok: true|false, data|code|message }` using helpers in
+  `src/lib/api/response.ts`.
+- Frontend services must unwrap and return domain data only; components never
+  see envelopes.
+- The centralized HTTP client `@/lib/http` detects envelopes and throws
+  `HttpClientError` on `{ ok: false }`.
+
+Acceptance
+
+- [ ] API returns `ok/data` or ProblemDetails on error
+- [ ] Frontend services unwrap and return plain domain objects
+
+### CORS & Middleware
+
+- CORS is enforced in `middleware.ts` using `CORS_ORIGINS` (comma list);
+  responses include `Vary` and limited headers.
+- Security headers and rate limiting are applied at the edge; `x-request-id` is
+  attached to every response.
+- PWA assets (`/sw.js`, `/icons/*`, `/manifest.json`) bypass heavy checks.
 
 ## 🎯 **TIPS & TRICKS** {#tips-tricks}
 
@@ -872,30 +998,32 @@ cleanup phases.
 
 1. **Platform Safeguards**: Environment validation, security headers, rate
    limiting, and request-ID propagation
-2. **Database Schema Alignment**: Always check database schema first
-3. **Type Safety**: 100% TypeScript compliance, no `any` types
-4. **Structured Logging**: Use centralized logging with request correlation
-5. **Route Boundaries**: Every route must have loading.tsx and error.tsx
-6. **Error Handling**: Comprehensive error boundaries and processing
-7. **Performance**: Monitor bundle size and runtime performance
-8. **Accessibility**: WCAG 2.1 AA compliance for all UI components
-9. **Security**: Input validation, authorization, secure defaults
-10. **API Security**: Protect sensitive endpoints with proper authentication
-11. **Data Integrity**: Prevent duplicates and ensure consistency
-12. **User Experience**: Loading states and error recovery mechanisms
-13. **Testing**: Real data testing with comprehensive coverage
-14. **Documentation**: Update docs after every implementation
-15. **Analytics**: Track user interactions and feature validation
-16. **Mobile Responsiveness**: Touch targets, responsive design
-17. **Background Processing**: Async operations with proper patterns
-18. **Data Management**: Consistent seed data and testing environments
-19. **Database Safety**: Defensive programming and null checks
-20. **Testing Infrastructure**: Comprehensive CLI and automated testing
+2. **Authorization**: Use `validateApiPermission`/`withRole` in API routes
+3. **Database Schema Alignment**: Always check database schema first
+4. **Type Safety**: 100% TypeScript compliance, no `any` types
+5. **Structured Logging**: Use centralized logging with request correlation
+6. **Route Boundaries**: Every route must have loading.tsx and error.tsx
+7. **Error Handling**: Comprehensive error boundaries and processing
+8. **Performance**: Monitor bundle size and runtime performance
+9. **Accessibility**: WCAG 2.1 AA compliance for all UI components
+10. **Security**: Input validation, authorization, secure defaults
+11. **API Security**: Protect sensitive endpoints with proper authentication
+12. **Data Integrity**: Prevent duplicates and ensure consistency
+13. **User Experience**: Loading states and error recovery mechanisms
+14. **Testing**: Real data testing with comprehensive coverage
+15. **Documentation**: Update docs after every implementation
+16. **Analytics**: Track user interactions and feature validation
+17. **Mobile Responsiveness**: Touch targets, responsive design
+18. **Background Processing**: Async operations with proper patterns
+19. **Data Management**: Consistent seed data and testing environments
+20. **Database Safety**: Defensive programming and null checks
+21. **Testing Infrastructure**: Comprehensive CLI and automated testing
 
 **Quality Gates**
 
 - [ ] Platform safeguards implemented (environment validation, security headers,
       rate limiting, request-ID propagation)
+- [ ] API routes use `createRoute` and permission checks
 - [ ] Route boundaries implemented (loading.tsx and error.tsx for all routes)
 - [ ] Type checking passes with no errors
 - [ ] No duplicate implementations or conflicts
@@ -914,8 +1042,8 @@ cleanup phases.
 
 - **PROJECT_REFERENCE.md**: Architecture overview and API documentation
 - **DEVELOPMENT_STANDARDS.md**: Code quality and implementation patterns
-- **Structured Logger**: Use `@/lib/log` for all logging with automatic request
-  ID correlation
+- **Structured Logger**: Use `@/lib/logger` for all logging with automatic
+  request ID correlation
 
 **Implementation References**
 
@@ -923,6 +1051,30 @@ cleanup phases.
 - Check shared hooks in `src/hooks/` before creating new ones
 - Follow established service patterns in `src/services/`
 - Use store patterns from `src/lib/store/` for state management
+
+## 🗄️ Environment & Database
+
+**Prisma Engine/URL Alignment (MANDATORY)**
+
+- Local dev uses PostgreSQL URLs (`postgresql://…`) and standard client engine.
+- Data Proxy/Accelerate requires `prisma://…` and
+  `PRISMA_CLIENT_ENGINE_TYPE=dataproxy` or `PRISMA_ACCELERATE_URL`.
+- The client validates mismatch early; see `src/lib/db/prisma.ts` diagnostics
+  and errors.
+
+Acceptance
+
+- [ ] `DATABASE_URL` protocol matches engine mode
+- [ ] No Data Proxy vars set for local PostgreSQL
+
+## 🏁 Feature Flags
+
+- Provide feature toggles via `FlagsProvider`
+  (`src/components/providers/FlagsProvider.tsx`).
+- Read flags with `useFeatureFlag(key)`; default values come from env-configured
+  `getFeatureFlags()`.
+- Gate new features and experiments behind flags; default safe-off in
+  production.
 
 ---
 
@@ -938,7 +1090,7 @@ document to every Cursor prompt when working on new features.
 3. **Database-First Design** (check Prisma schema)
 4. **Implement Route Boundaries** (loading.tsx and error.tsx for all routes)
 5. **Use modern patterns** (React Query + Zustand + Service Layer)
-6. **Use structured logging** (`@/lib/log`) with automatic request ID
+6. **Use structured logging** (`@/lib/logger`) with automatic request ID
    correlation
 7. **Reference existing feature modules for patterns**
 

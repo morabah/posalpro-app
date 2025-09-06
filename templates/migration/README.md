@@ -9,9 +9,9 @@ follow the standards outlined in `docs/CORE_REQUIREMENTS.md`.
 
 The updated templates implement a **comprehensive modern architecture** with:
 
-- ✅ **Class-based services** with ErrorHandlingService integration
+- ✅ **Function-based services** using centralized `@/lib/http`
 - ✅ **Centralized query keys** from feature-based schemas
-- ✅ **useHttpClient** hook instead of direct fetch calls
+- ✅ **createRoute** API wrapper for auth/validation/idempotency
 - ✅ **Structured logging** with user story/hypothesis tracking
 - ✅ **Analytics integration** with useOptimizedAnalytics
 - ✅ **Performance monitoring** with load time tracking
@@ -33,7 +33,7 @@ implementation patterns:
 
 #### **✅ Service Layer Compliance**
 
-- **Class-based services** with singleton pattern
+- **Function-based services** on `@/lib/http` (no singletons)
   (ProposalService.getInstance())
 - **ErrorHandlingService integration** with proper error codes and context
 - **Structured logging** with component, operation, userStory, hypothesis
@@ -46,7 +46,7 @@ implementation patterns:
 
 #### **✅ React Query Compliance**
 
-- **useHttpClient** hook for consistent HTTP calls
+- **http** client for consistent HTTP calls
 - **Centralized query keys** from feature directories
 - **Optimized caching** with proper `staleTime: 30000`, `gcTime: 120000`
 - **Infinite scroll** with cursor-based pagination
@@ -106,7 +106,7 @@ implementation patterns:
 
 ### **1. Service Layer Excellence**
 
-- **Class-based services** with singleton pattern
+- **Function-based services** on `@/lib/http`
 - **Comprehensive error handling** with ErrorHandlingService
 - **Structured logging** with component, operation, and user story tracking
 - **ApiResponse wrapper** for consistent response format
@@ -115,7 +115,7 @@ implementation patterns:
 
 ### **2. React Query Integration**
 
-- **useHttpClient** hook for consistent HTTP calls
+- **http** client for consistent HTTP calls
 - **Centralized query keys** from `src/features/*/keys.ts`
 - **Optimized caching** with proper staleTime and gcTime
 - **Infinite scroll** with cursor-based pagination
@@ -156,29 +156,31 @@ implementation patterns:
 
 ### **Core Domain Templates** ⭐ **FULLY MODERNIZED**
 
-| Template                    | Modern Features                                                              | Target Location                                   | Status        |
-| --------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------- | ------------- |
-| `service.template.ts` ⭐    | Class-based, ErrorHandlingService, structured logging, singleton pattern     | `src/services/__RESOURCE__Service.ts`             | ✅ **MODERN** |
-| `hook.template.ts` ⭐       | useHttpClient, centralized keys, analytics integration, performance tracking | `src/hooks/use__RESOURCE__s.ts`                   | ✅ **MODERN** |
-| `component.template.tsx` ⭐ | Modern UI, accessibility, analytics, error handling, responsive design       | `src/components/__RESOURCE__s/__ENTITY__List.tsx` | ✅ **MODERN** |
-| `page.template.tsx` ⭐      | SEO, error boundaries, structured data, suspense, breadcrumbs                | `src/app/(dashboard)/__RESOURCE__s/page.tsx`      | ✅ **MODERN** |
+| Template                    | Modern Features                                                            | Target Location                                   | Status        |
+| --------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------- | ------------- |
+| `service.template.ts` ⭐    | Function-based service on `@/lib/http`, unwrapped data                     | `src/services/__RESOURCE__Service.ts`             | ✅ **MODERN** |
+| `hook.template.ts` ⭐       | http client, centralized keys, analytics integration, performance tracking | `src/hooks/use__RESOURCE__s.ts`                   | ✅ **MODERN** |
+| `component.template.tsx` ⭐ | Modern UI, accessibility, analytics, error handling, responsive design     | `src/components/__RESOURCE__s/__ENTITY__List.tsx` | ✅ **MODERN** |
+| `page.template.tsx` ⭐      | SEO, error boundaries, structured data, suspense, breadcrumbs              | `src/app/(dashboard)/__RESOURCE__s/page.tsx`      | ✅ **MODERN** |
 
 ### **Supporting Templates** ⭐ **MODERNIZED**
 
-| Template                           | Purpose                                                     | Status        | Features                                                     |
-| ---------------------------------- | ----------------------------------------------------------- | ------------- | ------------------------------------------------------------ |
-| `route.template.ts` ⭐             | API routes with createRoute wrapper, performance monitoring | ✅ **MODERN** | Structured logging, user story tracking, error handling      |
-| `bulk-delete-route.template.ts` ⭐ | Bulk delete API with validation, transaction safety         | ✅ **MODERN** | Audit trails, soft delete patterns, performance monitoring   |
-| `store.template.ts` ⭐             | Zustand store patterns with shallow comparison              | ✅ **MODERN** | Analytics integration, optimized selectors, persistent state |
-| `transaction.template.ts`          | Database transaction patterns                               | ✅ **READY**  | Multi-step writes, rollback safety, idempotency              |
-| `errors.template.ts` ⭐            | Enhanced error handling with categorization                 | ✅ **MODERN** | Error recovery, user-friendly messages, type-safe codes      |
-| `logger.template.ts` ⭐            | Structured logging with performance tracking                | ✅ **MODERN** | Request correlation, context metadata, multiple formats      |
+| Template                              | Purpose                                                     | Status        | Features                                                     |
+| ------------------------------------- | ----------------------------------------------------------- | ------------- | ------------------------------------------------------------ |
+| `route.template.ts` ⭐                | API routes with createRoute wrapper, performance monitoring | ✅ **MODERN** | Structured logging, user story tracking, error handling      |
+| `route-permissions.template.ts` ⭐    | API routes with capability checks via validateApiPermission | ✅ **MODERN** | Fine-grained `resource:action`, scoped OWN/TEAM examples     |
+| `route-permissions-id.template.ts` ⭐ | [id] routes (PUT/DELETE) with capability checks             | ✅ **MODERN** | Extract id, soft delete, update with auditing                |
+| `bulk-delete-route.template.ts` ⭐    | Bulk delete API with validation, transaction safety         | ✅ **MODERN** | Audit trails, soft delete patterns, performance monitoring   |
+| `store.template.ts` ⭐                | Zustand store patterns with shallow comparison              | ✅ **MODERN** | Analytics integration, optimized selectors, persistent state |
+| `transaction.template.ts`             | Database transaction patterns                               | ✅ **READY**  | Multi-step writes, rollback safety, idempotency              |
+| `errors.template.ts` ⭐               | Centralized errors via `src/lib/errors` (ProblemDetails)    | ✅ **MODERN** | StandardError, ErrorHandlingService, ProblemDetails          |
+| `logger.template.ts` ⭐               | Structured logging with performance tracking                | ✅ **MODERN** | Request correlation, context metadata, multiple formats      |
 
 ### **Infrastructure Templates** ⭐ **MODERN PATTERNS**
 
 | Template                    | Purpose                                      | Status        | Modern Features                                                 |
 | --------------------------- | -------------------------------------------- | ------------- | --------------------------------------------------------------- |
-| `errors.template.ts` ⭐     | Enhanced error handling with categorization  | ✅ **MODERN** | Error recovery, user-friendly messages, type-safe codes         |
+| `errors.template.ts` ⭐     | Centralized errors via `src/lib/errors`      | ✅ **MODERN** | StandardError, ErrorHandlingService, ProblemDetails             |
 | `logger.template.ts` ⭐     | Structured logging with performance tracking | ✅ **MODERN** | Request correlation, context metadata, multiple formats         |
 | `http.template.ts`          | HTTP client helper                           | ✅ **READY**  | Consistent API calls, error handling, caching                   |
 | `response.template.ts`      | Typed response envelopes                     | ✅ **READY**  | ApiResponse wrapper, type safety, error states                  |
@@ -190,10 +192,9 @@ implementation patterns:
 
 ### **Prerequisites**
 
-- ✅ Infrastructure templates already implemented
 - ✅ Feature-based schemas created (`src/features/__RESOURCE__/schemas.ts`)
 - ✅ Query keys defined (`src/features/__RESOURCE__/keys.ts`)
-- ✅ Core dependencies installed (Zustand, React Query, Zod, etc.)
+- ✅ Core dependencies installed (React Query, Zod, etc.)
 
 ### **One-Command Migration** ⭐ **RECOMMENDED**
 
@@ -218,6 +219,35 @@ mkdir -p src/features/__RESOURCE__
 # Edit src/features/__RESOURCE__/schemas.ts
 # Edit src/features/__RESOURCE__/keys.ts
 ```
+
+## 🔐 Permission Templates Quick Reference
+
+Use these when you need capability-based checks in API routes:
+
+- `templates/migration/route-permissions.template.ts`
+  - GET requires `"__RESOURCE__:read"`; POST requires `"__RESOURCE__:create"`.
+  - Example scoped check:
+    ```ts
+    await validateApiPermission(
+      req,
+      { resource: '__RESOURCE__', action: 'read', scope: 'OWN' },
+      { resourceOwner: user.id }
+    );
+    ```
+
+- `templates/migration/route-permissions-id.template.ts`
+  - GET by id requires `"__RESOURCE__:read"`.
+  - PUT requires `"__RESOURCE__:update"`; DELETE requires
+    `"__RESOURCE__:delete"`.
+  - Extract id via `const id = new URL(req.url).pathname.split('/').pop()`.
+
+Guidance
+
+- Prefer capabilities (`resource:action`) for fine-grained authorization.
+- Admin roles (System Administrator/Administrator) bypass permission checks
+  automatically.
+- Keep Zod schemas in feature modules; wire them in
+  `createRoute({ query, body })`.
 
 #### **Step 2: Migrate Domain Layer by Layer**
 
@@ -358,22 +388,21 @@ H1
 
 #### **Service Layer**
 
-- [ ] Class-based service with singleton pattern
-- [ ] ErrorHandlingService integration with proper error codes
-- [ ] Structured logging with component/operation tracking
-- [ ] ApiResponse wrapper for all methods
-- [ ] Schema validation using feature-based schemas
-- [ ] Performance monitoring with load time tracking
-- [ ] User story and hypothesis tracking in logs
+- [ ] Function-based services using `@/lib/http` (no singletons)
+- [ ] Return unwrapped domain data from services (no envelopes in UI)
+- [ ] Feature schemas imported from `src/features/__RESOURCE__/schemas.ts`
+- [ ] Structured logging via `@/lib/logger` where appropriate
+- [ ] Error handling via `ErrorHandlingService` in consumers as needed
+- [ ] Performance monitoring/logging as needed
 
 #### **React Query Integration**
 
-- [ ] useHttpClient hook for HTTP calls
+- [ ] Use centralized `http` client for all calls
 - [ ] Centralized query keys from features directory
-- [ ] Proper staleTime (30s) and gcTime (2min) settings
+- [ ] Proper `staleTime` (30s) and `gcTime` (2min) settings
 - [ ] Infinite scroll with cursor pagination
-- [ ] Bulk operations with proper invalidation
-- [ ] Retry logic and error handling
+- [ ] Mutations update cache (`setQueryData`) and invalidate lists
+- [ ] Sensible retry logic and error handling
 
 #### **Component Architecture**
 
@@ -472,17 +501,19 @@ All templates in `templates/migration/` are now **100% compliant** with the
 modern implementation patterns from your existing Product, Customer, and
 Proposal modules:
 
-- **Service Layer**: ✅ Class-based, ErrorHandlingService, structured logging,
-  singleton patterns
-- **React Query**: ✅ useHttpClient, centralized keys, optimized caching,
+- **Service Layer**: ✅ Function-based services on `@/lib/http`, unwrapped data,
+  feature schemas, structured logging
+- **React Query**: ✅ `http` client, centralized keys, optimized caching,
   analytics integration
 - **Components**: ✅ Modern UI, accessibility, analytics, error boundaries,
   responsive design
 - **Pages**: ✅ SEO optimization, structured data, error boundaries, suspense
 - **State Management**: ✅ Zustand with middleware, optimized selectors,
   persistent state
-- **Error Handling**: ✅ Comprehensive categorization, user-friendly messages,
-  recovery actions
+- **API Routes**: ✅ `createRoute` wrapper, Zod validation, ProblemDetails,
+  idempotency headers, capability-based permissions (optional)
+- **Error Handling**: ✅ Centralized errors (`src/lib/errors`), ProblemDetails,
+  user-friendly messages
 - **Logging**: ✅ Structured logging, performance tracking, request correlation
 
 ### **🚀 Ready for Immediate Use**

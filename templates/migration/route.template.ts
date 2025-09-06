@@ -8,11 +8,12 @@
 // ✅ ALIGNS: Feature-based schemas for consistent data flow
 // ✅ IMPLEMENTS: Performance monitoring and structured logging
 
-// TODO: Replace with actual imports when implementing
-// import { ok } from '@/lib/api/response';
-// import { createRoute } from '@/lib/api/route';
-// import { db } from '@/lib/db';
-// import { logDebug, logInfo } from '@/lib/logger';
+// Core imports
+import { ok, okPaginated } from '@/lib/api/response';
+import { createRoute } from '@/lib/api/route';
+import { prisma } from '@/lib/db/prisma';
+import { logDebug, logInfo, logError } from '@/lib/logger';
+import { z } from 'zod';
 
 // ====================
 // Import consolidated schemas from features directory
@@ -44,19 +45,16 @@ export const GET = createRoute(
   {
     roles: ['admin', 'sales', 'viewer'],
     query: __ENTITY__QuerySchema,
-    userStory: '__USER_STORY__',
-    hypothesis: '__HYPOTHESIS__',
   },
-  async ({ query, user }) => {
+  async ({ req, query, user, requestId }) => {
     const start = performance.now();
 
     logDebug('API: Fetching __RESOURCE__ list', {
       component: '__ENTITY__ API Route',
       operation: 'GET /api/__RESOURCE__',
-      query: query,
+      query,
       userId: user.id,
-      userStory: '__USER_STORY__',
-      hypothesis: '__HYPOTHESIS__',
+      requestId,
     });
 
     try {
@@ -77,7 +75,7 @@ export const GET = createRoute(
       if (query.category) where.category = query.category;
       // Add other filter fields as needed
 
-      const rows = await db.__RESOURCE__.findMany({
+      const rows = await (prisma as any).__RESOURCE__.findMany({
         where,
         select: {
           id: true,
@@ -104,22 +102,20 @@ export const GET = createRoute(
         hasNextPage: !!nextCursor,
         loadTime: Math.round(loadTime),
         userId: user.id,
-        userStory: '__USER_STORY__',
-        hypothesis: '__HYPOTHESIS__',
+        requestId,
       });
 
-      return Response.json(ok(result));
+      return okPaginated(result.items, result.nextCursor);
     } catch (error) {
       const loadTime = performance.now() - start;
 
-      logDebug('API: Error fetching __RESOURCE__ list', {
+      logError('API: Error fetching __RESOURCE__ list', {
         component: '__ENTITY__ API Route',
         operation: 'GET /api/__RESOURCE__',
         error: error instanceof Error ? error.message : 'Unknown error',
         loadTime: Math.round(loadTime),
         userId: user.id,
-        userStory: '__USER_STORY__',
-        hypothesis: '__HYPOTHESIS__',
+        requestId,
       });
 
       throw error; // Let createRoute handle the error response
@@ -135,10 +131,8 @@ export const POST = createRoute(
   {
     roles: ['admin', 'sales'],
     body: __ENTITY__CreateSchema,
-    userStory: '__USER_STORY__',
-    hypothesis: '__HYPOTHESIS__',
   },
-  async ({ body, user }) => {
+  async ({ body, user, requestId }) => {
     const start = performance.now();
 
     logDebug('API: Creating new __RESOURCE__', {
@@ -146,16 +140,15 @@ export const POST = createRoute(
       operation: 'POST /api/__RESOURCE__',
       data: body,
       userId: user.id,
-      userStory: '__USER_STORY__',
-      hypothesis: '__HYPOTHESIS__',
+      requestId,
     });
 
     try {
-      // Validate data using schema (already done by createRoute, but good to be explicit)
-      const validatedData = __ENTITY__CreateSchema.parse(body);
+      // Validation is handled by createRoute via Zod schema
+      const validatedData = body as z.infer<typeof __ENTITY__CreateSchema>;
 
       // Create the entity with audit trail
-      const created = await db.__RESOURCE__.create({
+      const created = await (prisma as any).__RESOURCE__.create({
         data: {
           ...validatedData,
           createdBy: user.id,
@@ -180,27 +173,22 @@ export const POST = createRoute(
         __RESOURCE__Id: created.id,
         loadTime: Math.round(loadTime),
         userId: user.id,
-        userStory: '__USER_STORY__',
-        hypothesis: '__HYPOTHESIS__',
+        requestId,
       });
 
-      return new Response(JSON.stringify(ok(created)), {
-        status: 201,
-        headers: {
-          Location: `/api/__RESOURCE__/${created.id}`,
-        },
-      });
+      const res = ok(created, 201);
+      res.headers.set('Location', `/api/__RESOURCE__/${created.id}`);
+      return res;
     } catch (error) {
       const loadTime = performance.now() - start;
 
-      logDebug('API: Error creating __RESOURCE__', {
+      logError('API: Error creating __RESOURCE__', {
         component: '__ENTITY__ API Route',
         operation: 'POST /api/__RESOURCE__',
         error: error instanceof Error ? error.message : 'Unknown error',
         loadTime: Math.round(loadTime),
         userId: user.id,
-        userStory: '__USER_STORY__',
-        hypothesis: '__HYPOTHESIS__',
+        requestId,
       });
 
       throw error;
@@ -216,12 +204,11 @@ export const PUT = createRoute(
   {
     roles: ['admin', 'sales'],
     body: __ENTITY__UpdateSchema,
-    userStory: '__USER_STORY__',
-    hypothesis: '__HYPOTHESIS__',
   },
-  async ({ body, user, params }) => {
+  async ({ req, body, user, requestId }) => {
     const start = performance.now();
-    const __RESOURCE__Id = params?.id as string;
+    const url = new URL(req.url);
+    const __RESOURCE__Id = url.pathname.split('/').pop() as string;
 
     logDebug('API: Updating __RESOURCE__', {
       component: '__ENTITY__ API Route',
@@ -229,15 +216,14 @@ export const PUT = createRoute(
       __RESOURCE__Id,
       data: body,
       userId: user.id,
-      userStory: '__USER_STORY__',
-      hypothesis: '__HYPOTHESIS__',
+      requestId,
     });
 
     try {
-      const validatedData = __ENTITY__UpdateSchema.parse(body);
+      const validatedData = body as z.infer<typeof __ENTITY__UpdateSchema>;
 
       // Update with audit trail
-      const updated = await db.__RESOURCE__.update({
+      const updated = await (prisma as any).__RESOURCE__.update({
         where: { id: __RESOURCE__Id },
         data: {
           ...validatedData,
@@ -263,23 +249,21 @@ export const PUT = createRoute(
         __RESOURCE__Id,
         loadTime: Math.round(loadTime),
         userId: user.id,
-        userStory: '__USER_STORY__',
-        hypothesis: '__HYPOTHESIS__',
+        requestId,
       });
 
-      return Response.json(ok(updated));
+      return ok(updated);
     } catch (error) {
       const loadTime = performance.now() - start;
 
-      logDebug('API: Error updating __RESOURCE__', {
+      logError('API: Error updating __RESOURCE__', {
         component: '__ENTITY__ API Route',
         operation: 'PUT /api/__RESOURCE__/[id]',
         __RESOURCE__Id,
         error: error instanceof Error ? error.message : 'Unknown error',
         loadTime: Math.round(loadTime),
         userId: user.id,
-        userStory: '__USER_STORY__',
-        hypothesis: '__HYPOTHESIS__',
+        requestId,
       });
 
       throw error;
@@ -294,26 +278,24 @@ export const PUT = createRoute(
 export const DELETE = createRoute(
   {
     roles: ['admin'],
-    userStory: '__USER_STORY__',
-    hypothesis: '__HYPOTHESIS__',
   },
-  async ({ user, params }) => {
+  async ({ req, user, requestId }) => {
     const start = performance.now();
-    const __RESOURCE__Id = params?.id as string;
+    const url = new URL(req.url);
+    const __RESOURCE__Id = url.pathname.split('/').pop() as string;
 
     logDebug('API: Deleting __RESOURCE__', {
       component: '__ENTITY__ API Route',
       operation: 'DELETE /api/__RESOURCE__/[id]',
       __RESOURCE__Id,
       userId: user.id,
-      userStory: '__USER_STORY__',
-      hypothesis: '__HYPOTHESIS__',
+      requestId,
     });
 
     try {
       // Soft delete pattern - update status instead of hard delete
       // This preserves data integrity and audit trails
-      const deleted = await db.__RESOURCE__.update({
+      const deleted = await (prisma as any).__RESOURCE__.update({
         where: { id: __RESOURCE__Id },
         data: {
           status: 'DELETED',
@@ -342,23 +324,21 @@ export const DELETE = createRoute(
         __RESOURCE__Id,
         loadTime: Math.round(loadTime),
         userId: user.id,
-        userStory: '__USER_STORY__',
-        hypothesis: '__HYPOTHESIS__',
+        requestId,
       });
 
       return new Response(null, { status: 204 });
     } catch (error) {
       const loadTime = performance.now() - start;
 
-      logDebug('API: Error deleting __RESOURCE__', {
+      logError('API: Error deleting __RESOURCE__', {
         component: '__ENTITY__ API Route',
         operation: 'DELETE /api/__RESOURCE__/[id]',
         __RESOURCE__Id,
         error: error instanceof Error ? error.message : 'Unknown error',
         loadTime: Math.round(loadTime),
         userId: user.id,
-        userStory: '__USER_STORY__',
-        hypothesis: '__HYPOTHESIS__',
+        requestId,
       });
 
       throw error;

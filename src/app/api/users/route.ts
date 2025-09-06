@@ -350,7 +350,7 @@ export async function PUT(request: NextRequest) {
     const userRole = userRoles[0]; // Primary role for backward compatibility
 
     // Use transaction to update multiple related tables
-    const result = await prisma.$transaction(async prisma => {
+    const result = await prisma.$transaction(async (prisma: any) => {
       // Update basic user data if provided
       let updatedUser;
       if (Object.keys(basicUserData).length > 0) {

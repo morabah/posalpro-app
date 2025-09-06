@@ -37,7 +37,7 @@ export const POST = createRoute(
       });
 
       // Use transaction to ensure data consistency
-      const result = await prisma.$transaction(async tx => {
+      const result = await prisma.$transaction(async (tx: any) => {
         // Delete product relationships first
         const deletedRelationships = await tx.productRelationship.deleteMany({
           where: {

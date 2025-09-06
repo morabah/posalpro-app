@@ -3,7 +3,14 @@ import prisma from '@/lib/db/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getServerSession } from 'next-auth';
-import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
+import {
+  customerQueries,
+  productQueries,
+  proposalQueries,
+  userQueries,
+  workflowQueries,
+  executeQuery,
+} from '@/lib/db/database';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
@@ -48,7 +55,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     const messages = [
-      ...events.map(e => ({
+      ...events.map((e: any) => ({
         id: e.id,
         proposalId: proposalId ?? 'unknown',
         from: {
@@ -66,7 +73,7 @@ export async function GET(request: NextRequest) {
         isRead: true,
         tags: ['analytics'],
       })),
-      ...sections.map(s => ({
+      ...sections.map((s: any) => ({
         id: s.id,
         proposalId: s.proposalId,
         from: { id: 'system', name: 'System', role: 'System', department: 'Proposal' },

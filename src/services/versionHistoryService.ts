@@ -62,7 +62,8 @@ export class VersionHistoryService {
     params: VersionHistoryQuery = { limit: 20 }
   ): Promise<ApiResponse<VersionHistoryList>> {
     // Use HTTP client on client-side, Prisma on server-side
-    if (typeof window !== 'undefined') {
+    // In test environment, always use Prisma even if window is defined
+    if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'test') {
       return this.getVersionHistoryViaHttp(params);
     } else {
       return this.getVersionHistoryViaPrisma(params);
@@ -206,7 +207,7 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map(version => {
+      const transformedItems = items.map((version: any) => {
         const snapshot = version.snapshot as any;
         return {
           id: version.id,
@@ -455,7 +456,7 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map(version => {
+      const transformedItems = items.map((version: any) => {
         const snapshot = version.snapshot as any;
         return {
           id: version.id,
@@ -710,7 +711,7 @@ export class VersionHistoryService {
         totalVersions,
         totalProposals,
         changeTypeBreakdown: changeTypeStats.reduce(
-          (acc, stat) => {
+          (acc: Record<string, number>, stat: any) => {
             acc[stat.changeType] = stat._count.id;
             return acc;
           },
@@ -850,7 +851,7 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map(version => {
+      const transformedItems = items.map((version: any) => {
         const snapshot = version.snapshot as any;
         return {
           id: version.id,
@@ -997,7 +998,7 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map(version => {
+      const transformedItems = items.map((version: any) => {
         const snapshot = version.snapshot as any;
         return {
           id: version.id,
