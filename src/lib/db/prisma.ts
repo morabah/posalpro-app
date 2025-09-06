@@ -6,10 +6,10 @@
  * Development environments use DATABASE_URL for local PostgreSQL
  */
 
-import { PrismaClient } from '@prisma/client';
-import type { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logging/structuredLogger';
 import { recordDbLatency } from '@/lib/observability/metricsStore';
+import type { Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 declare global {
   // Reuse Prisma client across HMR cycles in dev
@@ -73,7 +73,8 @@ const isDataProxyMode =
 
 // Validate protocol vs engine expectations early with a clear, actionable error
 const isPrismaProtocol = databaseUrl.startsWith('prisma://');
-const isPostgresProtocol = databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://');
+const isPostgresProtocol =
+  databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://');
 
 if (process.env.NODE_ENV !== 'production') {
   // Helpful diagnostics in dev only
@@ -155,7 +156,7 @@ if (!globalThis.prismaMiddlewareRegistered) {
 
   // Audit logging middleware - lightweight write operation tracking
   prisma.$use(async (params, next) => {
-    const write = ["create", "update", "delete", "upsert"];
+    const write = ['create', 'update', 'delete', 'upsert'];
     const isWrite = write.includes(params.action.toLowerCase());
 
     // Skip audit logging for AuditLog operations to prevent infinite recursion
@@ -164,16 +165,18 @@ if (!globalThis.prismaMiddlewareRegistered) {
     const result = await next(params);
     if (isWrite && !isAuditLogOperation) {
       // Fire and forget - don't block the main operation
-      prisma.auditLog.create({
-        data: {
-          model: params.model ?? "Unknown",
-          action: params.action,
-          targetId: (result as any)?.id ?? null,
-          diff: { params: params.args },
-        }
-      }).catch(() => {
-        // Silently ignore audit log errors to not impact main flow
-      });
+      prisma.auditLog
+        .create({
+          data: {
+            model: params.model ?? 'Unknown',
+            action: params.action,
+            targetId: (result as any)?.id ?? null,
+            diff: { params: params.args },
+          },
+        })
+        .catch(() => {
+          // Silently ignore audit log errors to not impact main flow
+        });
     }
     return result;
   });

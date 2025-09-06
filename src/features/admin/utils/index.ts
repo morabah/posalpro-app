@@ -10,7 +10,7 @@
  * - Test Cases: TC-H8-001, TC-H8-002, TC-H8-003
  */
 
-import type { User, Role, Permission, SystemMetrics, DatabaseStatus } from '../schemas';
+import type { DatabaseStatus, Permission, Role, SystemMetrics, User } from '../schemas';
 
 /**
  * User status utilities
@@ -151,14 +151,17 @@ export const permissionUtils = {
    * Group permissions by resource
    */
   groupByResource: (permissions: Permission[]): Record<string, Permission[]> => {
-    return permissions.reduce((groups, permission) => {
-      const resource = permission.resource;
-      if (!groups[resource]) {
-        groups[resource] = [];
-      }
-      groups[resource].push(permission);
-      return groups;
-    }, {} as Record<string, Permission[]>);
+    return permissions.reduce(
+      (groups, permission) => {
+        const resource = permission.resource;
+        if (!groups[resource]) {
+          groups[resource] = [];
+        }
+        groups[resource].push(permission);
+        return groups;
+      },
+      {} as Record<string, Permission[]>
+    );
   },
 
   /**
@@ -176,7 +179,9 @@ export const systemMetricsUtils = {
   /**
    * Get system health color
    */
-  getHealthColor: (status: SystemMetrics['apiStatus'] | SystemMetrics['databaseStatus']): string => {
+  getHealthColor: (
+    status: SystemMetrics['apiStatus'] | SystemMetrics['databaseStatus']
+  ): string => {
     const statusStr = status.toLowerCase();
     if (statusStr.includes('operational') || statusStr.includes('healthy')) {
       return 'text-green-600';
@@ -298,11 +303,12 @@ export const searchUtils = {
     if (!searchTerm.trim()) return users;
 
     const term = searchTerm.toLowerCase();
-    return users.filter(user =>
-      user.name.toLowerCase().includes(term) ||
-      user.email.toLowerCase().includes(term) ||
-      user.department.toLowerCase().includes(term) ||
-      user.role.toLowerCase().includes(term)
+    return users.filter(
+      user =>
+        user.name.toLowerCase().includes(term) ||
+        user.email.toLowerCase().includes(term) ||
+        user.department.toLowerCase().includes(term) ||
+        user.role.toLowerCase().includes(term)
     );
   },
 
@@ -313,9 +319,9 @@ export const searchUtils = {
     if (!searchTerm.trim()) return roles;
 
     const term = searchTerm.toLowerCase();
-    return roles.filter(role =>
-      role.name.toLowerCase().includes(term) ||
-      role.description.toLowerCase().includes(term)
+    return roles.filter(
+      role =>
+        role.name.toLowerCase().includes(term) || role.description.toLowerCase().includes(term)
     );
   },
 
@@ -326,10 +332,11 @@ export const searchUtils = {
     if (!searchTerm.trim()) return permissions;
 
     const term = searchTerm.toLowerCase();
-    return permissions.filter(permission =>
-      permission.resource.toLowerCase().includes(term) ||
-      permission.action.toLowerCase().includes(term) ||
-      permission.displayName.toLowerCase().includes(term)
+    return permissions.filter(
+      permission =>
+        permission.resource.toLowerCase().includes(term) ||
+        permission.action.toLowerCase().includes(term) ||
+        permission.displayName.toLowerCase().includes(term)
     );
   },
 } as const;

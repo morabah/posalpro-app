@@ -5,13 +5,18 @@
  */
 
 import { authOptions } from '@/lib/auth';
-import { createApiErrorResponse, ErrorCodes, StandardError, ErrorHandlingService } from '@/lib/errors';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import {
+  createApiErrorResponse,
+  ErrorCodes,
+  ErrorHandlingService,
+  StandardError,
+} from '@/lib/errors';
 import ImageOptimizationService from '@/lib/performance/ImageOptimizationService';
 import MemoryOptimizationService from '@/lib/performance/MemoryOptimizationService';
 import { getCache, setCache } from '@/lib/redis';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 import { logWarn } from '@/lib/logger';
 
@@ -91,7 +96,9 @@ export async function GET(request: NextRequest) {
     try {
       await setCache(cacheKey, optimizationStatus, 300);
     } catch (cacheError) {
-      logWarn('[PerformanceOptimizationAPI] Failed to cache status:', { error: cacheError instanceof Error ? cacheError.message : String(cacheError) });
+      logWarn('[PerformanceOptimizationAPI] Failed to cache status:', {
+        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+      });
     }
 
     return NextResponse.json(optimizationStatus);
@@ -239,7 +246,9 @@ export async function POST(request: NextRequest) {
     try {
       await setCache(cacheKey, optimizationResults, 600); // 10 minutes
     } catch (cacheError) {
-      logWarn('[PerformanceOptimizationAPI] Failed to cache results:', { error: cacheError instanceof Error ? cacheError.message : String(cacheError) });
+      logWarn('[PerformanceOptimizationAPI] Failed to cache results:', {
+        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+      });
     }
 
     return NextResponse.json({

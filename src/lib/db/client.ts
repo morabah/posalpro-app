@@ -1,4 +1,4 @@
-import { logger } from '@/lib/logger';/**
+import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Database Client Configuration
  * Production-ready Prisma client with optimized connection management
  */
@@ -7,7 +7,6 @@ import { PrismaClient } from '@prisma/client';
 
 // Global variable to prevent multiple Prisma clients in development
 declare global {
-
   let __prisma: PrismaClient | undefined;
 }
 
