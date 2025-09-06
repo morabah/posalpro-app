@@ -14,8 +14,8 @@
  * - Optimized JWT strategy
  */
 
-import { secureSessionManager } from '@/lib/auth/secureSessionManager';
 import { AUTH_DEBUG_ENABLED, getAuthSecret } from '@/lib/auth/secret';
+import { secureSessionManager } from '@/lib/auth/secureSessionManager';
 import { logDebug, logError, logInfo, logWarn } from '@/lib/logger';
 import { NextAuthOptions, type User as NextAuthUser, type Session } from 'next-auth';
 import type { JWT as NextAuthJWT } from 'next-auth/jwt';
@@ -204,11 +204,12 @@ export const authOptions: NextAuthOptions = {
           try {
             const enforce = process.env.SEAT_ENFORCEMENT === 'true';
             if (enforce) {
-              const isAdmin = roles.includes('Administrator') || roles.includes('System Administrator');
+              const isAdmin =
+                roles.includes('Administrator') || roles.includes('System Administrator');
               if (!isAdmin) {
-                const { hasAvailableSeat, seats, activeUsers } = await (await import('./services/subscriptionService')).getSeatStatus(
-                  user.tenantId
-                );
+                const { hasAvailableSeat, seats, activeUsers } = await (
+                  await import('./services/subscriptionService')
+                ).getSeatStatus(user.tenantId);
                 if (!hasAvailableSeat) {
                   logWarn('❌ Seat enforcement blocked sign-in', {
                     tenantId: user.tenantId,
@@ -407,7 +408,10 @@ export const authOptions: NextAuthOptions = {
             }
           }
           // If still empty, fall back to DB lookup
-          if ((!Array.isArray(session.user.roles) || session.user.roles.length === 0) && token.email) {
+          if (
+            (!Array.isArray(session.user.roles) || session.user.roles.length === 0) &&
+            token.email
+          ) {
             const fresh = await getUserByEmail(token.email);
             if (fresh) {
               const roles = fresh.roles.map(r => r.role.name);
@@ -451,7 +455,6 @@ export const authOptions: NextAuthOptions = {
       return baseUrl;
     },
   },
-
 
   pages: {
     signIn: '/auth/login',

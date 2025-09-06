@@ -1,5 +1,6 @@
 // API route wrapper with authentication, RBAC, validation, and logging
 import { authOptions } from '@/lib/auth';
+import { getFeatureFlags } from '@/lib/env';
 import {
   badRequest,
   errorHandlingService,
@@ -10,10 +11,9 @@ import {
 import { logError, logInfo } from '@/lib/logger';
 import { getCache, setCache } from '@/lib/redis';
 import { getOrCreateRequestId } from '@/lib/requestId';
-import { createHash } from 'crypto';
-import { getFeatureFlags } from '@/lib/env';
-import { runWithTenantContext } from '@/lib/tenant';
 import { EntitlementService } from '@/lib/services/EntitlementService';
+import { runWithTenantContext } from '@/lib/tenant';
+import { createHash } from 'crypto';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 
@@ -162,7 +162,9 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         try {
           const enforceSeats = process.env.SEAT_ENFORCEMENT === 'true';
           if (enforceSeats) {
-            const isAdmin = (user.roles || []).some(r => r === 'Administrator' || r === 'System Administrator');
+            const isAdmin = (user.roles || []).some(
+              r => r === 'Administrator' || r === 'System Administrator'
+            );
             if (!isAdmin) {
               const { getSeatStatus } = await import('@/lib/services/subscriptionService');
               const status = await getSeatStatus(user.tenantId);
@@ -180,7 +182,9 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         try {
           const enforceSub = process.env.SUBSCRIPTION_ENFORCEMENT === 'true';
           if (enforceSub) {
-            const isAdmin = (user.roles || []).some(r => r === 'Administrator' || r === 'System Administrator');
+            const isAdmin = (user.roles || []).some(
+              r => r === 'Administrator' || r === 'System Administrator'
+            );
             if (!isAdmin) {
               const { getSubscriptionStatus } = await import('@/lib/services/subscriptionService');
               const sub = await getSubscriptionStatus(user.tenantId);
@@ -205,7 +209,8 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         if ((config as any).requireAuth !== false && (config as any).requirePaid) {
           const flags = getFeatureFlags();
           const enforce = process.env.PAID_FEATURES_ENFORCE === 'true';
-          const paidOn = flags.enableExperimentalFeatures || process.env.PAID_FEATURES_DEFAULT === 'true';
+          const paidOn =
+            flags.enableExperimentalFeatures || process.env.PAID_FEATURES_DEFAULT === 'true';
           if (enforce && !paidOn) {
             throw forbidden('Upgrade required');
           }
@@ -213,7 +218,10 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
 
         // Entitlement enforcement: require all listed entitlements for the tenant
         if (config.entitlements && config.entitlements.length > 0) {
-          const ok = await EntitlementService.hasEntitlements((user as any).tenantId, config.entitlements);
+          const ok = await EntitlementService.hasEntitlements(
+            (user as any).tenantId,
+            config.entitlements
+          );
           if (!ok) {
             throw forbidden('Missing entitlements');
           }
@@ -286,16 +294,14 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         }
 
         // Call the handler within tenant async context for Prisma middleware
-        const response = await runWithTenantContext(
-          { tenantId: user.tenantId } as any,
-          async () =>
-            handler({
-              req,
-              user,
-              query,
-              body,
-              requestId,
-            })
+        const response = await runWithTenantContext({ tenantId: user.tenantId } as any, async () =>
+          handler({
+            req,
+            user,
+            query,
+            body,
+            requestId,
+          })
         );
 
         // Add request ID and API headers to response

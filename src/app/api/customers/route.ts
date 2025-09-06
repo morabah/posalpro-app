@@ -8,19 +8,11 @@ import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import {
-  customerQueries,
-  productQueries,
-  proposalQueries,
-  userQueries,
-  workflowQueries,
-  executeQuery,
-} from '@/lib/db/database';
-import { logInfo as structuredLogInfo } from '@/lib/log';
+// Database imports removed - using Prisma directly
 import { logError, logInfo } from '@/lib/logger';
 import { getCache, setCache } from '@/lib/redis';
 import type { Prisma } from '@prisma/client';
-import { CustomerStatus, CustomerTier, Prisma as PrismaClient } from '@prisma/client';
+import { CustomerStatus, CustomerTier } from '@prisma/client';
 
 // Define proper type for Prisma customer query result
 type CustomerQueryResult = {

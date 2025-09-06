@@ -3,11 +3,11 @@
  * Standardized permission validation for API endpoints
  */
 
+import { authOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { getServerSession } from 'next-auth';
 import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 
 export interface AuthorizationContext {
   userId: string;
@@ -37,7 +37,9 @@ export async function validateApiPermission(
     try {
       if (req?.nextUrl?.pathname) return req.nextUrl.pathname;
       if (req?.url) return new URL(req.url).pathname;
-    } catch {}
+    } catch {
+      // Ignore URL parsing errors
+    }
     return 'unknown';
   })();
 
@@ -50,7 +52,7 @@ export async function validateApiPermission(
         process.env.NEXTAUTH_SECRET || 'posalpro-mvp2-secret-key-for-jwt-signing-32-chars-minimum',
     });
   } catch {
-    // ignore and fallback to session
+    // Ignore JWT token errors and fallback to session
   }
 
   let authContext: AuthorizationContext | null = null;

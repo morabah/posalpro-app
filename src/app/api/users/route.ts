@@ -52,23 +52,23 @@ const UserQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
-const UserPreferencesUpdateSchema = z.object({
-  theme: z.string().optional(),
-  language: z.string().length(2).optional(),
-  analyticsConsent: z.boolean().optional(),
-  performanceTracking: z.boolean().optional(),
-  dashboardLayout: z.record(z.any()).optional(),
-});
+// const UserPreferencesUpdateSchema = z.object({
+//   theme: z.string().optional(),
+//   language: z.string().length(2).optional(),
+//   analyticsConsent: z.boolean().optional(),
+//   performanceTracking: z.boolean().optional(),
+//   dashboardLayout: z.record(z.any()).optional(),
+// });
 
-const CommunicationPreferencesUpdateSchema = z.object({
-  timezone: z.string().optional(),
-  language: z.string().length(2).optional(),
-  quietHoursStart: z.string().optional(),
-  quietHoursEnd: z.string().optional(),
-  channels: z.record(z.any()).optional(),
-  frequency: z.record(z.any()).optional(),
-  categories: z.record(z.any()).optional(),
-});
+// const CommunicationPreferencesUpdateSchema = z.object({
+//   timezone: z.string().optional(),
+//   language: z.string().length(2).optional(),
+//   quietHoursStart: z.string().optional(),
+//   quietHoursEnd: z.string().optional(),
+//   channels: z.record(z.any()).optional(),
+//   frequency: z.record(z.any()).optional(),
+//   categories: z.record(z.any()).optional(),
+// });
 
 const UserUpdateQuerySchema = z.object({
   fields: z.string().optional(), // Comma-separated list of fields to update
@@ -304,17 +304,17 @@ export const PUT = createRoute(
       // Note: Communication preferences are not handled in this simplified version
       // let updatedCommPrefs;
       // if (Object.keys(validatedCommPreferences).length > 0) {
-        // updatedCommPrefs = await prisma.communicationPreferences.upsert({
-        //   where: { userId: user.id },
-        //   update: validatedCommPreferences,
-        //   create: {
-        //     userId: user.id,
-        //     channels: {},
-        //     frequency: {},
-        //     categories: {},
-        //     ...validatedCommPreferences,
-        //   },
-        // });
+      // updatedCommPrefs = await prisma.communicationPreferences.upsert({
+      //   where: { userId: user.id },
+      //   update: validatedCommPreferences,
+      //   create: {
+      //     userId: user.id,
+      //     channels: {},
+      //     frequency: {},
+      //     categories: {},
+      //     ...validatedCommPreferences,
+      //   },
+      // });
       // }
 
       // Fetch the complete updated user profile
