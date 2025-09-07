@@ -1,0 +1,60 @@
+{
+  "baselineCommit": "local",
+  "currentCommit": "local",
+  "comparisonTimestamp": "2025-09-07T09:52:07.310Z",
+  "overall": {
+    "baselineAvgResponseTime": 209.52060996000003,
+    "currentAvgResponseTime": 219.58948503999997,
+    "changePercent": 4.805672855726321,
+    "status": "STABLE"
+  },
+  "byTest": [
+    {
+      "name": "Customer Search - Simple",
+      "baselineAvg": 148.44002500000002,
+      "currentAvg": 153.41335859999998,
+      "baselineP95": 169.902042,
+      "currentP95": 169.197,
+      "avgResponseTimeChange": 0.03350399327944037,
+      "p95ResponseTimeChange": -0.0041496970354246345
+    },
+    {
+      "name": "Customer Search - Complex",
+      "baselineAvg": 281.0820166,
+      "currentAvg": 312.56844979999994,
+      "baselineP95": 330.27954199999976,
+      "currentP95": 340.1986659999998,
+      "avgResponseTimeChange": 0.11201866836186619,
+      "p95ResponseTimeChange": 0.03003251106603514
+    },
+    {
+      "name": "Proposal Search - Basic",
+      "baselineAvg": 48.1485332000002,
+      "currentAvg": 47.334757999999965,
+      "baselineP95": 54.260833000000275,
+      "currentP95": 58.16416600000048,
+      "avgResponseTimeChange": -0.016901349759087428,
+      "p95ResponseTimeChange": 0.07193647395719455
+    },
+    {
+      "name": "Proposal Search - Filtered",
+      "baselineAvg": 156.05067499999987,
+      "currentAvg": 151.18375859999978,
+      "baselineP95": 170.7357089999996,
+      "currentP95": 171.10599999999977,
+      "avgResponseTimeChange": -0.031188050932814595,
+      "p95ResponseTimeChange": 0.002168796452534603
+    },
+    {
+      "name": "Proposal Search - Complex",
+      "baselineAvg": 413.8818000000001,
+      "currentAvg": 433.4471002000002,
+      "baselineP95": 439.4855000000007,
+      "currentP95": 479.22395900000083,
+      "avgResponseTimeChange": 0.0472726759185837,
+      "p95ResponseTimeChange": 0.09042040977461165
+    }
+  ],
+  "regressions": [],
+  "improvements": []
+}

@@ -1,0 +1,50 @@
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:ci": "npm run test:unit && npm run test:integration && npm run test:accessibility",
+
+    "test:unit": "jest tests/unit",
+    "test:unit:watch": "jest tests/unit --watch",
+    "test:unit:coverage": "jest tests/unit --coverage",
+
+    "test:integration": "jest tests/integration",
+    "test:integration:watch": "jest tests/integration --watch",
+    "test:integration:coverage": "jest tests/integration --coverage",
+
+    "test:e2e": "jest tests/e2e",
+    "test:e2e:watch": "jest tests/e2e --watch",
+    "test:e2e:coverage": "jest tests/e2e --coverage",
+
+    "test:accessibility": "jest tests/accessibility",
+    "test:accessibility:watch": "jest tests/accessibility --watch",
+    "test:accessibility:coverage": "jest tests/accessibility --coverage",
+
+    "test:performance": "jest tests/performance",
+    "test:performance:watch": "jest tests/performance --watch",
+    "test:performance:coverage": "jest tests/performance --coverage",
+
+    "test:security": "jest tests/security",
+    "test:security:watch": "jest tests/security --watch",
+    "test:security:coverage": "jest tests/security --coverage",
+
+    "test:api-routes": "jest tests/api-routes",
+    "test:api-routes:watch": "jest tests/api-routes --watch",
+    "test:api-routes:coverage": "jest tests/api-routes --coverage",
+
+    "test:critical-gaps": "jest tests/critical-gaps",
+    "test:critical-gaps:watch": "jest tests/critical-gaps --watch",
+    "test:critical-gaps:coverage": "jest tests/critical-gaps --coverage",
+
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e && npm run test:accessibility && npm run test:performance && npm run test:security",
+    "test:all:coverage": "npm run test:all -- --coverage",
+
+    "test:coverage": "jest --coverage --coverageDirectory=tests/coverage",
+    "test:coverage:report": "open tests/coverage/lcov-report/index.html",
+
+    "test:debug": "node --inspect-brk ./node_modules/.bin/jest --runInBand",
+    "test:debug:unit": "node --inspect-brk ./node_modules/.bin/jest tests/unit --runInBand",
+
+    "test:pre-commit": "npm run test:unit && npm run test:security && npm run test:accessibility"
+  }
+}

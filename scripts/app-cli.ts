@@ -461,10 +461,17 @@ class ApiClient {
       }
 
       // Follow one redirect to callbackUrl to collect any additional cookies
-      if (loginRes.status === 302 || loginRes.status === 303 || loginRes.status === 307 || loginRes.status === 308) {
+      if (
+        loginRes.status === 302 ||
+        loginRes.status === 303 ||
+        loginRes.status === 307 ||
+        loginRes.status === 308
+      ) {
         const loc = loginRes.headers.get('location');
         if (loc) {
-          const redirectUrl = loc.startsWith('http') ? loc : `${this.baseUrl}${loc.startsWith('/') ? '' : '/'}${loc}`;
+          const redirectUrl = loc.startsWith('http')
+            ? loc
+            : `${this.baseUrl}${loc.startsWith('/') ? '' : '/'}${loc}`;
           const redirRes = await httpsFetch(redirectUrl, {
             method: 'GET',
             headers: { Cookie: this.jar.getCookieHeader(), Accept: 'text/html,application/json' },
@@ -644,6 +651,19 @@ function printHelp() {
   troubleshoot auth                          # Diagnose auth/session/roles issues
   troubleshoot dashboard                     # Diagnose dashboard RBAC/entitlements & fallbacks
   cookies show                               # Show CLI Cookie header and server debug cookie presence
+
+🧰 REDIS (CACHE) DIAGNOSTICS
+  redis status                               # Show Redis enablement and connection status
+  redis health                               # Run Redis health check (HTTP route + local fallback)
+  redis benchmark|perf-test                   # Compare Redis vs Memory cache performance
+  redis connect [url]                        # Force-connect Redis using REDIS_URL (sets USE_REDIS=true)
+  redis ping                                 # Send PING to Redis
+  redis get <key>                            # Get cached value by key (JSON parsed)
+  redis set <key> <json|string> [ttl]        # Set cached value with optional TTL seconds
+  redis del <key>                            # Delete a cache key
+  redis keys <pattern>                       # List keys (requires Redis connection)
+  redis clear <pattern>                      # Delete keys by pattern (server-side)
+  redis flush [--force]                      # Flush current database (DANGEROUS; requires --force)
 
 ⚙️ ENVIRONMENT & CONFIGURATION
   env                                        # Show loaded environment variables
@@ -1582,7 +1602,10 @@ async function handleTroubleshootDashboard(api: ApiClient) {
 
   // 4) Entitlements for tenant (DB direct)
   try {
-    const tenantId = process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default';
+    const tenantId =
+      process.env.DEFAULT_TENANT_ID ||
+      process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ||
+      'tenant_default';
     const entRows = await prisma.entitlement.findMany({
       where: { tenantId, enabled: true },
       select: { key: true },
@@ -1717,6 +1740,14 @@ async function execute(tokens: string[], api: ApiClient) {
       const startApi = Date.now();
       const r = await fetch(`${(api as any).baseUrl}/api/health`);
       console.log(`API ${r.status} (${Date.now() - startApi}ms)`);
+      break;
+    }
+    case 'health:redis': {
+      await handleRedisCommand(['redis', 'health'], api);
+      break;
+    }
+    case 'redis': {
+      await handleRedisCommand(tokens, api);
       break;
     }
     case 'cookies': {
@@ -2761,7 +2792,11 @@ async function execute(tokens: string[], api: ApiClient) {
       const tenantArg = tokens.find((t, i) => t === '--tenant' && tokens[i + 1])
         ? tokens[tokens.indexOf('--tenant') + 1]
         : undefined;
-      const tenantId = tenantArg || process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default';
+      const tenantId =
+        tenantArg ||
+        process.env.DEFAULT_TENANT_ID ||
+        process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ||
+        'tenant_default';
 
       if (sub === 'list') {
         const rows = await prisma.entitlement.findMany({
@@ -2796,7 +2831,9 @@ async function execute(tokens: string[], api: ApiClient) {
         });
         console.log(`Revoked ${key} for ${tenantId}`);
       } else {
-        console.log('Usage:\n  entitlements list [--tenant <id>]\n  entitlements grant <key> [--tenant <id>]\n  entitlements revoke <key> [--tenant <id>]');
+        console.log(
+          'Usage:\n  entitlements list [--tenant <id>]\n  entitlements grant <key> [--tenant <id>]\n  entitlements revoke <key> [--tenant <id>]'
+        );
       }
       break;
     }
@@ -5486,6 +5523,357 @@ async function monitorHealth(api: ApiClient) {
   console.log(`   Passed: ${passed}`);
   console.log(`   Failed: ${failed}`);
   console.log(`   Overall Status: ${failed === 0 ? '✅ HEALTHY' : '⚠️ ISSUES DETECTED'}`);
+}
+
+// ====================
+// Redis Troubleshooting & Utilities
+// ====================
+async function handleRedisCommand(tokens: string[], api: ApiClient) {
+  const sub = (tokens[1] || 'status').toLowerCase();
+
+  // Helper to call server health route and gracefully fall back
+  const tryHttpHealth = async () => {
+    try {
+      const res = await api.request('GET', '/api/health/redis');
+      const text = await res.text();
+      try {
+        const json = JSON.parse(text);
+        console.log('🌐 /api/health/redis →', res.status);
+        console.log(JSON.stringify(json, null, 2));
+        return true;
+      } catch {
+        console.log('🌐 /api/health/redis →', res.status);
+        console.log(text);
+        return res.ok;
+      }
+    } catch (e) {
+      console.log('ℹ️  HTTP Redis health route unavailable, using local diagnostics.');
+      return false;
+    }
+  };
+
+  switch (sub) {
+    case 'status': {
+      const { getRedisDiagnostics } = await import('../src/lib/redis');
+      const diag = getRedisDiagnostics();
+      console.log('🧰 Redis Diagnostics');
+      console.log(JSON.stringify(diag, null, 2));
+      if (!diag.enabled) {
+        console.log(
+          '\nℹ️  Redis is disabled. Set USE_REDIS=true and REDIS_URL to enable. Using in-memory cache.'
+        );
+      }
+      break;
+    }
+    case 'health': {
+      const httpOk = await tryHttpHealth();
+      if (!httpOk) {
+        const { checkRedisHealth, getRedisDiagnostics } = await import('../src/lib/redis');
+        const ok = await checkRedisHealth();
+        const diag = getRedisDiagnostics();
+        console.log('🩺 Local Redis health:', ok ? '✅ healthy' : '❌ unhealthy');
+        console.log(JSON.stringify(diag, null, 2));
+      }
+      break;
+    }
+    case 'connect': {
+      const url = tokens[2];
+      if (url) process.env.REDIS_URL = url;
+      process.env.USE_REDIS = 'true';
+      // Import AFTER setting env, so module evaluates with new values
+      const redis = await import('../src/lib/redis');
+      await redis.ensureRedisConnection();
+      try {
+        const pong = await redis.redisClient.ping();
+        console.log('✅ Connected. PING →', pong);
+      } catch (e) {
+        console.log('❌ Failed to connect or ping:', (e as Error)?.message);
+      }
+      const diag = redis.getRedisDiagnostics();
+      console.log(JSON.stringify(diag, null, 2));
+      break;
+    }
+    case 'ping': {
+      const { ensureRedisConnection, redisClient, getRedisDiagnostics } = await import(
+        '../src/lib/redis'
+      );
+      await ensureRedisConnection();
+      try {
+        const pong = await redisClient.ping();
+        console.log('✅ PING →', pong);
+      } catch (e) {
+        console.log('❌ PING failed:', (e as Error)?.message);
+        console.log('Status:', JSON.stringify(getRedisDiagnostics(), null, 2));
+      }
+      break;
+    }
+    case 'get': {
+      const key = tokens[2];
+      if (!key) {
+        console.log('Usage: redis get <key>');
+        break;
+      }
+      const { getCache } = await import('../src/lib/redis');
+      const val = await getCache(key);
+      console.log(val === null ? '(null)' : JSON.stringify(val, null, 2));
+      break;
+    }
+    case 'set': {
+      const key = tokens[2];
+      const raw = tokens[3];
+      const ttlToken = tokens[4];
+      if (!key || raw === undefined) {
+        console.log('Usage: redis set <key> <json|string> [ttlSeconds]');
+        break;
+      }
+      let value: any = raw;
+      try {
+        value = JSON.parse(raw);
+      } catch {
+        // keep as string
+      }
+      const ttl = ttlToken ? Number(ttlToken) || 60 : 60;
+      const { setCache } = await import('../src/lib/redis');
+      await setCache(key, value, ttl);
+      console.log(`✅ SET ${key} (ttl=${ttl}s)`);
+      break;
+    }
+    case 'del': {
+      const key = tokens[2];
+      if (!key) {
+        console.log('Usage: redis del <key>');
+        break;
+      }
+      const { deleteCache } = await import('../src/lib/redis');
+      await deleteCache(key);
+      console.log(`🗑️  DEL ${key}`);
+      break;
+    }
+    case 'keys': {
+      const pattern = tokens[2] || '*';
+      const { ensureRedisConnection, getRedisDiagnostics, redisClient } = await import(
+        '../src/lib/redis'
+      );
+      await ensureRedisConnection();
+      const diag = getRedisDiagnostics();
+      if (!diag.connected) {
+        console.log('ℹ️  Not connected to Redis (using memory cache). Keys listing unavailable.');
+        console.log(JSON.stringify(diag, null, 2));
+        break;
+      }
+      try {
+        const keys = await redisClient.keys(pattern);
+        console.log(`🔑 ${keys.length} key(s):`);
+        for (const k of keys.slice(0, 200)) console.log('  ', k);
+        if (keys.length > 200) console.log(`  ... and ${keys.length - 200} more`);
+      } catch (e) {
+        console.log('❌ KEYS failed:', (e as Error)?.message);
+      }
+      break;
+    }
+    case 'clear': {
+      const pattern = tokens[2];
+      if (!pattern) {
+        console.log('Usage: redis clear <pattern>');
+        break;
+      }
+      const { clearCache } = await import('../src/lib/redis');
+      await clearCache(pattern);
+      console.log(`🧹 Cleared keys matching: ${pattern}`);
+      break;
+    }
+    case 'flush': {
+      const force = tokens.includes('--force');
+      if (!force) {
+        console.log(
+          '⚠️  DANGEROUS: This will FLUSH the current Redis database. Use: redis flush --force'
+        );
+        break;
+      }
+      const { ensureRedisConnection, getRedisDiagnostics, redisClient } = await import(
+        '../src/lib/redis'
+      );
+      await ensureRedisConnection();
+      const diag = getRedisDiagnostics();
+      if (!diag.connected) {
+        console.log('❌ Not connected to Redis. Aborting.');
+        break;
+      }
+      try {
+        await redisClient.flushDb();
+        console.log('🧨 FLUSHED current Redis DB');
+      } catch (e) {
+        console.log('❌ FLUSH failed:', (e as Error)?.message);
+      }
+      break;
+    }
+    case 'benchmark':
+    case 'perf-test': {
+      await runRedisBenchmark();
+      break;
+    }
+    default: {
+      console.log('Usage:');
+      console.log('  redis status');
+      console.log('  redis health');
+      console.log('  redis connect [url]');
+      console.log('  redis ping');
+      console.log('  redis get <key>');
+      console.log('  redis set <key> <json|string> [ttl]');
+      console.log('  redis del <key>');
+      console.log('  redis keys <pattern>');
+      console.log('  redis clear <pattern>');
+      console.log('  redis flush [--force]');
+      console.log('  redis benchmark|perf-test');
+      break;
+    }
+  }
+}
+
+async function runRedisBenchmark() {
+  console.log('🚀 Redis Performance Benchmark');
+  console.log('='.repeat(50));
+
+  const iterations = 100;
+  const testData = {
+    session: { userId: 'test-user-123', email: 'test@example.com', role: 'admin' },
+    user: { id: 'user-456', name: 'John Doe', email: 'john@example.com', lastLogin: new Date() },
+    auth: { token: 'jwt-token-789', expiresAt: Date.now() + 3600000 },
+  };
+
+  // Test with Redis enabled
+  console.log('\n🔴 Testing WITH Redis (current configuration):');
+  const redisResults = await runCacheBenchmark(testData, iterations, true);
+
+  // Test with Redis disabled (force memory cache)
+  console.log('\n🔵 Testing WITHOUT Redis (memory cache only):');
+  const memoryResults = await runCacheBenchmark(testData, iterations, false);
+
+  // Compare results
+  console.log('\n📊 PERFORMANCE COMPARISON');
+  console.log('='.repeat(50));
+
+  console.log('Average Response Times:');
+  console.log(`  Redis:     ${redisResults.avgTime.toFixed(2)}ms`);
+  console.log(`  Memory:    ${memoryResults.avgTime.toFixed(2)}ms`);
+  console.log(
+    `  Speedup:   ${(memoryResults.avgTime / redisResults.avgTime).toFixed(1)}x faster with Redis`
+  );
+
+  console.log('\nCache Hit Rates:');
+  console.log(
+    `  Redis:     ${((redisResults.hits / iterations) * 100).toFixed(1)}% (${redisResults.hits}/${iterations})`
+  );
+  console.log(
+    `  Memory:    ${((memoryResults.hits / iterations) * 100).toFixed(1)}% (${memoryResults.hits}/${iterations})`
+  );
+
+  console.log('\nTotal Operations:');
+  console.log(
+    `  Redis:     ${iterations} operations in ${(redisResults.totalTime / 1000).toFixed(2)}s`
+  );
+  console.log(
+    `  Memory:    ${iterations} operations in ${(memoryResults.totalTime / 1000).toFixed(2)}s`
+  );
+
+  console.log('\n💡 CONCLUSION:');
+  if (redisResults.avgTime < memoryResults.avgTime) {
+    const speedup = (memoryResults.avgTime / redisResults.avgTime).toFixed(1);
+    console.log(`✅ Redis provides ${speedup}x better performance for your use case!`);
+  } else {
+    console.log(
+      '⚠️  Memory cache is performing better - consider Redis configuration or network latency.'
+    );
+  }
+}
+
+async function runCacheBenchmark(testData: any, iterations: number, useRedis: boolean) {
+  // Temporarily override Redis settings
+  const originalUseRedis = process.env.USE_REDIS;
+  const originalUrl = process.env.REDIS_URL;
+
+  if (!useRedis) {
+    process.env.USE_REDIS = 'false';
+    delete process.env.REDIS_URL;
+  } else {
+    process.env.USE_REDIS = 'true';
+    process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+  }
+
+  // Force module reload with new environment
+  delete require.cache[require.resolve('../src/lib/redis')];
+
+  const {
+    setCache,
+    getCache,
+    getSessionCache,
+    setSessionCache,
+    getUserCache,
+    setUserCache,
+    getAuthCache,
+    setAuthCache,
+    deleteCache,
+  } = await import('../src/lib/redis');
+
+  let totalTime = 0;
+  let hits = 0;
+  let misses = 0;
+
+  // Warm up cache
+  await setSessionCache('test-user', testData.session);
+  await setUserCache('test@example.com', testData.user);
+  await setAuthCache('test-token', testData.auth);
+
+  console.log(`Running ${iterations} cache operations...`);
+
+  for (let i = 0; i < iterations; i++) {
+    const startTime = Date.now();
+
+    // Mix of different cache operations
+    const operation = i % 4;
+    switch (operation) {
+      case 0: // Session cache
+        await getSessionCache('test-user');
+        break;
+      case 1: // User cache
+        await getUserCache('test@example.com');
+        break;
+      case 2: // Auth cache
+        await getAuthCache('test-token');
+        break;
+      case 3: // Direct cache operations
+        const key = `test-key-${i}`;
+        await setCache(key, { data: `value-${i}`, timestamp: Date.now() }, 60);
+        const result = await getCache(key);
+        if (result) hits++;
+        else misses++;
+        await deleteCache(key);
+        break;
+    }
+
+    const operationTime = Date.now() - startTime;
+    totalTime += operationTime;
+  }
+
+  // Restore original environment
+  if (originalUseRedis !== undefined) {
+    process.env.USE_REDIS = originalUseRedis;
+  } else {
+    delete process.env.USE_REDIS;
+  }
+
+  if (originalUrl !== undefined) {
+    process.env.REDIS_URL = originalUrl;
+  } else {
+    delete process.env.REDIS_URL;
+  }
+
+  return {
+    avgTime: totalTime / iterations,
+    totalTime,
+    hits,
+    misses,
+  };
 }
 
 async function handleDbCommand(tokens: string[]) {

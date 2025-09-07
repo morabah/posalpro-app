@@ -10,11 +10,23 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { logDebug, logWarn } from '@/lib/logger';
 import type { RedisClientType } from 'redis';
 
-// Enable Redis only in production unless explicitly overridden
-const USE_REDIS = process.env.NODE_ENV === 'production' && process.env.USE_REDIS !== 'false';
+// Determine whether Redis should be used based on env
+// Rules (aligned with env.example):
+// - If USE_REDIS is explicitly set to true/1 → enable
+// - If USE_REDIS is explicitly set to false/0 → disable
+// - Otherwise: enable only in production AND when REDIS_URL is set
+function shouldUseRedis(): boolean {
+  const flag = (process.env.USE_REDIS || '').toLowerCase();
+  const hasUrl = Boolean(process.env.REDIS_URL);
+  if (flag === 'false' || flag === '0') return false;
+  if (flag === 'true' || flag === '1') return true;
+  return process.env.NODE_ENV === 'production' && hasUrl;
+}
 
 // Redis client configuration
 const redisClient: RedisClientType = createClient({
+  // Do not assume localhost in production unless explicitly configured.
+  // Keep localhost as a convenient dev override if USE_REDIS=true with no URL.
   url: process.env.REDIS_URL || 'redis://localhost:6379',
   socket: {
     connectTimeout: 3000,
@@ -35,8 +47,9 @@ let isConnected = false;
 const memoryCache = new Map<string, { value: unknown; expiresAt: number }>();
 
 export async function initializeRedis(): Promise<RedisClientType> {
-  if (!USE_REDIS) {
-    // Skip connecting in development for faster startup
+  const useRedis = shouldUseRedis();
+  if (!useRedis) {
+    // Skip connecting (use in-memory cache)
     isConnected = false;
     return redisClient;
   }
@@ -52,10 +65,9 @@ export async function initializeRedis(): Promise<RedisClientType> {
     const pong = await redisClient.ping();
     logDebug('✅ Redis ping successful:', { pong });
   } catch (error) {
-    logWarn(
-      '⚠️  Redis connection failed, falling back to in-memory cache:',
-      { error: error instanceof Error ? error.message : String(error) }
-    );
+    logWarn('⚠️  Redis connection failed, falling back to in-memory cache:', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     isConnected = false;
   }
 
@@ -101,7 +113,9 @@ export async function getCache<T = unknown>(key: string): Promise<T | null> {
     recordLatency(Date.now() - start);
     return hit ? (JSON.parse(value as string) as T) : null;
   } catch (error) {
-    logWarn('⚠️  Cache get error:', { error: error instanceof Error ? error.message : String(error) });
+    logWarn('⚠️  Cache get error:', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }
@@ -124,7 +138,9 @@ export async function setCache(
     await redisClient.setEx(key, ttl, JSON.stringify(value));
     recordLatency(Date.now() - start);
   } catch (error) {
-    logWarn('⚠️  Cache set error:', { error: error instanceof Error ? error.message : String(error) });
+    logWarn('⚠️  Cache set error:', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -137,7 +153,9 @@ export async function deleteCache(key: string): Promise<void> {
   try {
     await redisClient.del(key);
   } catch (error) {
-    logWarn('⚠️  Redis delete error:', { error: error instanceof Error ? error.message : String(error) });
+    logWarn('⚠️  Redis delete error:', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -150,7 +168,9 @@ export async function clearCache(pattern: string): Promise<void> {
       await redisClient.del(keys);
     }
   } catch (error) {
-    logWarn('⚠️  Redis clear error:', { error: error instanceof Error ? error.message : String(error) });
+    logWarn('⚠️  Redis clear error:', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -213,10 +233,9 @@ export async function checkRedisHealth(): Promise<boolean> {
     const pong = await redisClient.ping();
     return pong === 'PONG';
   } catch (error) {
-    logWarn(
-      '⚠️  Redis health check failed:',
-      { error: error instanceof Error ? error.message : String(error) }
-    );
+    logWarn('⚠️  Redis health check failed:', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return false;
   }
 }
@@ -229,8 +248,21 @@ export async function closeRedis(): Promise<void> {
   }
 }
 
+// Diagnostics for CLI and health routes
+export function getRedisDiagnostics() {
+  const enabled = shouldUseRedis();
+  const url = process.env.REDIS_URL || '';
+  return {
+    enabled,
+    connected: isConnected,
+    urlPresent: Boolean(url),
+    nodeEnv: process.env.NODE_ENV,
+    mode: enabled ? (isConnected ? 'redis' : 'redis-disabled-or-disconnected') : 'memory',
+  } as const;
+}
+
 // Initialize Redis on module load
-ensureRedisConnection().catch((error) => {
+ensureRedisConnection().catch(error => {
   ErrorHandlingService.getInstance().processError(
     error,
     'Failed to initialize Redis connection',

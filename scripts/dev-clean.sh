@@ -439,6 +439,18 @@ check_api_health() {
     else
         print_check "warn" "Health endpoint not available" "Consider implementing /api/health"
     fi
+
+    # Test Redis health endpoint (if exists)
+    local redis_health_response=$(curl -s --max-time 3 -w "%{http_code}" "http://localhost:$port/api/health/redis" 2>/dev/null)
+    local redis_health_status="${redis_health_response: -3}"  # Get last 3 characters (HTTP status)
+
+    if [ "$redis_health_status" = "200" ]; then
+        print_check "pass" "Redis health check passed" "HTTP $redis_health_status - /api/health/redis"
+    elif [ "$redis_health_status" = "503" ]; then
+        print_check "warn" "Redis not available" "HTTP $redis_health_status - /api/health/redis (using memory cache)"
+    else
+        print_check "info" "Redis health check skipped" "Endpoint not available or Redis disabled"
+    fi
 }
 
 # Function to kill processes on specific ports

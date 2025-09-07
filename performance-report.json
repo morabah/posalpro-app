@@ -1,0 +1,161 @@
+{
+  "testSummary": {
+    "totalDuration": 7600.292208,
+    "dataVolumes": [100, 500, 1000, 5000, 10000],
+    "timestamp": "2025-09-07T09:51:38.925Z"
+  },
+  "results": [
+    {
+      "dataSize": 100,
+      "customerSearch": {
+        "successRate": 100,
+        "avgResponseTime": 0.07609179999999753,
+        "minResponseTime": 0.041917000000012195,
+        "maxResponseTime": 0.14133299999997462,
+        "p95ResponseTime": 0.14133299999997462,
+        "p99ResponseTime": 0.14133299999997462,
+        "errors": 0
+      },
+      "proposalSearch": {
+        "successRate": 100,
+        "avgResponseTime": 0.1558582000000115,
+        "minResponseTime": 0.04620799999997871,
+        "maxResponseTime": 0.34495800000001964,
+        "p95ResponseTime": 0.34495800000001964,
+        "p99ResponseTime": 0.34495800000001964,
+        "errors": 0
+      },
+      "complexFiltering": {
+        "successRate": 100,
+        "avgResponseTime": 0.05697500000001128,
+        "minResponseTime": 0.029291000000057466,
+        "maxResponseTime": 0.08770899999990434,
+        "p95ResponseTime": 0.08770899999990434,
+        "p99ResponseTime": 0.08770899999990434,
+        "errors": 0
+      }
+    },
+    {
+      "dataSize": 500,
+      "customerSearch": {
+        "successRate": 100,
+        "avgResponseTime": 0.036683199999924906,
+        "minResponseTime": 0.02412499999991269,
+        "maxResponseTime": 0.04849999999987631,
+        "p95ResponseTime": 0.04849999999987631,
+        "p99ResponseTime": 0.04849999999987631,
+        "errors": 0
+      },
+      "proposalSearch": {
+        "successRate": 100,
+        "avgResponseTime": 0.06361660000011397,
+        "minResponseTime": 0.03875000000016371,
+        "maxResponseTime": 0.09654200000022684,
+        "p95ResponseTime": 0.09654200000022684,
+        "p99ResponseTime": 0.09654200000022684,
+        "errors": 0
+      },
+      "complexFiltering": {
+        "successRate": 100,
+        "avgResponseTime": 0.05401660000006814,
+        "minResponseTime": 0.0371250000002874,
+        "maxResponseTime": 0.06629100000009203,
+        "p95ResponseTime": 0.06629100000009203,
+        "p99ResponseTime": 0.06629100000009203,
+        "errors": 0
+      }
+    },
+    {
+      "dataSize": 1000,
+      "customerSearch": {
+        "successRate": 100,
+        "avgResponseTime": 0.05215020000014192,
+        "minResponseTime": 0.026125000000320142,
+        "maxResponseTime": 0.07141700000011042,
+        "p95ResponseTime": 0.07141700000011042,
+        "p99ResponseTime": 0.07141700000011042,
+        "errors": 0
+      },
+      "proposalSearch": {
+        "successRate": 100,
+        "avgResponseTime": 0.059175199999936014,
+        "minResponseTime": 0.04337500000019645,
+        "maxResponseTime": 0.08349999999973079,
+        "p95ResponseTime": 0.08349999999973079,
+        "p99ResponseTime": 0.08349999999973079,
+        "errors": 0
+      },
+      "complexFiltering": {
+        "successRate": 100,
+        "avgResponseTime": 0.06004160000011325,
+        "minResponseTime": 0.04604200000085257,
+        "maxResponseTime": 0.07741699999951379,
+        "p95ResponseTime": 0.07741699999951379,
+        "p99ResponseTime": 0.07741699999951379,
+        "errors": 0
+      }
+    },
+    {
+      "dataSize": 5000,
+      "customerSearch": {
+        "successRate": 100,
+        "avgResponseTime": 0.06660820000015519,
+        "minResponseTime": 0.04716699999971752,
+        "maxResponseTime": 0.09475000000020373,
+        "p95ResponseTime": 0.09475000000020373,
+        "p99ResponseTime": 0.09475000000020373,
+        "errors": 0
+      },
+      "proposalSearch": {
+        "successRate": 100,
+        "avgResponseTime": 0.04946680000011838,
+        "minResponseTime": 0.039583000000675383,
+        "maxResponseTime": 0.07616700000016863,
+        "p95ResponseTime": 0.07616700000016863,
+        "p99ResponseTime": 0.07616700000016863,
+        "errors": 0
+      },
+      "complexFiltering": {
+        "successRate": 100,
+        "avgResponseTime": 0.0714665999999852,
+        "minResponseTime": 0.04445800000030431,
+        "maxResponseTime": 0.08550000000013824,
+        "p95ResponseTime": 0.08550000000013824,
+        "p99ResponseTime": 0.08550000000013824,
+        "errors": 0
+      }
+    },
+    {
+      "dataSize": 10000,
+      "customerSearch": {
+        "successRate": 100,
+        "avgResponseTime": 0.050125199999820326,
+        "minResponseTime": 0.027291000000332133,
+        "maxResponseTime": 0.07670899999993708,
+        "p95ResponseTime": 0.07670899999993708,
+        "p99ResponseTime": 0.07670899999993708,
+        "errors": 0
+      },
+      "proposalSearch": {
+        "successRate": 100,
+        "avgResponseTime": 0.051700000000164434,
+        "minResponseTime": 0.02954200000021956,
+        "maxResponseTime": 0.06983300000047166,
+        "p95ResponseTime": 0.06983300000047166,
+        "p99ResponseTime": 0.06983300000047166,
+        "errors": 0
+      },
+      "complexFiltering": {
+        "successRate": 100,
+        "avgResponseTime": 0.06468339999973978,
+        "minResponseTime": 0.05616699999973207,
+        "maxResponseTime": 0.07225000000016735,
+        "p95ResponseTime": 0.07225000000016735,
+        "p99ResponseTime": 0.07225000000016735,
+        "errors": 0
+      }
+    }
+  ],
+  "recommendations": [],
+  "performanceInsights": []
+}

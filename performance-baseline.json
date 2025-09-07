@@ -1,0 +1,227 @@
+{
+  "timestamp": "2025-09-07T09:51:42.616Z",
+  "commit": "local",
+  "branch": "main",
+  "tests": [
+    {
+      "name": "Customer Search - Simple",
+      "endpoint": "/api/customers/search",
+      "params": {
+        "q": "technology",
+        "limit": 20
+      },
+      "iterations": 5,
+      "results": [
+        {
+          "iteration": 1,
+          "responseTime": 169.902042,
+          "success": true
+        },
+        {
+          "iteration": 2,
+          "responseTime": 129.35575,
+          "success": true
+        },
+        {
+          "iteration": 3,
+          "responseTime": 155.60199999999998,
+          "success": true
+        },
+        {
+          "iteration": 4,
+          "responseTime": 166.0841670000001,
+          "success": true
+        },
+        {
+          "iteration": 5,
+          "responseTime": 121.25616600000012,
+          "success": true
+        }
+      ],
+      "analysis": {
+        "successRate": 100,
+        "avgResponseTime": 148.44002500000002,
+        "p95ResponseTime": 169.902042,
+        "p99ResponseTime": 169.902042,
+        "errors": 0
+      }
+    },
+    {
+      "name": "Customer Search - Complex",
+      "endpoint": "/api/customers/search",
+      "params": {
+        "q": "enterprise technology",
+        "industry": "Technology",
+        "tier": "ENTERPRISE",
+        "limit": 50
+      },
+      "iterations": 5,
+      "results": [
+        {
+          "iteration": 1,
+          "responseTime": 297.68229199999996,
+          "success": true
+        },
+        {
+          "iteration": 2,
+          "responseTime": 278.21100000000024,
+          "success": true
+        },
+        {
+          "iteration": 3,
+          "responseTime": 262.1207079999999,
+          "success": true
+        },
+        {
+          "iteration": 4,
+          "responseTime": 237.11654099999987,
+          "success": true
+        },
+        {
+          "iteration": 5,
+          "responseTime": 330.27954199999976,
+          "success": true
+        }
+      ],
+      "analysis": {
+        "successRate": 100,
+        "avgResponseTime": 281.0820166,
+        "p95ResponseTime": 330.27954199999976,
+        "p99ResponseTime": 330.27954199999976,
+        "errors": 0
+      }
+    },
+    {
+      "name": "Proposal Search - Basic",
+      "endpoint": "/api/proposals",
+      "params": {
+        "limit": 20
+      },
+      "iterations": 5,
+      "results": [
+        {
+          "iteration": 1,
+          "responseTime": 41.887000000000626,
+          "success": true
+        },
+        {
+          "iteration": 2,
+          "responseTime": 52.3276249999999,
+          "success": true
+        },
+        {
+          "iteration": 3,
+          "responseTime": 49.17475000000013,
+          "success": true
+        },
+        {
+          "iteration": 4,
+          "responseTime": 54.260833000000275,
+          "success": true
+        },
+        {
+          "iteration": 5,
+          "responseTime": 43.09245800000008,
+          "success": true
+        }
+      ],
+      "analysis": {
+        "successRate": 100,
+        "avgResponseTime": 48.1485332000002,
+        "p95ResponseTime": 54.260833000000275,
+        "p99ResponseTime": 54.260833000000275,
+        "errors": 0
+      }
+    },
+    {
+      "name": "Proposal Search - Filtered",
+      "endpoint": "/api/proposals",
+      "params": {
+        "status": "DRAFT",
+        "priority": "HIGH",
+        "limit": 30
+      },
+      "iterations": 5,
+      "results": [
+        {
+          "iteration": 1,
+          "responseTime": 146.99070799999936,
+          "success": true
+        },
+        {
+          "iteration": 2,
+          "responseTime": 135.18624999999975,
+          "success": true
+        },
+        {
+          "iteration": 3,
+          "responseTime": 170.7357089999996,
+          "success": true
+        },
+        {
+          "iteration": 4,
+          "responseTime": 157.20620800000052,
+          "success": true
+        },
+        {
+          "iteration": 5,
+          "responseTime": 170.13450000000012,
+          "success": true
+        }
+      ],
+      "analysis": {
+        "successRate": 100,
+        "avgResponseTime": 156.05067499999987,
+        "p95ResponseTime": 170.7357089999996,
+        "p99ResponseTime": 170.7357089999996,
+        "errors": 0
+      }
+    },
+    {
+      "name": "Proposal Search - Complex",
+      "endpoint": "/api/proposals",
+      "params": {
+        "search": "enterprise solution",
+        "status": "APPROVED",
+        "priority": "HIGH",
+        "dueBefore": "2025-10-07T09:51:42.617Z",
+        "limit": 50
+      },
+      "iterations": 5,
+      "results": [
+        {
+          "iteration": 1,
+          "responseTime": 439.4855000000007,
+          "success": true
+        },
+        {
+          "iteration": 2,
+          "responseTime": 430.3580830000001,
+          "success": true
+        },
+        {
+          "iteration": 3,
+          "responseTime": 373.17145900000105,
+          "success": true
+        },
+        {
+          "iteration": 4,
+          "responseTime": 388.2024160000001,
+          "success": true
+        },
+        {
+          "iteration": 5,
+          "responseTime": 438.19154199999866,
+          "success": true
+        }
+      ],
+      "analysis": {
+        "successRate": 100,
+        "avgResponseTime": 413.8818000000001,
+        "p95ResponseTime": 439.4855000000007,
+        "p99ResponseTime": 439.4855000000007,
+        "errors": 0
+      }
+    }
+  ]
+}

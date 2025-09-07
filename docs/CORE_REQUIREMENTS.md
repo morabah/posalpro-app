@@ -227,12 +227,19 @@ Observability & Analytics: WebVitalsProvider, logger, metrics store, optimized a
 
 ## 🔐 Authentication & Route Gating
 
-- All pages under `src/app/(dashboard)/` are gated via `ProtectedLayout` in `src/app/(dashboard)/layout.tsx` and require authentication.
-- Top-level internal pages are gated client-side using `ClientLayoutWrapper` → `AuthProvider` → `ProtectedLayout`:
-  - Gated: `/observability`, `/docs`, `/performance` (all subpages), `/proposals/preview`, `/dashboard/proposals/create`, dev test pages (`/test-error`, `/test-error-boundary`, `/test-proposal`).
-  - Public: `/` (marketing/landing), auth routes under `/auth/*`, Next.js internals, and API routes as permitted by middleware.
-- Server-side protection remains enforced by `middleware.ts` + `rbacIntegration.authenticateAndAuthorize`.
-- New pages created via migration templates include this gating by default; remove it only for truly public pages (e.g., `/`).
+- All pages under `src/app/(dashboard)/` are gated via `ProtectedLayout` in
+  `src/app/(dashboard)/layout.tsx` and require authentication.
+- Top-level internal pages are gated client-side using `ClientLayoutWrapper` →
+  `AuthProvider` → `ProtectedLayout`:
+  - Gated: `/observability`, `/docs`, `/performance` (all subpages),
+    `/proposals/preview`, `/dashboard/proposals/create`, dev test pages
+    (`/test-error`, `/test-error-boundary`, `/test-proposal`).
+  - Public: `/` (marketing/landing), auth routes under `/auth/*`, Next.js
+    internals, and API routes as permitted by middleware.
+- Server-side protection remains enforced by `middleware.ts` +
+  `rbacIntegration.authenticateAndAuthorize`.
+- New pages created via migration templates include this gating by default;
+  remove it only for truly public pages (e.g., `/`).
 
 Implementation pattern (client wrapper inside a server page):
 
@@ -245,9 +252,7 @@ export default function Page() {
   return (
     <ClientLayoutWrapper>
       <AuthProvider>
-        <ProtectedLayout>
-          {/* page content */}
-        </ProtectedLayout>
+        <ProtectedLayout>{/* page content */}</ProtectedLayout>
       </AuthProvider>
     </ClientLayoutWrapper>
   );
@@ -513,6 +518,14 @@ Acceptance
 - [ ] Admin bypass honored; 401/403 semantics consistent
 - [ ] No route-local ad hoc role checks
 
+### Seat/Subscription Guardrails
+
+- Server-side guardrails are built into `createRoute` and toggled via env:
+  `SEAT_ENFORCEMENT=true`, `SUBSCRIPTION_ENFORCEMENT=true`.
+- Admin roles bypass enforcement. Subscription status checked via
+  `subscriptionService`; seat availability via `EntitlementService`.
+- No route changes required; use only when product policy calls for enforcement.
+
 ### **Platform Safeguards Checklist**
 
 **Pre-Implementation Verification**
@@ -583,6 +596,48 @@ try {
 ```
 
 **❌ FORBIDDEN: Custom error handling or console.error**
+
+### API Error Handler
+
+- Use `getErrorHandler({ component, operation })` in API routes for sanitized
+  envelopes and structured logging.
+- Wrap DB/IO with
+  `withAsyncErrorHandler(fn, message, { component, operation })`.
+- Prefer `createRoute` for auth/validation/idempotency; never expose stack
+  traces.
+
+Example
+
+```ts
+import { createRoute } from '@/lib/api/route';
+import {
+  getErrorHandler,
+  withAsyncErrorHandler,
+} from '@/server/api/errorHandler';
+
+export const GET = createRoute({ requireAuth: true }, async () => {
+  const eh = getErrorHandler({ component: 'EntityAPI', operation: 'GET' });
+  try {
+    const items = await withAsyncErrorHandler(
+      () => prisma.entity.findMany(),
+      'Fetch failed',
+      {
+        component: 'EntityAPI',
+        operation: 'GET',
+      }
+    );
+    return eh.createSuccessResponse({ items });
+  } catch (err) {
+    return eh.createErrorResponse(err, 'Fetch failed');
+  }
+});
+```
+
+Acceptance
+
+- [ ] `getErrorHandler` used in new API routes (set `component`, `operation`)
+- [ ] `withAsyncErrorHandler` wraps Prisma/remote calls
+- [ ] No `console.*`; no stack traces in responses
 
 **📝 100% TypeScript Compliance**
 
@@ -855,7 +910,7 @@ return useQuery({
 
 **Pagination Patterns (MANDATORY)**
 
-```typescript
+````typescript
 // ✅ CORRECT: Cursor-based pagination
 return useInfiniteQuery({
   queryKey: qk.[domain].list(params),
@@ -868,16 +923,37 @@ return useInfiniteQuery({
 
 ### Server Caching & Redis
 
-- Use `src/lib/redis.ts` helpers for server-side caching; do not implement ad hoc caches.
-- Redis is enabled in production via `USE_REDIS` and falls back to an in-memory cache in dev.
-- Record metrics via `metricsStore` (cache hits/misses, latency).
-- Never cache sensitive PII; choose short TTLs for auth/session data.
+- Use `src/lib/redis.ts` helpers (`getCache`, `setCache`, `deleteCache`); no ad‑hoc Maps.
+- Enable via `USE_REDIS=true` and `REDIS_URL`. Fallback: in‑memory cache (dev/test).
+- Record metrics via `metricsStore` (hits/misses/latency). Short TTLs for auth/session.
+- Key prefixes: `session:`, `providers:`, `user:`, `auth:`, `idemp:`.
+
+Example
+
+```ts
+import { getCache, setCache } from '@/lib/redis';
+import { getErrorHandler } from '@/server/api/errorHandler';
+
+export const GET = createRoute({ requireAuth: true }, async () => {
+  const eh = getErrorHandler({ component: 'EntityAPI', operation: 'GET' });
+  const key = 'entity:list:v1';
+  const cached = await getCache<{ items: any[] }>(key);
+  if (cached) return eh.createSuccessResponse(cached);
+
+  const items = await prisma.entity.findMany();
+  await setCache(key, { items }, 60);
+  return eh.createSuccessResponse({ items });
+});
+````
 
 Acceptance
 
 - [ ] Server routes/services use `getCache/setCache` where appropriate
-- [ ] No route-local in-memory Maps for shared caching concerns
-```
+- [ ] No route‑local Maps for shared caching concerns
+- [ ] TTLs match data sensitivity (auth/session short; lists moderate)
+- [ ] No PII cached unless strictly necessary and time‑boxed
+
+````
 
 ## 🧩 **CODE USABILITY (NEW COMPONENTS)**
 
@@ -921,10 +997,8 @@ Acceptance
 
 **Route Wrapper (MANDATORY)**
 
-- Use `createRoute(config, handler)` from `src/lib/api/route.ts` for new API
-  endpoints.
-- Configure `requireAuth`, `roles`, `query` (Zod), `body` (Zod), and
-  `idempotency` options.
+- Use `createRoute(config, handler)` from `src/lib/api/route.ts` for new API endpoints.
+- Configure `requireAuth`, `roles`, `entitlements`, `query` (Zod), `body` (Zod), and `idempotency`.
 - The wrapper adds request-id headers, deprecation/version headers, consistent
   error handling, and idempotent replay.
 
@@ -944,7 +1018,7 @@ export const GET = createRoute(
     return single(item);
   }
 );
-```
+````
 
 Idempotency
 
@@ -957,6 +1031,7 @@ Acceptance
 - [ ] New API routes use `createRoute`
 - [ ] Zod schemas validated in wrapper, not route body
 - [ ] Idempotency honored for mutating endpoints
+- [ ] Entitlements declared for premium/tenant features when applicable
 
 ### API Response Envelope
 
@@ -1160,10 +1235,15 @@ specific domain requirements.
 
 ## 🔐 Entitlements & Feature Gating
 
-- Enforce premium features on the server using `createRoute` with `entitlements` in the route config. This is mandatory for security.
-- Optional client-side UX gating uses `FeatureGate`/`FeatureLockedBanner` to hide panels when a tenant lacks a feature. Client gating does not replace server checks.
-- Entitlements are stored per-tenant in the `Entitlement` table and cached server-side for performance.
+- Enforce premium features on the server using `createRoute` with `entitlements`
+  in the route config. This is mandatory for security.
+- Optional client-side UX gating uses `FeatureGate`/`FeatureLockedBanner` to
+  hide panels when a tenant lacks a feature. Client gating does not replace
+  server checks.
+- Entitlements are stored per-tenant in the `Entitlement` table and cached
+  server-side for performance.
 - Developer tooling:
   - Seed default dev entitlements in `prisma/seed.ts` (tenant `tenant_default`).
-  - Toggle at runtime: `node scripts/toggle-entitlement.js <tenantId> <key> <enable|disable> [value]`.
+  - Toggle at runtime:
+    `node scripts/toggle-entitlement.js <tenantId> <key> <enable|disable> [value]`.
 - See `docs/FEATURE_GATE_USAGE.md` for examples and patterns.

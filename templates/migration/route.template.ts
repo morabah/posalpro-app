@@ -9,11 +9,12 @@
 // ✅ IMPLEMENTS: Performance monitoring and structured logging
 
 // Core imports
-import { ok, okPaginated } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import { prisma } from '@/lib/db/prisma';
 import { logDebug, logInfo, logError } from '@/lib/logger';
 import { z } from 'zod';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+// import { getCache, setCache } from '@/lib/redis';
 
 // ====================
 // Import consolidated schemas from features directory
@@ -44,9 +45,11 @@ type QueryParams = __ENTITY__Query;
 export const GET = createRoute(
   {
     roles: ['admin', 'sales', 'viewer'],
+    // entitlements: ['feature_key'], // Optional: gate premium feature
     query: __ENTITY__QuerySchema,
   },
   async ({ req, query, user, requestId }) => {
+    const errorHandler = getErrorHandler({ component: '__ENTITY__Route', operation: 'GET' });
     const start = performance.now();
 
     logDebug('API: Fetching __RESOURCE__ list', {
@@ -75,20 +78,24 @@ export const GET = createRoute(
       if (query.category) where.category = query.category;
       // Add other filter fields as needed
 
-      const rows = await (prisma as any).__RESOURCE__.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          // Add other commonly displayed fields
-        },
-        orderBy: { [query.sortBy]: query.sortOrder },
-        take: query.limit + 1,
-        ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      });
+      const rows = await withAsyncErrorHandler(
+        () =>
+          (prisma as any).__RESOURCE__.findMany({
+            where,
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+            orderBy: { [query.sortBy]: query.sortOrder },
+            take: query.limit + 1,
+            ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
+          }),
+        'GET __RESOURCE__ failed',
+        { component: '__ENTITY__Route', operation: 'GET' }
+      );
 
       const nextCursor = rows.length > query.limit ? rows.pop()!.id : null;
       const result = { items: rows, nextCursor };
@@ -105,7 +112,10 @@ export const GET = createRoute(
         requestId,
       });
 
-      return okPaginated(result.items, result.nextCursor);
+      return errorHandler.createSuccessResponse({
+        items: result.items,
+        nextCursor: result.nextCursor,
+      });
     } catch (error) {
       const loadTime = performance.now() - start;
 
@@ -118,7 +128,7 @@ export const GET = createRoute(
         requestId,
       });
 
-      throw error; // Let createRoute handle the error response
+      return errorHandler.createErrorResponse(error, 'Fetch failed');
     }
   }
 );
@@ -133,6 +143,7 @@ export const POST = createRoute(
     body: __ENTITY__CreateSchema,
   },
   async ({ body, user, requestId }) => {
+    const errorHandler = getErrorHandler({ component: '__ENTITY__Route', operation: 'POST' });
     const start = performance.now();
 
     logDebug('API: Creating new __RESOURCE__', {
@@ -148,22 +159,26 @@ export const POST = createRoute(
       const validatedData = body as z.infer<typeof __ENTITY__CreateSchema>;
 
       // Create the entity with audit trail
-      const created = await (prisma as any).__RESOURCE__.create({
-        data: {
-          ...validatedData,
-          createdBy: user.id,
-          updatedBy: user.id,
-        },
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          createdBy: true,
-          // Add other fields that should be returned
-        },
-      });
+      const created = await withAsyncErrorHandler(
+        () =>
+          (prisma as any).__RESOURCE__.create({
+            data: {
+              ...validatedData,
+              createdBy: user.id,
+              updatedBy: user.id,
+            },
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+              createdBy: true,
+            },
+          }),
+        'POST __RESOURCE__ failed',
+        { component: '__ENTITY__Route', operation: 'POST' }
+      );
 
       const loadTime = performance.now() - start;
 
@@ -176,7 +191,7 @@ export const POST = createRoute(
         requestId,
       });
 
-      const res = ok(created, 201);
+      const res = errorHandler.createSuccessResponse(created, undefined, 201);
       res.headers.set('Location', `/api/__RESOURCE__/${created.id}`);
       return res;
     } catch (error) {
@@ -191,7 +206,7 @@ export const POST = createRoute(
         requestId,
       });
 
-      throw error;
+      return errorHandler.createErrorResponse(error, 'Create failed');
     }
   }
 );
@@ -206,6 +221,7 @@ export const PUT = createRoute(
     body: __ENTITY__UpdateSchema,
   },
   async ({ req, body, user, requestId }) => {
+    const errorHandler = getErrorHandler({ component: '__ENTITY__Route', operation: 'PUT' });
     const start = performance.now();
     const url = new URL(req.url);
     const __RESOURCE__Id = url.pathname.split('/').pop() as string;
@@ -223,23 +239,27 @@ export const PUT = createRoute(
       const validatedData = body as z.infer<typeof __ENTITY__UpdateSchema>;
 
       // Update with audit trail
-      const updated = await (prisma as any).__RESOURCE__.update({
-        where: { id: __RESOURCE__Id },
-        data: {
-          ...validatedData,
-          updatedBy: user.id,
-          updatedAt: new Date(),
-        },
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          updatedBy: true,
-          // Add other fields that should be returned
-        },
-      });
+      const updated = await withAsyncErrorHandler(
+        () =>
+          (prisma as any).__RESOURCE__.update({
+            where: { id: __RESOURCE__Id },
+            data: {
+              ...validatedData,
+              updatedBy: user.id,
+              updatedAt: new Date(),
+            },
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+              updatedBy: true,
+            },
+          }),
+        'PUT __RESOURCE__ failed',
+        { component: '__ENTITY__Route', operation: 'PUT' }
+      );
 
       const loadTime = performance.now() - start;
 
@@ -252,7 +272,7 @@ export const PUT = createRoute(
         requestId,
       });
 
-      return ok(updated);
+      return errorHandler.createSuccessResponse(updated);
     } catch (error) {
       const loadTime = performance.now() - start;
 
@@ -266,7 +286,7 @@ export const PUT = createRoute(
         requestId,
       });
 
-      throw error;
+      return errorHandler.createErrorResponse(error, 'Update failed');
     }
   }
 );
@@ -280,6 +300,7 @@ export const DELETE = createRoute(
     roles: ['admin'],
   },
   async ({ req, user, requestId }) => {
+    const errorHandler = getErrorHandler({ component: '__ENTITY__Route', operation: 'DELETE' });
     const start = performance.now();
     const url = new URL(req.url);
     const __RESOURCE__Id = url.pathname.split('/').pop() as string;
@@ -295,21 +316,26 @@ export const DELETE = createRoute(
     try {
       // Soft delete pattern - update status instead of hard delete
       // This preserves data integrity and audit trails
-      const deleted = await (prisma as any).__RESOURCE__.update({
-        where: { id: __RESOURCE__Id },
-        data: {
-          status: 'DELETED',
-          updatedBy: user.id,
-          updatedAt: new Date(),
-          deletedAt: new Date(),
-        },
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          deletedAt: true,
-        },
-      });
+      const deleted = await withAsyncErrorHandler(
+        () =>
+          (prisma as any).__RESOURCE__.update({
+            where: { id: __RESOURCE__Id },
+            data: {
+              status: 'DELETED',
+              updatedBy: user.id,
+              updatedAt: new Date(),
+              deletedAt: new Date(),
+            },
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              deletedAt: true,
+            },
+          }),
+        'DELETE __RESOURCE__ failed',
+        { component: '__ENTITY__Route', operation: 'DELETE' }
+      );
 
       // For hard delete, uncomment the following:
       // await db.__RESOURCE__.delete({
@@ -327,7 +353,7 @@ export const DELETE = createRoute(
         requestId,
       });
 
-      return new Response(null, { status: 204 });
+      return errorHandler.createSuccessResponse(null as any, undefined, 204);
     } catch (error) {
       const loadTime = performance.now() - start;
 
@@ -341,7 +367,7 @@ export const DELETE = createRoute(
         requestId,
       });
 
-      throw error;
+      return errorHandler.createErrorResponse(error, 'Delete failed');
     }
   }
 );

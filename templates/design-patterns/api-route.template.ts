@@ -2,17 +2,16 @@
 // __USER_STORY__: <short reference>
 // __HYPOTHESIS__: <short reference>
 
-import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
+import { ErrorCodes } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+// import { getCache, setCache } from '@/lib/redis';
 // import prisma from '@/lib/db/prisma';
 // import { getServerSession } from 'next-auth';
 // import { authOptions } from '@/lib/auth';
 // import { validateApiPermission } from '@/lib/rbac/withRole';
 // import { __ENTITY__QuerySchema, __ENTITY__CreateSchema } from '@/features/__ROUTE_RESOURCE__/schemas';
-
-const errorHandlingService = ErrorHandlingService.getInstance();
 
 // GET /api/__ROUTE_RESOURCE__ - cursor-paginated list
 export const GET = createRoute(
@@ -21,6 +20,7 @@ export const GET = createRoute(
     // query: __ENTITY__QuerySchema,
   },
   async ({ query, user }) => {
+    const errorHandler = getErrorHandler({ component: '__ROUTE_RESOURCE__API', operation: 'GET' });
     const start = performance.now();
     logDebug('API GET start', {
       component: '__ROUTE_RESOURCE__',
@@ -30,9 +30,20 @@ export const GET = createRoute(
       params: query,
     });
     try {
-      // Example: fetch rows with prisma; replace with real implementation
-      // const rows = await prisma.__ROUTE_RESOURCE__.findMany({ ... })
-      const rows: unknown[] = [];
+      // Optional: Redis cache (example)
+      // const cacheKey = '__ROUTE_RESOURCE__:list:v1';
+      // const cached = await getCache<{ items: unknown[]; nextCursor: string | null }>(cacheKey);
+      // if (cached) return errorHandler.createSuccessResponse(cached);
+
+      // Example: fetch rows with prisma (wrap with withAsyncErrorHandler)
+      const rows: unknown[] = await withAsyncErrorHandler(
+        async () => {
+          // return await prisma.__ROUTE_RESOURCE__.findMany({ ... })
+          return [] as unknown[];
+        },
+        'GET __ROUTE_RESOURCE__ failed',
+        { component: '__ROUTE_RESOURCE__API', operation: 'GET' }
+      );
       const nextCursor: string | null = null;
 
       logInfo('GET success', {
@@ -42,16 +53,14 @@ export const GET = createRoute(
         userId: user.id,
       });
 
-      return Response.json(ok({ items: rows, nextCursor }));
+      // await setCache(cacheKey, { items: rows, nextCursor }, 60);
+      return errorHandler.createSuccessResponse({ items: rows, nextCursor });
     } catch (error: unknown) {
-      const processed = errorHandlingService.processError(
-        error,
-        'GET failed',
-        ErrorCodes.API.NETWORK_ERROR,
-        { context: '__ROUTE_RESOURCE__/GET' }
-      );
-      logError('GET failed', processed, { component: '__ROUTE_RESOURCE__' });
-      throw processed;
+      logError('GET failed', error, { component: '__ROUTE_RESOURCE__' });
+      return getErrorHandler({
+        component: '__ROUTE_RESOURCE__API',
+        operation: 'GET',
+      }).createErrorResponse(error, 'GET failed', ErrorCodes.API.NETWORK_ERROR);
     }
   }
 );
@@ -63,6 +72,7 @@ export const POST = createRoute(
     // body: __ENTITY__CreateSchema,
   },
   async ({ body, user }) => {
+    const errorHandler = getErrorHandler({ component: '__ROUTE_RESOURCE__API', operation: 'POST' });
     const start = performance.now();
     logDebug('API POST start', {
       component: '__ROUTE_RESOURCE__',
@@ -71,8 +81,14 @@ export const POST = createRoute(
       hypothesis: '__HYPOTHESIS__',
     });
     try {
-      // const created = await prisma.__ROUTE_RESOURCE__.create({ data: body, select: { ... } });
-      const created = { id: 'new-id', ...(body || {}), createdAt: new Date().toISOString() };
+      const created = await withAsyncErrorHandler(
+        async () => {
+          // return await prisma.__ROUTE_RESOURCE__.create({ data: body, select: { ... } });
+          return { id: 'new-id', ...(body || {}), createdAt: new Date().toISOString() } as const;
+        },
+        'POST __ROUTE_RESOURCE__ failed',
+        { component: '__ROUTE_RESOURCE__API', operation: 'POST' }
+      );
 
       logInfo('POST success', {
         component: '__ROUTE_RESOURCE__',
@@ -80,16 +96,13 @@ export const POST = createRoute(
         resourceId: (created as any).id,
         userId: user.id,
       });
-      return new Response(JSON.stringify(ok(created)), { status: 201 });
+      return errorHandler.createSuccessResponse(created, undefined, 201);
     } catch (error: unknown) {
-      const processed = errorHandlingService.processError(
-        error,
-        'POST failed',
-        ErrorCodes.API.NETWORK_ERROR,
-        { context: '__ROUTE_RESOURCE__/POST' }
-      );
-      logError('POST failed', processed, { component: '__ROUTE_RESOURCE__' });
-      throw processed;
+      logError('POST failed', error, { component: '__ROUTE_RESOURCE__' });
+      return getErrorHandler({
+        component: '__ROUTE_RESOURCE__API',
+        operation: 'POST',
+      }).createErrorResponse(error, 'POST failed', ErrorCodes.API.NETWORK_ERROR, 500);
     }
   }
 );

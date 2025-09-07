@@ -1,4 +1,3 @@
-// Request ID Template for Migration from Bridge Pattern
-
-export const getOrCreateRequestId = (req: Request) =>
-  req.headers.get('x-request-id') ?? crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
+// Request ID (Migration Template)
+// Prefer centralized helper. Re-export to avoid duplication/drift.
+export { getOrCreateRequestId } from '@/lib/requestId';

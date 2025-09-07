@@ -3,7 +3,7 @@
  * Monitors Redis connection and performance
  */
 
-import { checkRedisHealth, getCache, setCache } from '@/lib/redis';
+import { checkRedisHealth, getCache, setCache, getRedisDiagnostics } from '@/lib/redis';
 import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -11,7 +11,6 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-
     // Check Redis health
     const isHealthy = await checkRedisHealth();
 
@@ -28,7 +27,9 @@ export async function GET(request: NextRequest) {
 
       await setCache(testKey, testValue, 10); // 10 second TTL
       const retrievedValue = await getCache<Record<string, unknown>>(testKey);
-      cacheTestPassed = Boolean(retrievedValue && (retrievedValue as Record<string, unknown>).test === true);
+      cacheTestPassed = Boolean(
+        retrievedValue && (retrievedValue as Record<string, unknown>).test === true
+      );
       cacheTestTime = Date.now() - cacheTestStart;
     }
 
@@ -38,6 +39,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
       redis: {
         connected: isHealthy,
+        diagnostics: getRedisDiagnostics(),
         cacheTest: {
           passed: cacheTestPassed,
           time: cacheTestTime,

@@ -5,12 +5,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logDebug, logInfo, logWarn } from '@/lib/logger';
 import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
+import { getOrCreateRequestId } from '@/lib/requestId';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const start = performance.now();
+  const requestId = getOrCreateRequestId(request as unknown as Request);
 
   logDebug('Middleware start', {
     component: '__MIDDLEWARE_NAME__',
@@ -53,6 +55,7 @@ export async function middleware(request: NextRequest) {
     response.headers.set('X-Frame-Options', 'DENY');
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    response.headers.set('x-request-id', requestId);
 
     return response;
   } catch (error: unknown) {
@@ -65,16 +68,20 @@ export async function middleware(request: NextRequest) {
         pathname,
         userStory: '__USER_STORY__',
         hypothesis: '__HYPOTHESIS__',
+        requestId,
       }
     );
 
     logWarn('Middleware error', processed, {
       component: '__MIDDLEWARE_NAME__',
       pathname,
+      requestId,
     });
 
     // Continue to next middleware/route on error (defensive)
-    return NextResponse.next();
+    const response = NextResponse.next();
+    response.headers.set('x-request-id', requestId);
+    return response;
   }
 }
 

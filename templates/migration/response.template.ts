@@ -1,5 +1,3 @@
-// Typed Response Envelope Template for Migration from Bridge Pattern
-
-export type ApiResponse<T> = { ok: true; data: T } | { ok: false; code: string; message: string };
-
-export const ok = <T>(data: T): ApiResponse<T> => ({ ok: true, data });
+// Response Envelope (Migration Template)
+// Prefer centralized helpers. Re-export to avoid duplication/drift.
+export { ok, okPaginated, error as fail, error, type ApiResponse } from '@/lib/api/response';
