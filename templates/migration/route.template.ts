@@ -10,11 +10,17 @@
 
 // Core imports
 import { createRoute } from '@/lib/api/route';
-import { prisma } from '@/lib/db/prisma';
 import { logDebug, logInfo, logError } from '@/lib/logger';
 import { z } from 'zod';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 // import { getCache, setCache } from '@/lib/redis';
+
+// IMPORTANT: Business logic must live in server services (no Prisma in routes)
+// See docs/CORE_REQUIREMENTS.md#service-layer-patterns
+// TODO: Replace __RESOURCE__/__ENTITY__ import below with your actual server DB service
+// Example: import { customerService } from '@/lib/services/customerService';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { __ENTITY__Service as __RESOURCE__DbService } from '@/lib/services/__RESOURCE__Service';
 
 // ====================
 // Import consolidated schemas from features directory
@@ -61,44 +67,22 @@ export const GET = createRoute(
     });
 
     try {
-      // Build dynamic where clause based on entity schema
-      const where: any = {};
+      // Route builds typed filters only; service performs DB operations + normalization
+      const filters = {
+        search: query.search,
+        status: (query as any).status,
+        category: (query as any).category,
+        sortBy: query.sortBy,
+        sortOrder: query.sortOrder,
+        cursor: query.cursor,
+        limit: query.limit,
+      } as const;
 
-      if (query.search && query.search.trim()) {
-        // This would be customized based on the entity's searchable fields
-        where.OR = [
-          { name: { contains: query.search, mode: 'insensitive' } },
-          // Add other searchable fields here
-          // { email: { contains: query.search, mode: 'insensitive' } },
-        ];
-      }
-
-      // Add any filters (status, category, etc.)
-      if (query.status) where.status = query.status;
-      if (query.category) where.category = query.category;
-      // Add other filter fields as needed
-
-      const rows = await withAsyncErrorHandler(
-        () =>
-          (prisma as any).__RESOURCE__.findMany({
-            where,
-            select: {
-              id: true,
-              name: true,
-              status: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-            orderBy: { [query.sortBy]: query.sortOrder },
-            take: query.limit + 1,
-            ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-          }),
+      const result = await withAsyncErrorHandler(
+        () => (__RESOURCE__DbService as any).get__ENTITY__s(filters),
         'GET __RESOURCE__ failed',
         { component: '__ENTITY__Route', operation: 'GET' }
       );
-
-      const nextCursor = rows.length > query.limit ? rows.pop()!.id : null;
-      const result = { items: rows, nextCursor };
 
       const loadTime = performance.now() - start;
 
@@ -112,10 +96,7 @@ export const GET = createRoute(
         requestId,
       });
 
-      return errorHandler.createSuccessResponse({
-        items: result.items,
-        nextCursor: result.nextCursor,
-      });
+      return errorHandler.createSuccessResponse({ items: result.items, nextCursor: result.nextCursor });
     } catch (error) {
       const loadTime = performance.now() - start;
 
@@ -158,24 +139,9 @@ export const POST = createRoute(
       // Validation is handled by createRoute via Zod schema
       const validatedData = body as z.infer<typeof __ENTITY__CreateSchema>;
 
-      // Create the entity with audit trail
+      // Delegate creation to server service (ensures transactions and integrity)
       const created = await withAsyncErrorHandler(
-        () =>
-          (prisma as any).__RESOURCE__.create({
-            data: {
-              ...validatedData,
-              createdBy: user.id,
-              updatedBy: user.id,
-            },
-            select: {
-              id: true,
-              name: true,
-              status: true,
-              createdAt: true,
-              updatedAt: true,
-              createdBy: true,
-            },
-          }),
+        () => (__RESOURCE__DbService as any).create__ENTITY__({ ...validatedData, createdBy: user.id }),
         'POST __RESOURCE__ failed',
         { component: '__ENTITY__Route', operation: 'POST' }
       );
@@ -238,25 +204,9 @@ export const PUT = createRoute(
     try {
       const validatedData = body as z.infer<typeof __ENTITY__UpdateSchema>;
 
-      // Update with audit trail
+      // Delegate update to server service (handles transactions/normalization)
       const updated = await withAsyncErrorHandler(
-        () =>
-          (prisma as any).__RESOURCE__.update({
-            where: { id: __RESOURCE__Id },
-            data: {
-              ...validatedData,
-              updatedBy: user.id,
-              updatedAt: new Date(),
-            },
-            select: {
-              id: true,
-              name: true,
-              status: true,
-              createdAt: true,
-              updatedAt: true,
-              updatedBy: true,
-            },
-          }),
+        () => (__RESOURCE__DbService as any).update__ENTITY__(__RESOURCE__Id, { ...validatedData, updatedBy: user.id }),
         'PUT __RESOURCE__ failed',
         { component: '__ENTITY__Route', operation: 'PUT' }
       );
@@ -314,33 +264,12 @@ export const DELETE = createRoute(
     });
 
     try {
-      // Soft delete pattern - update status instead of hard delete
-      // This preserves data integrity and audit trails
-      const deleted = await withAsyncErrorHandler(
-        () =>
-          (prisma as any).__RESOURCE__.update({
-            where: { id: __RESOURCE__Id },
-            data: {
-              status: 'DELETED',
-              updatedBy: user.id,
-              updatedAt: new Date(),
-              deletedAt: new Date(),
-            },
-            select: {
-              id: true,
-              name: true,
-              status: true,
-              deletedAt: true,
-            },
-          }),
+      // Prefer soft-delete in service for auditability; allow hard delete as needed.
+      await withAsyncErrorHandler(
+        () => (__RESOURCE__DbService as any).delete__ENTITY__(__RESOURCE__Id, { deletedBy: user.id }),
         'DELETE __RESOURCE__ failed',
         { component: '__ENTITY__Route', operation: 'DELETE' }
       );
-
-      // For hard delete, uncomment the following:
-      // await db.__RESOURCE__.delete({
-      //   where: { id: __RESOURCE__Id },
-      // });
 
       const loadTime = performance.now() - start;
 

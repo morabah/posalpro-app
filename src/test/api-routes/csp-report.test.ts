@@ -11,6 +11,10 @@ describe('API Route - /api/security/csp-report', () => {
     const res = await POST(req as any);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ status: 'ok' });
+    expect(body).toEqual({
+      ok: true,
+      data: { status: 'ok' },
+      message: 'CSP violation report received successfully'
+    });
   });
 });

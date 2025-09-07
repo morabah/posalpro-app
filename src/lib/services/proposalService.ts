@@ -1321,71 +1321,6 @@ export class ProposalService {
     }
   }
 
-  async calculateProposalValue(id: string): Promise<number> {
-    try {
-      const result = await prisma.proposalProduct.aggregate({
-        where: { proposalId: id },
-        _sum: { total: true },
-      });
-
-      const totalValue = Number(result._sum.total || 0);
-
-      // Update the proposal with calculated value
-      await prisma.proposal.update({
-        where: { id },
-        data: { value: totalValue },
-      });
-
-      return totalValue;
-    } catch (error) {
-      // Log the error using ErrorHandlingService
-      errorHandlingService.processError(error);
-
-      if (isPrismaError(error)) {
-        if (error.code === 'P2025') {
-          throw new StandardError({
-            message: 'Proposal not found',
-            code: ErrorCodes.DATA.NOT_FOUND,
-            cause: error,
-            metadata: {
-              component: 'ProposalService',
-              operation: 'calculateProposalValue',
-              proposalId: id,
-              prismaCode: error.code,
-            },
-          });
-        }
-
-        throw new StandardError({
-          message: 'Database error while calculating proposal value',
-          code: ErrorCodes.DATA.DATABASE_ERROR,
-          cause: error,
-          metadata: {
-            component: 'ProposalService',
-            operation: 'calculateProposalValue',
-            proposalId: id,
-            prismaCode: error.code,
-          },
-        });
-      }
-
-      if (error instanceof StandardError) {
-        throw error;
-      }
-
-      throw new StandardError({
-        message: 'Failed to calculate proposal value',
-        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
-        cause: error instanceof Error ? error : undefined,
-        metadata: {
-          component: 'ProposalService',
-          operation: 'calculateProposalValue',
-          proposalId: id,
-        },
-      });
-    }
-  }
-
   async getProposalAnalytics(id: string): Promise<ProposalAnalytics> {
     try {
       const [proposal, sections, products, validationIssues] = await Promise.all([
@@ -1595,6 +1530,397 @@ export class ProposalService {
         },
       });
     }
+  }
+
+  /**
+   * Cursor-based list method following CORE_REQUIREMENTS.md patterns
+   * Returns normalized data with proper transformations
+   */
+  async listProposalsCursor(filters: ProposalFilters = {}): Promise<{
+    items: ProposalWithCustomer[];
+    nextCursor: string | null;
+  }> {
+    try {
+      const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
+
+      // Build where clause following service layer patterns
+      const where: Prisma.ProposalWhereInput = this.buildWhereClause(filters);
+
+      // Build order by with cursor pagination support
+      const orderBy: Array<Record<string, Prisma.SortOrder>> = this.buildOrderByClause(filters);
+
+      // Execute query with cursor pagination
+      const rows = await prisma.proposal.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          customerId: true,
+          createdBy: true,
+          dueDate: true,
+          submittedAt: true,
+          approvedAt: true,
+          validUntil: true,
+          priority: true,
+          value: true,
+          currency: true,
+          status: true,
+          tags: true,
+          userStoryTracking: true,
+          createdAt: true,
+          updatedAt: true,
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              industry: true,
+            },
+          },
+          creator: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+        orderBy,
+        take: limit + 1, // Take one extra to check if there are more
+        ...(filters.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
+      });
+
+      // Determine if there are more pages and extract items
+      const hasNextPage = rows.length > limit;
+      const items = hasNextPage ? rows.slice(0, limit) : rows;
+      const nextCursor = hasNextPage ? rows[limit - 1].id : null;
+
+      // Normalize data following service layer patterns
+      const normalizedItems = items.map(item => this.normalizeProposalData(item));
+
+      return {
+        items: normalizedItems as ProposalWithCustomer[],
+        nextCursor,
+      };
+    } catch (error) {
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to list proposals with cursor pagination',
+        code: ErrorCodes.DATA.DATABASE_ERROR,
+        cause: error,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'listProposalsCursor',
+          filters,
+        },
+      });
+    }
+  }
+
+  /**
+   * Comprehensive proposal creation with assignments and products
+   * Following CORE_REQUIREMENTS.md service layer patterns
+   */
+  async createProposalWithAssignmentsAndProducts(
+    data: CreateProposalData & {
+      teamData?: { teamLead?: string; salesRepresentative?: string };
+      productData?: {
+        products: Array<{
+          productId: string;
+          quantity: number;
+          unitPrice: number;
+          total: number;
+          discount?: number;
+        }>;
+      };
+      contentData?: any;
+      sectionData?: any;
+      planType?: string;
+      wizardVersion?: string;
+    },
+    userId: string
+  ): Promise<ProposalWithCustomer> {
+    try {
+      const tenant = getCurrentTenant();
+
+      // Calculate final value from products (business logic belongs in service)
+      const finalValue = this.calculateProposalValue(data);
+
+      // Create comprehensive user story tracking
+      const userStoryTracking = this.buildUserStoryTracking(data);
+
+      // Execute transaction following service layer patterns
+      const proposal = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Create main proposal
+        const proposal = await tx.proposal.create({
+          data: {
+            tenantId: tenant.tenantId,
+            title: data.title || 'Untitled Proposal',
+            description: data.description || '',
+            customerId: data.customerId,
+            dueDate: data.dueDate ? new Date(data.dueDate) : null,
+            priority: data.priority || Priority.MEDIUM,
+            value: finalValue,
+            currency: data.currency || 'USD',
+            status: ProposalStatus.DRAFT,
+            tags: data.tags || [],
+            createdBy: userId,
+            userStoryTracking: toPrismaJson(userStoryTracking),
+          },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            customerId: true,
+            dueDate: true,
+            priority: true,
+            value: true,
+            currency: true,
+            status: true,
+            tags: true,
+            userStoryTracking: true,
+            createdAt: true,
+            updatedAt: true,
+            customer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                industry: true,
+              },
+            },
+            creator: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        });
+
+        // Handle team assignments if provided
+        if (data.teamData?.teamLead || data.teamData?.salesRepresentative) {
+          await this.handleTeamAssignments(tx, proposal.id, data.teamData);
+        }
+
+        // Handle product assignments if provided
+        if (data.productData?.products && data.productData.products.length > 0) {
+          await this.handleProductAssignments(tx, proposal.id, data.productData.products);
+        }
+
+        return proposal;
+      });
+
+      // Normalize and return
+      return this.normalizeProposalData(proposal) as ProposalWithCustomer;
+    } catch (error) {
+      errorHandlingService.processError(error);
+
+      if (isPrismaError(error)) {
+        throw new StandardError({
+          message: `Database operation failed during proposal creation`,
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'createProposalWithAssignmentsAndProducts',
+            prismaCode: error.code,
+          },
+        });
+      }
+
+      throw new StandardError({
+        message: 'Failed to create proposal with assignments and products',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error,
+        metadata: {
+          component: 'ProposalService',
+          operation: 'createProposalWithAssignmentsAndProducts',
+        },
+      });
+    }
+  }
+
+  /**
+   * Helper: Build where clause for filtering
+   * Following CORE_REQUIREMENTS.md patterns
+   */
+  private buildWhereClause(filters: ProposalFilters): Prisma.ProposalWhereInput {
+    const where: Prisma.ProposalWhereInput = {};
+
+    if (filters.search) {
+      where.OR = [
+        { title: { contains: filters.search, mode: 'insensitive' } },
+        { description: { contains: filters.search, mode: 'insensitive' } },
+        { customer: { name: { contains: filters.search, mode: 'insensitive' } } },
+      ];
+    }
+
+    if (filters.status) where.status = { in: filters.status };
+    if (filters.priority) where.priority = { in: filters.priority };
+    if (filters.customerId) where.customerId = filters.customerId;
+    if (filters.createdBy) where.createdBy = filters.createdBy;
+
+    if (filters.assignedTo) {
+      where.assignedTo = { some: { id: filters.assignedTo } };
+    }
+
+    if (filters.tags && filters.tags.length > 0) {
+      where.tags = { hasSome: filters.tags };
+    }
+
+    // Handle deadline filters
+    if (filters.dueBefore || filters.dueAfter) {
+      where.dueDate = {};
+      if (filters.dueBefore) (where.dueDate as any).lte = new Date(filters.dueBefore);
+      if (filters.dueAfter) (where.dueDate as any).gte = new Date(filters.dueAfter);
+    }
+
+    // Handle date range filters
+    if (filters.createdAfter || filters.createdBefore) {
+      where.createdAt = {};
+      if (filters.createdAfter) (where.createdAt as any).gte = new Date(filters.createdAfter);
+      if (filters.createdBefore) (where.createdAt as any).lte = new Date(filters.createdBefore);
+    }
+
+    // Handle value range filters
+    if (filters.valueMin !== undefined || filters.valueMax !== undefined) {
+      where.value = {};
+      if (filters.valueMin !== undefined) (where.value as any).gte = filters.valueMin;
+      if (filters.valueMax !== undefined) (where.value as any).lte = filters.valueMax;
+    }
+
+    // Open-only filter (exclude final states)
+    if (filters.openOnly) {
+      where.status = {
+        notIn: ['APPROVED', 'REJECTED', 'ACCEPTED', 'DECLINED'],
+      } as any;
+    }
+
+    return where;
+  }
+
+  /**
+   * Helper: Build order by clause with cursor pagination support
+   */
+  private buildOrderByClause(filters: ProposalFilters): Array<Record<string, Prisma.SortOrder>> {
+    const sortBy = filters.sortBy || 'createdAt';
+    const sortOrder = filters.sortOrder || 'desc';
+
+    const orderBy: Array<Record<string, Prisma.SortOrder>> = [{ [sortBy]: sortOrder }];
+
+    // Add secondary sort for cursor pagination stability
+    if (sortBy !== 'id') {
+      orderBy.push({ id: sortOrder });
+    }
+
+    return orderBy;
+  }
+
+  /**
+   * Helper: Normalize proposal data (Decimal conversion, null handling)
+   * Following CORE_REQUIREMENTS.md transformation patterns
+   */
+  private normalizeProposalData(proposal: any): any {
+    return {
+      ...proposal,
+      value: proposal.value ? Number(proposal.value) : undefined,
+      description: proposal.description || '',
+      userStoryTracking: proposal.userStoryTracking || {},
+      customer: proposal.customer
+        ? {
+            ...proposal.customer,
+            email: proposal.customer.email || '',
+            industry: proposal.customer.industry || '',
+          }
+        : undefined,
+      title: proposal.title || 'Untitled Proposal',
+      dueDate: proposal.dueDate || null,
+      submittedAt: proposal.submittedAt || null,
+      approvedAt: proposal.approvedAt || null,
+      validUntil: proposal.validUntil || null,
+    };
+  }
+
+  /**
+   * Helper: Calculate proposal value from products
+   */
+  private calculateProposalValue(data: any): number {
+    if (data.productData?.products?.length > 0) {
+      return data.productData.products.reduce(
+        (sum: number, product: any) => sum + (product.total || 0),
+        0
+      );
+    }
+    return data.value || 0;
+  }
+
+  /**
+   * Helper: Build user story tracking object
+   */
+  private buildUserStoryTracking(data: any): any {
+    return {
+      projectType: data.projectType || '',
+      teamData: data.teamData || {},
+      contentData: data.contentData || {},
+      productData: data.productData ? JSON.parse(JSON.stringify(data.productData)) : {},
+      sectionData: data.sectionData || {},
+      wizardVersion: data.wizardVersion || 'modern',
+      submittedAt: new Date().toISOString(),
+      planType: data.planType || '',
+    };
+  }
+
+  /**
+   * Helper: Handle team assignments in transaction
+   */
+  private async handleTeamAssignments(
+    tx: Prisma.TransactionClient,
+    proposalId: string,
+    teamData: { teamLead?: string; salesRepresentative?: string }
+  ): Promise<void> {
+    const assignedUserIds = [];
+    if (teamData.teamLead) assignedUserIds.push(teamData.teamLead);
+    if (teamData.salesRepresentative) assignedUserIds.push(teamData.salesRepresentative);
+
+    if (assignedUserIds.length > 0) {
+      await tx.proposal.update({
+        where: { id: proposalId },
+        data: {
+          assignedTo: {
+            connect: assignedUserIds.map(userId => ({ id: userId })),
+          },
+        },
+      });
+    }
+  }
+
+  /**
+   * Helper: Handle product assignments in transaction
+   */
+  private async handleProductAssignments(
+    tx: Prisma.TransactionClient,
+    proposalId: string,
+    products: Array<{
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      total: number;
+      discount?: number;
+    }>
+  ): Promise<void> {
+    await tx.proposalProduct.createMany({
+      data: products.map(product => ({
+        proposalId,
+        productId: product.productId,
+        quantity: product.quantity,
+        unitPrice: product.unitPrice,
+        total: product.total,
+        discount: product.discount || 0,
+      })),
+    });
   }
 }
 

@@ -55,46 +55,35 @@ export const __ENTITY__Service = {
    * Get single entity by ID
    */
   async get__ENTITY__(id: string): Promise<__ENTITY__> {
-    return http<__ENTITY__>(`/api/__RESOURCE__/${id}`);
+    return http.get<__ENTITY__>(`/api/__RESOURCE__/${id}`);
   },
 
   /**
    * Create new entity
    */
   async create__ENTITY__(data: Create__ENTITY__Data): Promise<__ENTITY__> {
-    return http<__ENTITY__>('/api/__RESOURCE__', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    return http.post<__ENTITY__>('/api/__RESOURCE__', data);
   },
 
   /**
    * Update existing entity
    */
   async update__ENTITY__(id: string, data: Update__ENTITY__Data): Promise<__ENTITY__> {
-    return http<__ENTITY__>(`/api/__RESOURCE__/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    return http.put<__ENTITY__>(`/api/__RESOURCE__/${id}`, data);
   },
 
   /**
    * Delete entity
    */
   async delete__ENTITY__(id: string): Promise<void> {
-    await http(`/api/__RESOURCE__/${id}`, {
-      method: 'DELETE',
-    });
+    await http.delete(`/api/__RESOURCE__/${id}`);
   },
 
   /**
    * Bulk delete entities
    */
   async delete__ENTITY__sBulk(ids: string[]): Promise<{ deleted: number }> {
-    return http<{ deleted: number }>('/api/__RESOURCE__/bulk-delete', {
-      method: 'POST',
-      body: JSON.stringify({ ids }),
-    });
+    return http.post<{ deleted: number }>('/api/__RESOURCE__/bulk-delete', { ids });
   },
 
   /**
@@ -106,7 +95,7 @@ export const __ENTITY__Service = {
     inactive: number;
     // Add entity-specific stats
   }> {
-    return http<any>('/api/__RESOURCE__/stats');
+    return http.get<any>('/api/__RESOURCE__/stats');
   },
 
   /**
@@ -122,7 +111,7 @@ export const __ENTITY__Service = {
       });
     }
 
-    return http<__ENTITY__[]>(`/api/__RESOURCE__/search?${searchParams.toString()}`);
+    return http.get<__ENTITY__[]>(`/api/__RESOURCE__/search?${searchParams.toString()}`);
   },
 };
 

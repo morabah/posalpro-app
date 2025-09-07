@@ -4,7 +4,10 @@
 
 import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import { prisma } from '@/lib/db/prisma';
+// IMPORTANT: No Prisma in routes; delegate to server DB services
+// Example: import { customerService } from '@/lib/services/customerService';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { __ENTITY__Service as __RESOURCE__DbService } from '@/lib/services/__RESOURCE__Service';
 import { logInfo } from '@/lib/logger';
 import { z } from 'zod';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
@@ -27,14 +30,7 @@ export const GET = createRoute(
     await validateApiPermission(req as any, '__RESOURCE__:read');
 
     const items = await withAsyncErrorHandler(
-      () =>
-        (prisma as any).__RESOURCE__.findMany({
-          where: query.search
-            ? { name: { contains: query.search, mode: 'insensitive' } }
-            : undefined,
-          take: query.limit,
-          orderBy: { createdAt: 'desc' },
-        }),
+      () => (__RESOURCE__DbService as any).get__ENTITY__s({ search: query.search, limit: query.limit }),
       'GET __RESOURCE__ failed',
       { component: '__ENTITY__PermissionRoute', operation: 'GET' }
     );
@@ -67,11 +63,7 @@ export const POST = createRoute(
     await validateApiPermission(req as any, '__RESOURCE__:create');
 
     const created = await withAsyncErrorHandler(
-      () =>
-        (prisma as any).__RESOURCE__.create({
-          data: { name: body.name, createdBy: user.id },
-          select: { id: true, name: true, createdAt: true },
-        }),
+      () => (__RESOURCE__DbService as any).create__ENTITY__({ name: body.name, createdBy: user.id }),
       'POST __RESOURCE__ failed',
       { component: '__ENTITY__PermissionRoute', operation: 'POST' }
     );

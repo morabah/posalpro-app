@@ -165,3 +165,4 @@ describe('Dashboard Performance Tests', () => {
     expect(screen.getByText('Dashboard Overview')).toBeInTheDocument();
   });
 });
+

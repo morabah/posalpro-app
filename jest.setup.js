@@ -405,13 +405,13 @@ if (typeof window !== 'undefined') {
 
 // Mock geolocation API (browser only)
 if (typeof navigator !== 'undefined') {
-  Object.defineProperty(navigator, 'geolocation', {
-    value: {
+  if (!navigator.geolocation) {
+    navigator.geolocation = {
       getCurrentPosition: jest.fn(),
       watchPosition: jest.fn(),
       clearWatch: jest.fn(),
-    },
-  });
+    };
+  }
 }
 
 // Mock clipboard API for copy/paste functionality (browser only)

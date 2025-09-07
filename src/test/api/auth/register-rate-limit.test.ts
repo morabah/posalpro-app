@@ -40,11 +40,13 @@ jest.mock('@/lib/errors', () => ({
   createApiErrorResponse: jest.fn().mockImplementation((error, message, code, status, options) => {
     return new Response(
       JSON.stringify({
-        success: false,
+        ok: false,
         message: message || 'Error',
-        code,
-        metadata: error.metadata,
-        userFriendlyMessage: options?.userFriendlyMessage,
+        error: {
+          code,
+          metadata: error.metadata,
+        },
+        ...(options?.userFriendlyMessage && { userFriendlyMessage: options.userFriendlyMessage }),
       }),
       {
         status: status || 500,
@@ -127,7 +129,9 @@ describe('Registration Rate Limiting Tests', () => {
       expect(mockRateLimiter.isLimited).toHaveBeenCalledWith('192.168.1.1', 5, 60 * 1000);
       expect(mockRateLimiter.getRemainingAttempts).toHaveBeenCalledWith('192.168.1.1', 5);
       expect(response.status).toBe(429);
-      expect(responseData.success).toBe(false);
+      const responseData = await response.json();
+      expect(responseData.ok).toBe(false);
+      expect(responseData.ok).toBe(false);
       expect(responseData.message).toBe('Too many attempts');
     });
 
@@ -141,7 +145,7 @@ describe('Registration Rate Limiting Tests', () => {
       const response = await POST(request);
       const responseData = await response.json();
 
-      expect(responseData.metadata?.remainingAttempts).toBe(2);
+      expect(responseData.error?.metadata?.remainingAttempts).toBe(2);
     });
   });
 
@@ -183,6 +187,8 @@ describe('Registration Rate Limiting Tests', () => {
       const request3 = createMockRequest('192.168.1.1', validRegistrationData);
       const response3 = await POST(request3);
       expect(response3.status).toBe(429);
+      const response3Data = await response3.json();
+      expect(response3Data.ok).toBe(false);
     });
   });
 
@@ -264,6 +270,8 @@ describe('Registration Rate Limiting Tests', () => {
       const response = await POST(request);
 
       expect(response.status).toBe(429);
+      const responseData = await response.json();
+      expect(responseData.ok).toBe(false);
     });
 
     it('should support AC-9.1.2: Rate limit window resets after 60 seconds', async () => {
@@ -290,9 +298,12 @@ describe('Registration Rate Limiting Tests', () => {
       const responseData = await response.json();
 
       expect(response.status).toBe(429);
+      const responseData = await response.json();
+      expect(responseData.ok).toBe(false);
       expect(responseData.userFriendlyMessage).toBe(
         'Too many registration attempts. Please try again later.'
       );
+      expect(responseData.ok).toBe(false);
     });
   });
 });

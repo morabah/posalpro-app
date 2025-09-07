@@ -7,11 +7,32 @@ import { GET as getEnhanced } from '@/app/api/dashboard/enhanced-stats/route';
 import { GET as getExecutive } from '@/app/api/dashboard/executive/route';
 import { GET as getOpenApi } from '@/app/api/docs/openapi.json/route';
 
-// Mock next-auth session to satisfy createRoute auth path
+// Mock next-auth and next-auth/jwt to avoid ES module issues
 jest.mock('next-auth', () => ({
   getServerSession: jest.fn(async () => ({
-    user: { id: 'u1', email: 'admin@example.com', roles: ['Administrator'] },
+    user: {
+      id: 'u1',
+      email: 'admin@example.com',
+      roles: ['Administrator'],
+      entitlements: ['feature.analytics.dashboard', 'feature.analytics.enhanced', 'feature.analytics.executive']
+    },
   })),
+}));
+
+jest.mock('next-auth/jwt', () => ({
+  getToken: jest.fn(async () => ({
+    sub: 'u1',
+    email: 'admin@example.com',
+    roles: ['Administrator'],
+    entitlements: ['feature.analytics.dashboard', 'feature.analytics.enhanced', 'feature.analytics.executive'],
+  })),
+}));
+
+// Mock EntitlementService to allow dashboard access
+jest.mock('@/lib/services/EntitlementService', () => ({
+  EntitlementService: {
+    hasEntitlements: jest.fn(async () => true),
+  },
 }));
 
 // Mock Prisma to avoid database access during tests
@@ -65,4 +86,3 @@ describe('Dashboard OpenAPI paths', () => {
     expect(doc.paths['/dashboard/executive']).toBeTruthy();
   });
 });
-

@@ -106,12 +106,19 @@ implementation patterns:
 
 ### **1. Service Layer Excellence**
 
-- **Function-based services** on `@/lib/http`
+- **Function-based services** on `@/lib/http` (frontend)
+- **Server DB services** under `src/lib/services/*` (Prisma) — All business logic here
 - **Comprehensive error handling** with ErrorHandlingService
 - **Structured logging** with component, operation, and user story tracking
 - **ApiResponse wrapper** for consistent response format
 - **Schema validation** using feature-based Zod schemas
 - **Performance monitoring** with load time tracking
+
+Important:
+
+- API routes are thin: validation, RBAC, idempotency, request ID, optional cache.
+- Routes MUST NOT import `@/lib/db/prisma`; call the server DB service instead.
+- Put `$transaction`, `$queryRaw`, and normalization in the server DB service.
 
 ### **2. React Query Integration**
 
@@ -158,7 +165,8 @@ implementation patterns:
 
 | Template                    | Modern Features                                                            | Target Location                                   | Status        |
 | --------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------- | ------------- |
-| `service.template.ts` ⭐    | Function-based service on `@/lib/http`, unwrapped data                     | `src/services/__RESOURCE__Service.ts`             | ✅ **MODERN** |
+| `service.template.ts` ⭐    | Function-based service on `@/lib/http`, unwrapped data (frontend only)     | `src/services/__RESOURCE__Service.ts`             | ✅ **MODERN** |
+| `db-service.template.ts` ⭐ | Prisma-backed server DB service (business logic lives here)                | `src/lib/services/__RESOURCE__Service.ts`         | ✅ **MODERN** |
 | `hook.template.ts` ⭐       | http client, centralized keys, analytics integration, performance tracking | `src/hooks/use__RESOURCE__s.ts`                   | ✅ **MODERN** |
 | `component.template.tsx` ⭐ | Modern UI, accessibility, analytics, error handling, responsive design     | `src/components/__RESOURCE__s/__ENTITY__List.tsx` | ✅ **MODERN** |
 | `page.template.tsx` ⭐      | SEO, error boundaries, structured data, suspense, breadcrumbs              | `src/app/(dashboard)/__RESOURCE__s/page.tsx`      | ✅ **MODERN** |
@@ -167,7 +175,7 @@ implementation patterns:
 
 | Template                              | Purpose                                                     | Status        | Features                                                     |
 | ------------------------------------- | ----------------------------------------------------------- | ------------- | ------------------------------------------------------------ |
-| `route.template.ts` ⭐                | API routes with createRoute wrapper, performance monitoring | ✅ **MODERN** | Structured logging, user story tracking, error handling      |
+| `route.template.ts` ⭐                | API routes delegating to server DB service (no Prisma)      | ✅ **MODERN** | Thin routes, RBAC/idempotency, structured logging, error handling |
 | `route-permissions.template.ts` ⭐    | API routes with capability checks via validateApiPermission | ✅ **MODERN** | Fine-grained `resource:action`, scoped OWN/TEAM examples     |
 | `route-permissions-id.template.ts` ⭐ | [id] routes (PUT/DELETE) with capability checks             | ✅ **MODERN** | Extract id, soft delete, update with auditing                |
 | `bulk-delete-route.template.ts` ⭐    | Bulk delete API with validation, transaction safety         | ✅ **MODERN** | Audit trails, soft delete patterns, performance monitoring   |

@@ -3,7 +3,10 @@
 
 import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import { prisma } from '@/lib/db/prisma';
+// IMPORTANT: No Prisma in routes; delegate to server DB services
+// Example: import { customerService } from '@/lib/services/customerService';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { __ENTITY__Service as __RESOURCE__DbService } from '@/lib/services/__RESOURCE__Service';
 import { logInfo } from '@/lib/logger';
 import { z } from 'zod';
 import { getErrorHandler, withAsyncErrorHandler, ErrorCodes } from '@/server/api/errorHandler';
@@ -28,12 +31,7 @@ export const PUT = createRoute(
     const id = url.pathname.split('/').pop() as string;
 
     const updated = await withAsyncErrorHandler(
-      () =>
-        (prisma as any).__RESOURCE__.update({
-          where: { id },
-          data: { ...body, updatedBy: user.id },
-          select: { id: true, name: true, status: true, updatedAt: true },
-        }),
+      () => (__RESOURCE__DbService as any).update__ENTITY__(id, { ...body, updatedBy: user.id }),
       'PUT __RESOURCE__ failed',
       { component: '__ENTITY__PermissionIdRoute', operation: 'PUT' }
     );
@@ -63,11 +61,7 @@ export const DELETE = createRoute({ requireAuth: true }, async ({ req, user, req
 
   // Soft delete pattern
   await withAsyncErrorHandler(
-    () =>
-      (prisma as any).__RESOURCE__.update({
-        where: { id },
-        data: { status: 'INACTIVE', deletedAt: new Date(), updatedBy: user.id },
-      }),
+    () => (__RESOURCE__DbService as any).delete__ENTITY__(id, { deletedBy: user.id }),
     'DELETE __RESOURCE__ failed',
     { component: '__ENTITY__PermissionIdRoute', operation: 'DELETE' }
   );
@@ -95,11 +89,7 @@ export const GET = createRoute({ requireAuth: true }, async ({ req, user, reques
   const id = url.pathname.split('/').pop() as string;
 
   const item = await withAsyncErrorHandler(
-    () =>
-      (prisma as any).__RESOURCE__.findUnique({
-        where: { id },
-        select: { id: true, name: true, status: true, createdAt: true, updatedAt: true },
-      }),
+    () => (__RESOURCE__DbService as any).get__ENTITY__(id),
     'GET __RESOURCE__ failed',
     { component: '__ENTITY__PermissionIdRoute', operation: 'GET' }
   );

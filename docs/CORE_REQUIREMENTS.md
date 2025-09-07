@@ -225,6 +225,58 @@ services.
 Observability & Analytics: WebVitalsProvider, logger, metrics store, optimized analytics
 ```
 
+## **Service Layer Patterns** {#service-layer-patterns}
+
+**Business Logic Separation (MANDATORY)**
+
+- API routes act as thin boundaries. Routes MUST NOT contain Prisma calls, raw SQL, or non-trivial query building.
+- Put all business logic (query composition, transactions, denormalization, normalization of Decimal/dates, cross-entity orchestration) in server DB services under `src/lib/services/*`.
+- Routes handle only: schema validation (Zod), RBAC/permissions, idempotency keys, request-ID propagation, light response shaping, and optional cache lookups.
+- Raw SQL (`$queryRaw`), `$transaction`, and transformations belong in services.
+- Cursor pagination logic for domain lists lives in services; routes simply pass typed filters.
+
+Correct vs Wrong
+
+```ts
+// ❌ Wrong (route with Prisma/business logic)
+import prisma from '@/lib/db/prisma';
+export const GET = createRoute({ query: MyQuery }, async ({ query }) => {
+  const rows = await prisma.myEntity.findMany({ where: {/*...*/} });
+  return ok({ items: rows });
+});
+
+// ✅ Correct (route delegating to service)
+import { myEntityService } from '@/lib/services/myEntityService';
+export const GET = createRoute({ query: MyQuery }, async ({ query }) => {
+  const { items, nextCursor } = await myEntityService.list(query);
+  return ok({ items, nextCursor });
+});
+```
+
+Route Responsibilities
+
+- Validate inputs via feature schemas.
+- Enforce authorization with `validateApiPermission`/`withRole`.
+- Apply idempotency protection for mutating endpoints when needed.
+- Optionally consult/set cache around stable service calls (cache key strategy lives near service filters).
+- Return standardized envelopes (ProblemDetails/ok).
+
+Service Responsibilities (src/lib/services)
+
+- Build type-safe filters and ordering (including cursor pagination secondary sort).
+- Execute Prisma queries/transactions and handle integrity checks.
+- Normalize data (Decimal → number, null handling, assignedTo flattening) once, consistently.
+- Emit domain errors via `StandardError` with `ErrorCodes` and metadata.
+- Provide stable method signatures (e.g., `list`, `getById`, `create`, `update`, `remove`).
+
+Acceptance
+
+- [ ] No new API route imports `@/lib/db/prisma` directly
+- [ ] All `$transaction`/`$queryRaw` calls moved to `src/lib/services/*`
+- [ ] Cursor pagination implemented in services; routes pass typed filters
+- [ ] Transformations centralized in services; routes return validated envelopes
+- [ ] Idempotency and RBAC enforced at route layer
+
 ## 🔐 Authentication & Route Gating
 
 - All pages under `src/app/(dashboard)/` are gated via `ProtectedLayout` in

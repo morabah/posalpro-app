@@ -144,7 +144,6 @@ const customJestConfig = {
       transform: {
         '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
       },
-      testTimeout: 60000,
       collectCoverageFrom: [
         'src/**/*.{ts,tsx,js,jsx}',
         '!src/**/*.d.ts',
@@ -177,7 +176,6 @@ const customJestConfig = {
   forceExit: true,
 
   // Global test configuration
-  testTimeout: 10000,
   clearMocks: true,
   restoreMocks: true,
 };
