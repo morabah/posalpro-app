@@ -41,36 +41,39 @@ import { z } from 'zod';
 
 // Dynamic imports for heavy components
 const InteractiveRevenueChart = dynamic(
-  () => import('./sections/InteractiveRevenueChart').then(mod => ({ default: mod.InteractiveRevenueChart })),
-  {
-    loading: () => {
-      const { SkeletonRevenueChart } = require('./DashboardSkeleton');
-      return <SkeletonRevenueChart />;
-    },
-    ssr: false,
-  }
+  async () => {
+    const mod = await import('./sections/InteractiveRevenueChart');
+    const { SkeletonRevenueChart } = await import('./DashboardSkeleton');
+    return {
+      default: mod.InteractiveRevenueChart,
+      loading: () => <SkeletonRevenueChart />,
+    };
+  },
+  { ssr: false }
 );
 
 const PipelineHealthVisualization = dynamic(
-  () => import('./sections/PipelineHealthVisualization').then(mod => ({ default: mod.PipelineHealthVisualization })),
-  {
-    loading: () => {
-      const { SkeletonPipelineChart } = require('./DashboardSkeleton');
-      return <SkeletonPipelineChart />;
-    },
-    ssr: false,
-  }
+  async () => {
+    const mod = await import('./sections/PipelineHealthVisualization');
+    const { SkeletonPipelineChart } = await import('./DashboardSkeleton');
+    return {
+      default: mod.PipelineHealthVisualization,
+      loading: () => <SkeletonPipelineChart />,
+    };
+  },
+  { ssr: false }
 );
 
 const TeamPerformanceHeatmap = dynamic(
-  () => import('./sections/TeamPerformanceHeatmap').then(mod => ({ default: mod.TeamPerformanceHeatmap })),
-  {
-    loading: () => {
-      const { SkeletonHeatmap } = require('./DashboardSkeleton');
-      return <SkeletonHeatmap />;
-    },
-    ssr: false,
-  }
+  async () => {
+    const mod = await import('./sections/TeamPerformanceHeatmap');
+    const { SkeletonHeatmap } = await import('./DashboardSkeleton');
+    return {
+      default: mod.TeamPerformanceHeatmap,
+      loading: () => <SkeletonHeatmap />,
+    };
+  },
+  { ssr: false }
 );
 
 // Enhanced KPI interfaces

@@ -4,7 +4,6 @@
  * Component Traceability: US-3.1, US-3.2, H3, H4
  */
 
-import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
@@ -16,12 +15,12 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { logError, logInfo, logWarn } from '@/lib/logger';
-import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { securityAuditManager } from '@/lib/security/audit';
 import { apiRateLimiter } from '@/lib/security/hardening';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 // Import consolidated schemas from feature folder
@@ -121,167 +120,169 @@ export const GET = createRoute(
 
     try {
       const product = await withAsyncErrorHandler(
-      () =>
-        prisma.product.findUnique({
-      where: { id },
-      include: {
-        relationships: {
-          include: {
-            targetProduct: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-                price: true,
-                currency: true,
-                isActive: true,
+        () =>
+          prisma.product.findUnique({
+            where: { id },
+            include: {
+              relationships: {
+                include: {
+                  targetProduct: {
+                    select: {
+                      id: true,
+                      name: true,
+                      sku: true,
+                      price: true,
+                      currency: true,
+                      isActive: true,
+                    },
+                  },
+                },
+              },
+              relatedFrom: {
+                include: {
+                  sourceProduct: {
+                    select: {
+                      id: true,
+                      name: true,
+                      sku: true,
+                      price: true,
+                      currency: true,
+                      isActive: true,
+                    },
+                  },
+                },
+              },
+              proposalProducts: {
+                include: {
+                  proposal: { include: { customer: { select: { id: true, name: true } } } },
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+              },
+              _count: {
+                select: {
+                  relationships: true,
+                  relatedFrom: true,
+                  proposalProducts: true,
+                  validationRules: true,
+                },
               },
             },
-          },
-        },
-        relatedFrom: {
-          include: {
-            sourceProduct: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-                price: true,
-                currency: true,
-                isActive: true,
-              },
-            },
-          },
-        },
-        proposalProducts: {
-          include: { proposal: { include: { customer: { select: { id: true, name: true } } } } },
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-        },
-        _count: {
-          select: {
-            relationships: true,
-            relatedFrom: true,
-            proposalProducts: true,
-            validationRules: true,
-          },
-        },
-      },
-    }),
-    'Failed to fetch product from database',
-    { component: 'ProductAPI', operation: 'GET_BY_ID' }
-  );
+          }),
+        'Failed to fetch product from database',
+        { component: 'ProductAPI', operation: 'GET_BY_ID' }
+      );
 
-  if (!product) {
-    const notFoundError = new StandardError({
-      message: 'Product not found',
-      code: ErrorCodes.DATA.NOT_FOUND,
-      metadata: {
+      if (!product) {
+        const notFoundError = new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProductAPI',
+            operation: 'GET_BY_ID',
+            productId: id,
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          notFoundError,
+          'Product not found',
+          ErrorCodes.DATA.NOT_FOUND,
+          404
+        );
+        return errorResponse;
+      }
+
+      // Transform the data for frontend consumption
+      const transformedProduct = {
+        ...product,
+        // Handle null values from database
+        description: product.description || '',
+        price:
+          typeof product.price === 'object' && product.price !== null
+            ? Number(product.price.toString())
+            : Number(product.price ?? 0),
+        category: Array.isArray(product.category)
+          ? product.category
+          : product.category
+            ? [product.category]
+            : [],
+        stockQuantity: product.stockQuantity || 0,
+        status: product.status || 'ACTIVE',
+        attributes: product.attributes || undefined,
+        usageAnalytics: product.usageAnalytics || undefined,
+        statistics: {
+          relationshipsCount: product._count.relationships + product._count.relatedFrom,
+          usageInProposals: product._count.proposalProducts,
+          validationRulesCount: product._count.validationRules,
+        },
+        recentUsage: product.proposalProducts.map((pp: ProductProposal) => ({
+          proposalId: pp.proposal.id,
+          proposalTitle: pp.proposal.title,
+          proposalStatus: pp.proposal.status,
+          customerName: pp.proposal.customer.name,
+          quantity: pp.quantity,
+          unitPrice: pp.unitPrice,
+          total: pp.total,
+          usedAt: pp.createdAt,
+        })),
+        allRelationships: [
+          ...product.relationships.map((rel: ProductRelationship) => ({
+            id: rel.id,
+            type: rel.type,
+            direction: 'outgoing' as const,
+            quantity: rel.quantity,
+            condition: rel.condition,
+            relatedProduct: rel.targetProduct,
+            createdAt: rel.createdAt,
+          })),
+          ...product.relatedFrom.map((rel: ProductRelatedFrom) => ({
+            id: rel.id,
+            type: rel.type,
+            direction: 'incoming' as const,
+            quantity: rel.quantity,
+            condition: rel.condition,
+            relatedProduct: rel.sourceProduct,
+            createdAt: rel.createdAt,
+          })),
+        ],
+      };
+
+      // Remove the nested arrays that are now transformed
+      delete (transformedProduct as any).relationships;
+      delete (transformedProduct as any).relatedFrom;
+      delete (transformedProduct as any).proposalProducts;
+      delete (transformedProduct as any)._count;
+
+      // Track product view for analytics
+      await trackProductViewEvent(user.id, id, product.name);
+
+      // Validate response against schema
+      const validationResult = ProductSchema.safeParse(transformedProduct);
+      if (!validationResult.success) {
+        logError('Product schema validation failed', validationResult.error, {
+          component: 'ProductAPI',
+          operation: 'GET_BY_ID',
+        });
+        // Return the product data anyway for now, but log the validation error
+      }
+
+      const validatedProductData = validationResult.success
+        ? validationResult.data
+        : transformedProduct;
+
+      return errorHandler.createSuccessResponse(
+        validatedProductData,
+        'Product retrieved successfully'
+      );
+    } catch (error) {
+      logError('Failed to fetch product by ID', {
         component: 'ProductAPI',
         operation: 'GET_BY_ID',
+        error: error instanceof Error ? error.message : String(error),
         productId: id,
-      },
-    });
-    const errorResponse = errorHandler.createErrorResponse(
-      notFoundError,
-      'Product not found',
-      ErrorCodes.DATA.NOT_FOUND,
-      404
-    );
-    return errorResponse;
-  }
-
-    // Transform the data for frontend consumption
-    const transformedProduct = {
-      ...product,
-      // Handle null values from database
-      description: product.description || '',
-      price:
-        typeof product.price === 'object' && product.price !== null
-          ? Number(product.price.toString())
-          : Number(product.price ?? 0),
-      category: Array.isArray(product.category)
-        ? product.category
-        : product.category
-          ? [product.category]
-          : [],
-      stockQuantity: product.stockQuantity || 0,
-      status: product.status || 'ACTIVE',
-      attributes: product.attributes || undefined,
-      usageAnalytics: product.usageAnalytics || undefined,
-      statistics: {
-        relationshipsCount: product._count.relationships + product._count.relatedFrom,
-        usageInProposals: product._count.proposalProducts,
-        validationRulesCount: product._count.validationRules,
-      },
-      recentUsage: product.proposalProducts.map((pp: ProductProposal) => ({
-        proposalId: pp.proposal.id,
-        proposalTitle: pp.proposal.title,
-        proposalStatus: pp.proposal.status,
-        customerName: pp.proposal.customer.name,
-        quantity: pp.quantity,
-        unitPrice: pp.unitPrice,
-        total: pp.total,
-        usedAt: pp.createdAt,
-      })),
-      allRelationships: [
-        ...product.relationships.map((rel: ProductRelationship) => ({
-          id: rel.id,
-          type: rel.type,
-          direction: 'outgoing' as const,
-          quantity: rel.quantity,
-          condition: rel.condition,
-          relatedProduct: rel.targetProduct,
-          createdAt: rel.createdAt,
-        })),
-        ...product.relatedFrom.map((rel: ProductRelatedFrom) => ({
-          id: rel.id,
-          type: rel.type,
-          direction: 'incoming' as const,
-          quantity: rel.quantity,
-          condition: rel.condition,
-          relatedProduct: rel.sourceProduct,
-          createdAt: rel.createdAt,
-        })),
-      ],
-    };
-
-    // Remove the nested arrays that are now transformed
-    delete (transformedProduct as any).relationships;
-    delete (transformedProduct as any).relatedFrom;
-    delete (transformedProduct as any).proposalProducts;
-    delete (transformedProduct as any)._count;
-
-    // Track product view for analytics
-    await trackProductViewEvent(user.id, id, product.name);
-
-    // Validate response against schema
-    const validationResult = ProductSchema.safeParse(transformedProduct);
-    if (!validationResult.success) {
-      logError('Product schema validation failed', validationResult.error, {
-        component: 'ProductAPI',
-        operation: 'GET_BY_ID',
       });
-      // Return the product data anyway for now, but log the validation error
+      throw error; // Let the createRoute wrapper handle the response
     }
-
-    const validatedProductData = validationResult.success
-      ? validationResult.data
-      : transformedProduct;
-
-    return errorHandler.createSuccessResponse(
-      validatedProductData,
-      'Product retrieved successfully'
-    );
-  } catch (error) {
-    logError('Failed to fetch product by ID', {
-      component: 'ProductAPI',
-      operation: 'GET_BY_ID',
-      error: error instanceof Error ? error.message : String(error),
-      productId: id,
-    });
-    throw error; // Let the createRoute wrapper handle the response
-  }
   }
 );
 /**
@@ -385,97 +386,97 @@ export const PUT = createRoute(
       const updatedProduct = await withAsyncErrorHandler(
         () =>
           prisma.product.update({
-        where: { id },
-        data: {
-          ...validatedData,
-          ...(validatedData.attributes
-            ? { attributes: validatedData.attributes as unknown as Prisma.InputJsonValue }
-            : {}),
-          version: existingProduct.version + 1,
-          usageAnalytics: {
-            lastUpdatedBy: user.id,
-            lastUpdatedAt: new Date().toISOString(),
-            updateCount: (existingProduct as any).usageAnalytics?.updateCount + 1 || 1,
-            hypothesis: ['H3', 'H4'],
-            userStories: ['US-3.1', 'US-3.2'],
-          } as unknown as Prisma.InputJsonValue,
-        } as any,
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          sku: true,
-          price: true,
-          currency: true,
-          category: true,
-          tags: true,
-          attributes: true,
-          images: true,
-          stockQuantity: true,
-          status: true,
-          isActive: true,
-          version: true,
-          userStoryMappings: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      } as any),
-      'Failed to update product in database',
-      { component: 'ProductAPI', operation: 'PUT' }
-    );
+            where: { id },
+            data: {
+              ...validatedData,
+              ...(validatedData.attributes
+                ? { attributes: validatedData.attributes as unknown as Prisma.InputJsonValue }
+                : {}),
+              version: existingProduct.version + 1,
+              usageAnalytics: {
+                lastUpdatedBy: user.id,
+                lastUpdatedAt: new Date().toISOString(),
+                updateCount: (existingProduct as any).usageAnalytics?.updateCount + 1 || 1,
+                hypothesis: ['H3', 'H4'],
+                userStories: ['US-3.1', 'US-3.2'],
+              } as unknown as Prisma.InputJsonValue,
+            } as any,
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              sku: true,
+              price: true,
+              currency: true,
+              category: true,
+              tags: true,
+              attributes: true,
+              images: true,
+              stockQuantity: true,
+              status: true,
+              isActive: true,
+              version: true,
+              userStoryMappings: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          } as any),
+        'Failed to update product in database',
+        { component: 'ProductAPI', operation: 'PUT' }
+      );
 
-    await trackProductUpdateEvent(user.id, id, existingProduct.name, Object.keys(validatedData));
+      await trackProductUpdateEvent(user.id, id, existingProduct.name, Object.keys(validatedData));
 
-    const transformedProduct = {
-      ...updatedProduct,
-      description: updatedProduct.description || '',
-      price:
-        typeof updatedProduct.price === 'object' && updatedProduct.price !== null
-          ? Number(updatedProduct.price.toString())
-          : Number(updatedProduct.price ?? 0),
-      category: Array.isArray(updatedProduct.category)
-        ? updatedProduct.category
-        : updatedProduct.category
-          ? [updatedProduct.category]
-          : [],
-      stockQuantity: updatedProduct.stockQuantity || 0,
-      status: updatedProduct.status || 'ACTIVE',
-      attributes: updatedProduct.attributes || undefined,
-      usageAnalytics: (updatedProduct as any).usageAnalytics || undefined,
-    };
+      const transformedProduct = {
+        ...updatedProduct,
+        description: updatedProduct.description || '',
+        price:
+          typeof updatedProduct.price === 'object' && updatedProduct.price !== null
+            ? Number(updatedProduct.price.toString())
+            : Number(updatedProduct.price ?? 0),
+        category: Array.isArray(updatedProduct.category)
+          ? updatedProduct.category
+          : updatedProduct.category
+            ? [updatedProduct.category]
+            : [],
+        stockQuantity: updatedProduct.stockQuantity || 0,
+        status: updatedProduct.status || 'ACTIVE',
+        attributes: updatedProduct.attributes || undefined,
+        usageAnalytics: (updatedProduct as any).usageAnalytics || undefined,
+      };
 
-    const validationResult = ProductSchema.safeParse(transformedProduct);
-    if (!validationResult.success) {
-      logError('Product schema validation failed after update', validationResult.error, {
-        component: 'ProductAPI',
-        operation: 'PUT',
-      });
+      const validationResult = ProductSchema.safeParse(transformedProduct);
+      if (!validationResult.success) {
+        logError('Product schema validation failed after update', validationResult.error, {
+          component: 'ProductAPI',
+          operation: 'PUT',
+        });
+      }
+
+      const validatedUpdatedData = validationResult.success
+        ? validationResult.data
+        : transformedProduct;
+
+      return errorHandler.createSuccessResponse(
+        validatedUpdatedData,
+        'Product updated successfully'
+      );
+    } catch (error) {
+      const systemError = errorHandlingService.processError(
+        error,
+        'Failed to update product',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        { component: 'ProductAPI', operation: 'PUT' }
+      );
+
+      const errorResponse = errorHandler.createErrorResponse(
+        systemError,
+        'Failed to update product',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        500
+      );
+      return errorResponse;
     }
-
-    const validatedUpdatedData = validationResult.success
-      ? validationResult.data
-      : transformedProduct;
-
-    return errorHandler.createSuccessResponse(
-      validatedUpdatedData,
-      'Product updated successfully'
-    );
-  } catch (error) {
-    const systemError = errorHandlingService.processError(
-      error,
-      'Failed to update product',
-      ErrorCodes.DATA.UPDATE_FAILED,
-      { component: 'ProductAPI', operation: 'PUT' }
-    );
-
-    const errorResponse = errorHandler.createErrorResponse(
-      systemError,
-      'Failed to update product',
-      ErrorCodes.DATA.UPDATE_FAILED,
-      500
-    );
-    return errorResponse;
-  }
   }
 );
 
@@ -521,7 +522,9 @@ export const DELETE = createRoute(
               id: true,
               name: true,
               isActive: true,
-              _count: { select: { proposalProducts: true, relationships: true, relatedFrom: true } },
+              _count: {
+                select: { proposalProducts: true, relationships: true, relatedFrom: true },
+              },
             },
           }),
         'Failed to check product existence for deletion',
@@ -835,11 +838,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     // Parse and validate request body
-    const body = await withAsyncErrorHandler(
-      () => request.json(),
-      'Failed to parse request body',
-      { component: 'ProductAPI', operation: 'PATCH' }
-    );
+    const body = await withAsyncErrorHandler(() => request.json(), 'Failed to parse request body', {
+      component: 'ProductAPI',
+      operation: 'PATCH',
+    });
 
     // Debug logging
     logInfo('Product update request received', {
@@ -855,72 +857,69 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const updatedProduct = await withAsyncErrorHandler(
       () =>
         prisma.product.update({
-      where: { id },
-      data: {
-        ...validatedData,
-        ...(validatedData.attributes
-          ? { attributes: validatedData.attributes as unknown as Prisma.InputJsonValue }
-          : {}),
-        ...(validatedData.usageAnalytics
-          ? { usageAnalytics: validatedData.usageAnalytics as unknown as Prisma.InputJsonValue }
-          : {}),
-        updatedAt: new Date(),
-      } as any,
-      include: {
-        relationships: {
+          where: { id },
+          data: {
+            ...validatedData,
+            ...(validatedData.attributes
+              ? { attributes: validatedData.attributes as unknown as Prisma.InputJsonValue }
+              : {}),
+            ...(validatedData.usageAnalytics
+              ? { usageAnalytics: validatedData.usageAnalytics as unknown as Prisma.InputJsonValue }
+              : {}),
+            updatedAt: new Date(),
+          } as any,
           include: {
-            targetProduct: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-                price: true,
-                currency: true,
-                isActive: true,
+            relationships: {
+              include: {
+                targetProduct: {
+                  select: {
+                    id: true,
+                    name: true,
+                    sku: true,
+                    price: true,
+                    currency: true,
+                    isActive: true,
+                  },
+                },
+              },
+            },
+            relatedFrom: {
+              include: {
+                sourceProduct: {
+                  select: {
+                    id: true,
+                    name: true,
+                    sku: true,
+                    price: true,
+                    currency: true,
+                    isActive: true,
+                  },
+                },
               },
             },
           },
-        },
-        relatedFrom: {
-          include: {
-            sourceProduct: {
-              select: {
-                id: true,
-                name: true,
-                sku: true,
-                price: true,
-                currency: true,
-                isActive: true,
-              },
-            },
-          },
-        },
-      },
-    } as any),
-    'Failed to update product in database',
-    { component: 'ProductAPI', operation: 'PATCH' }
-  );
+        } as any),
+      'Failed to update product in database',
+      { component: 'ProductAPI', operation: 'PATCH' }
+    );
 
-  // Track analytics event
-  await trackProductUpdateEvent(
-    session.user.id,
-    id,
-    updatedProduct.name,
-    Object.keys(validatedData)
-  );
+    // Track analytics event
+    await trackProductUpdateEvent(
+      session.user.id,
+      id,
+      updatedProduct.name,
+      Object.keys(validatedData)
+    );
 
-  logInfo('Product updated successfully', {
-    component: 'ProductAPI',
-    operation: 'PATCH',
-    productId: id,
-    updatedFields: Object.keys(validatedData),
-    userId: session.user.id,
-  });
+    logInfo('Product updated successfully', {
+      component: 'ProductAPI',
+      operation: 'PATCH',
+      productId: id,
+      updatedFields: Object.keys(validatedData),
+      userId: session.user.id,
+    });
 
-  return errorHandler.createSuccessResponse(
-    updatedProduct,
-    'Product updated successfully'
-  );
+    return errorHandler.createSuccessResponse(updatedProduct, 'Product updated successfully');
   } catch (error) {
     // Log the full error for debugging
     logError('Product update error details', {

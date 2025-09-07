@@ -1,5 +1,4 @@
 import { createRoute } from '@/lib/api/route';
-import { error as apiError } from '@/lib/api/response';
 import { ErrorHandlingService } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { StandardError } from '@/lib/errors/StandardError';
@@ -13,9 +12,8 @@ import { ProductSearchApiSchema } from '@/features/products/schemas';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 import { productService } from '@/lib/services';
-import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { z } from 'zod';
 
 // Initialize error handling service
 const errorHandlingService = ErrorHandlingService.getInstance();
@@ -69,7 +67,10 @@ export const GET = createRoute({ query: searchSchema }, async ({ req, query }) =
       },
     };
 
-    return errorHandler.createSuccessResponse(searchResponse, 'Product search completed successfully');
+    return errorHandler.createSuccessResponse(
+      searchResponse,
+      'Product search completed successfully'
+    );
   } catch (error) {
     logger.error('Product search failed:', error);
 

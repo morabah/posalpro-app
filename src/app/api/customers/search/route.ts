@@ -4,28 +4,14 @@
  * Component Traceability: US-4.1, US-4.2, H4, H6
  */
 
+import { CustomerSearchApiSchema } from '@/features/customers/schemas';
 import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
-import {
-  createApiErrorResponse,
-  ErrorCodes,
-  errorHandlingService,
-  StandardError,
-} from '@/lib/errors';
-import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
-import {
-  customerQueries,
-  productQueries,
-  proposalQueries,
-  userQueries,
-  workflowQueries,
-  executeQuery,
-} from '@/lib/db/database';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 import { getRequestMeta, logger } from '@/lib/logging/structuredLogger';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
-import { NextResponse } from 'next/server';
-import { CustomerSearchApiSchema } from '@/features/customers/schemas';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { z } from 'zod';
 
 /**
@@ -143,7 +129,10 @@ export const GET = createRoute({ query: CustomerSearchSchema }, async ({ req, us
       },
     };
 
-    return errorHandler.createSuccessResponse(searchData, `Found ${customers.length} customers matching "${validatedQuery.q}"`);
+    return errorHandler.createSuccessResponse(
+      searchData,
+      `Found ${customers.length} customers matching "${validatedQuery.q}"`
+    );
   } catch (error: unknown) {
     const searchDuration = Date.now() - startTime;
 
@@ -255,7 +244,7 @@ async function trackCustomerSearchEvent(
       'Failed to track customer search analytics',
       {
         component: 'CustomerSearchRoute',
-        operation: 'trackCustomerSearchEvent'
+        operation: 'trackCustomerSearchEvent',
       }
     );
   } catch (error) {

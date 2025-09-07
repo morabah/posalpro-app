@@ -4,7 +4,6 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
-import { NextResponse } from 'next/server';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 export const GET = createRoute(

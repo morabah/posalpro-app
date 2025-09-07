@@ -1,7 +1,7 @@
-import { logInfo } from '@/lib/logger';
-import { NextRequest, NextResponse } from 'next/server';
-import { getErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes } from '@/lib/errors';
+import { logInfo } from '@/lib/logger';
+import { getErrorHandler } from '@/server/api/errorHandler';
+import { NextRequest } from 'next/server';
 
 export async function GET(request: NextRequest) {
   const errorHandler = getErrorHandler({

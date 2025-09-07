@@ -6,17 +6,8 @@
 import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
-import {
-  customerQueries,
-  productQueries,
-  proposalQueries,
-  userQueries,
-  workflowQueries,
-  executeQuery,
-} from '@/lib/db/database';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
-import { NextResponse } from 'next/server';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 /**

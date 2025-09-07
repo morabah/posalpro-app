@@ -7,13 +7,12 @@
  */
 
 import { createRoute } from '@/lib/api/route';
+import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { ErrorHandlingService, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { DatabaseOptimizationService } from '@/lib/services/DatabaseOptimizationService';
-import { PrismaClient } from '@prisma/client';
-import { NextResponse } from 'next/server';
-import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { PrismaClient } from '@prisma/client';
 
 /**
  * Component Traceability Matrix
@@ -248,11 +247,10 @@ export const POST = createRoute({}, async ({ req }) => {
 
   try {
     await validateApiPermission(req, { resource: 'metrics', action: 'update' });
-    const body = await withAsyncErrorHandler(
-      () => req.json(),
-      'Failed to parse request body',
-      { component: 'DatabaseMetricsAPI', operation: 'POST' }
-    );
+    const body = await withAsyncErrorHandler(() => req.json(), 'Failed to parse request body', {
+      component: 'DatabaseMetricsAPI',
+      operation: 'POST',
+    });
     const { metric, value, hypothesis, metadata } = body;
 
     // Validate required fields

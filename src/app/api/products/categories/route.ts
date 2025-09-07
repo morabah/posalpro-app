@@ -9,10 +9,9 @@ import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
-import { Decimal } from '@prisma/client/runtime/library';
-import { NextResponse } from 'next/server';
+import { ErrorCodes } from '@/lib/errors';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
-import { ErrorCodes, StandardError } from '@/lib/errors';
+import { Decimal } from '@prisma/client/runtime/library';
 
 /**
  * Component Traceability Matrix:
@@ -223,7 +222,7 @@ async function trackCategoryAccessEvent(userId: string, categoriesCount: number)
       'Failed to track category access analytics',
       {
         component: 'ProductCategoriesAPI',
-        operation: 'trackCategoryAccessEvent'
+        operation: 'trackCategoryAccessEvent',
       }
     );
   } catch (error) {

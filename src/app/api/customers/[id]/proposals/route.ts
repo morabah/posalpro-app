@@ -8,21 +8,13 @@ import { logger } from '@/lib/logger';
 import { CustomerProposalsQuerySchema } from '@/features/customers/schemas';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes, StandardError } from '@/lib/errors';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
-import {
-  customerQueries,
-  productQueries,
-  proposalQueries,
-  userQueries,
-  workflowQueries,
-  executeQuery,
-} from '@/lib/db/database';
 import prisma from '@/lib/db/prisma';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
 
 /**
@@ -440,7 +432,7 @@ async function trackCustomerProposalsAccessEvent(
       'Failed to track customer proposals analytics',
       {
         component: 'CustomerProposalsAPI',
-        operation: 'trackCustomerProposalsAccessEvent'
+        operation: 'trackCustomerProposalsAccessEvent',
       }
     );
   } catch (error) {

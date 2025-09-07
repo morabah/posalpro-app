@@ -1,7 +1,7 @@
-import { NextRequest } from 'next/server';
-import { BillingSyncService } from '@/lib/services/BillingSyncService';
-import { prisma } from '@/lib/db/prisma';
 import { getStripe, isStripeReady } from '@/lib/billing/stripe';
+import { prisma } from '@/lib/db/prisma';
+import { BillingSyncService } from '@/lib/services/BillingSyncService';
+import { NextRequest } from 'next/server';
 
 export async function POST(req: NextRequest) {
   // With secret configured: verify signature using raw body. Otherwise: dev scaffold allows JSON.
@@ -52,19 +52,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Normalize plan nickname/name from payload
-    const planName = (
-      data.plan?.nickname ||
+    const planName = (data.plan?.nickname ||
       data.plan?.name ||
       data.items?.data?.[0]?.plan?.nickname ||
       data.items?.data?.[0]?.plan?.name ||
-      'FREE'
-    ) as string;
+      'FREE') as string;
     const seats = Number(process.env.DEFAULT_PLAN_SEATS || 5);
 
     if (type === 'checkout.session.completed') {
       const customerId: string | undefined = data.customer as string | undefined;
       const tenantId: string | undefined =
-        (data.client_reference_id as string | undefined) || (data.metadata?.tenantId as string | undefined);
+        (data.client_reference_id as string | undefined) ||
+        (data.metadata?.tenantId as string | undefined);
       if (customerId && tenantId) {
         await prisma.tenant
           .update({ where: { id: tenantId }, data: { stripeCustomerId: customerId } })

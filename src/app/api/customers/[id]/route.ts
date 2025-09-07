@@ -7,10 +7,9 @@
  * ✅ REMOVED DUPLICATION: No inline schema definitions
  */
 
-import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
-import { errorHandlingService, ErrorCodes, StandardError } from '@/lib/errors';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
@@ -101,85 +100,85 @@ export const GET = createRoute(
       const customer = await withAsyncErrorHandler(
         () =>
           prisma.customer.findUnique({
-        where: { id },
-        include: {
-          proposals: {
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              status: true,
-              priority: true,
-              value: true,
-              currency: true,
-              dueDate: true,
-              createdAt: true,
-              updatedAt: true,
-              creator: {
+            where: { id },
+            include: {
+              proposals: {
+                select: {
+                  id: true,
+                  title: true,
+                  description: true,
+                  status: true,
+                  priority: true,
+                  value: true,
+                  currency: true,
+                  dueDate: true,
+                  createdAt: true,
+                  updatedAt: true,
+                  creator: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true,
+                      department: true,
+                    },
+                  },
+                  _count: {
+                    select: {
+                      products: true,
+                      sections: true,
+                    },
+                  },
+                },
+                orderBy: {
+                  createdAt: 'desc',
+                },
+                take: 20, // Latest 20 proposals
+              },
+              contacts: {
                 select: {
                   id: true,
                   name: true,
                   email: true,
+                  phone: true,
+                  role: true,
                   department: true,
+                  isPrimary: true,
+                  createdAt: true,
                 },
+                orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
               },
               _count: {
                 select: {
-                  products: true,
-                  sections: true,
+                  proposals: true,
+                  contacts: true,
                 },
               },
             },
-            orderBy: {
-              createdAt: 'desc',
-            },
-            take: 20, // Latest 20 proposals
-          },
-          contacts: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              phone: true,
-              role: true,
-              department: true,
-              isPrimary: true,
-              createdAt: true,
-            },
-            orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
-          },
-          _count: {
-            select: {
-              proposals: true,
-              contacts: true,
-            },
-          },
-        },
-      }),
-      'Failed to fetch customer from database',
-      { component: 'CustomerAPI', operation: 'GET_BY_ID' }
-    );
-
-    if (!customer) {
-      const notFoundError = new StandardError({
-        message: 'Customer not found',
-        code: ErrorCodes.DATA.NOT_FOUND,
-        metadata: {
-          component: 'CustomerAPI',
-          operation: 'GET_BY_ID',
-          customerId: id || 'unknown',
-        },
-      });
-      const errorResponse = errorHandler.createErrorResponse(
-        notFoundError,
-        'Customer not found',
-        ErrorCodes.DATA.NOT_FOUND,
-        404
+          }),
+        'Failed to fetch customer from database',
+        { component: 'CustomerAPI', operation: 'GET_BY_ID' }
       );
-      return errorResponse;
-    }
 
-    // Calculate customer analytics
+      if (!customer) {
+        const notFoundError = new StandardError({
+          message: 'Customer not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'CustomerAPI',
+            operation: 'GET_BY_ID',
+            customerId: id || 'unknown',
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          notFoundError,
+          'Customer not found',
+          ErrorCodes.DATA.NOT_FOUND,
+          404
+        );
+        return errorResponse;
+      }
+
+      // Calculate customer analytics
       const now = new Date();
       const proposalStatistics = {
         totalProposals: customer._count.proposals,

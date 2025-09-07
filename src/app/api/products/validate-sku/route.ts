@@ -3,28 +3,14 @@
  * Handles SKU uniqueness validation for product creation/updates
  */
 
+import { SKUValidationSchema } from '@/features/products/schemas';
 import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
-import {
-  createApiErrorResponse,
-  ErrorCodes,
-  errorHandlingService,
-  StandardError,
-} from '@/lib/errors';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
-import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
-import {
-  customerQueries,
-  productQueries,
-  proposalQueries,
-  userQueries,
-  workflowQueries,
-  executeQuery,
-} from '@/lib/db/database';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
-import { NextResponse } from 'next/server';
-import { SKUValidationSchema } from '@/features/products/schemas';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { z } from 'zod';
 
 /**

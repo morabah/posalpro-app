@@ -6,13 +6,12 @@
 
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
+import { StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { EntityType, Prisma } from '@prisma/client';
-import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
-import { StandardError } from '@/lib/errors';
+import { EntityType, Prisma } from '@prisma/client';
+import { z } from 'zod';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -155,10 +154,7 @@ export const GET = createRoute(
         },
       };
 
-      return errorHandler.createSuccessResponse(
-        responseData,
-        'Workflows retrieved successfully'
-      );
+      return errorHandler.createSuccessResponse(responseData, 'Workflows retrieved successfully');
     }
 
     const tx = await withAsyncErrorHandler(
@@ -223,10 +219,7 @@ export const GET = createRoute(
       },
     };
 
-    return errorHandler.createSuccessResponse(
-      responseData,
-      'Workflows retrieved successfully'
-    );
+    return errorHandler.createSuccessResponse(responseData, 'Workflows retrieved successfully');
   }
 );
 
@@ -302,10 +295,7 @@ export const POST = createRoute(
       { component: 'WorkflowsRoute', operation: 'POST' }
     );
 
-    return errorHandler.createSuccessResponse(
-      newWorkflow,
-      'Workflow created successfully'
-    );
+    return errorHandler.createSuccessResponse(newWorkflow, 'Workflow created successfully');
   }
 );
 
@@ -354,10 +344,7 @@ export const PUT = createRoute(
       { component: 'WorkflowsRoute', operation: 'PUT' }
     );
 
-    return errorHandler.createSuccessResponse(
-      updatedWorkflow,
-      'Workflow updated successfully'
-    );
+    return errorHandler.createSuccessResponse(updatedWorkflow, 'Workflow updated successfully');
   }
 );
 
