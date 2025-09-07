@@ -1,12 +1,12 @@
 import enhancedRBACMiddleware from '@/lib/auth/enhancedMiddleware';
+import { getAuthSecret } from '@/lib/auth/secret';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
+import { recordTenantRequest } from '@/lib/observability/metricsStore';
 import { createSecurityMiddleware, SecurityHeaders } from '@/lib/security/hardening';
 import { getToken } from 'next-auth/jwt';
-import { getAuthSecret } from '@/lib/auth/secret';
 import { NextRequest, NextResponse } from 'next/server';
-import { recordTenantRequest } from '@/lib/observability/metricsStore';
 
 // Compose security + RBAC + request id
 const securityMiddleware = createSecurityMiddleware();
@@ -116,7 +116,9 @@ async function resolveTenantId(req: NextRequest): Promise<string | null> {
   const sub = extractSubdomain(req.headers.get('host'));
   if (sub) return sub;
   if (process.env.NODE_ENV !== 'production') {
-    return process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default';
+    return (
+      process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default'
+    );
   }
   return null;
 }
@@ -126,7 +128,9 @@ function rateLimitTenant(req: NextRequest, tenantId: string | null): NextRespons
   if (!p.startsWith('/api/')) return null;
   if (!tenantId) return null; // skip strict limit when tenant unknown
   const ip =
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || (req as { ip?: string }).ip || 'local';
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    (req as { ip?: string }).ip ||
+    'local';
   const key = `${tenantId}:${ip}`;
   const now = Date.now();
   const bucket = tenantBuckets.get(key) || { count: 0, resetAt: now + TENANT_WINDOW_MS };
@@ -269,8 +273,8 @@ export async function middleware(req: NextRequest) {
     return SecurityHeaders.applyToResponse(applyCors(req, preflight));
   }
 
-  // Basic token-bucket rate limiting for API routes
-  if (ENABLE) {
+  // Basic token-bucket rate limiting for API routes - skip in development
+  if (ENABLE && process.env.NODE_ENV === 'production') {
     const ip = (req.headers.get('x-forwarded-for') ?? '127.0.0.1').split(',')[0].trim();
     const now = Date.now();
     const b = buckets.get(ip) ?? { tokens: LIMIT, ts: now };

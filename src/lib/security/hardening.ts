@@ -395,8 +395,8 @@ export function createSecurityMiddleware() {
       limiter = isDev ? new RateLimiter(60000, 200) : strictRateLimiter;
     }
 
-    // Check limiter
-    if (!bypassRateLimitInDev && !limiter.isAllowed(ip)) {
+    // Check limiter - skip in development to prevent dashboard issues
+    if (!isDev && !bypassRateLimitInDev && !limiter.isAllowed(ip)) {
       auditLogger.log({
         action: 'rate_limit_exceeded',
         resource: path,

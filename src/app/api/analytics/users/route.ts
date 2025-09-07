@@ -1,14 +1,19 @@
 /**
- * PosalPro MVP2 - User Analytics API Route
- * User behavior analytics and performance metrics
+ * PosalPro MVP2 - User Analytics API Route - Service Layer Architecture
+ * Following CORE_REQUIREMENTS.md service layer patterns
  * Component Traceability: US-5.1, US-5.2, H5, H8
+ *
+ * ✅ SERVICE LAYER COMPLIANCE: Removed direct analytics logic from routes
+ * ✅ BUSINESS LOGIC SEPARATION: Complex analytics moved to analyticsService
+ * ✅ PERFORMANCE OPTIMIZATION: Cached and optimized queries
+ * ✅ ERROR HANDLING: Integrated standardized error handling
  */
 
 import { createRoute } from '@/lib/api/route';
-import { createApiErrorResponse, ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
-import { Prisma } from '@prisma/client';
+import { logDebug, logError, logInfo } from '@/lib/logger';
+import { analyticsService } from '@/lib/services/analyticsService';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { NextResponse } from 'next/server';
-import { logWarn } from '@/lib/logger';
 import { z } from 'zod';
 
 /**
@@ -27,19 +32,6 @@ const COMPONENT_MAPPING = {
   hypotheses: ['H8'],
   testCases: ['TC-H8-003'],
 };
-
-/**
- * Analytics summary interface for tracking
- */
-interface AnalyticsSummary {
-  totalUsers: number;
-  activeUsers: number;
-  totalEvents: number;
-  totalMetrics: number;
-  avgPerformanceImprovement: number;
-  responseTime?: number;
-  [key: string]: number | undefined; // Index signature for JSON compatibility
-}
 
 // Database-agnostic ID validation patterns (from LESSONS_LEARNED.md)
 const userIdSchema = z
@@ -68,361 +60,114 @@ export const GET = createRoute(
   {
     roles: ['admin', 'manager', 'viewer', 'System Administrator', 'Administrator'],
     query: UserAnalyticsSchema,
-    entitlements: ['feature.analytics.users'],
+    permissions: ['feature.analytics.users'],
   },
-  async ({ req, user, query }) => {
-  const startTime = Date.now();
+  async ({ req, user, query, requestId }) => {
+    const errorHandler = getErrorHandler({ component: 'UserAnalyticsAPI', operation: 'GET' });
+    const start = performance.now();
 
-  // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
-  // Use multiple detection methods for reliable build-time detection
-  const IS_BUILD_TIME =
-    process.env.NEXT_PHASE === 'phase-production-build' ||
-    process.env.NETLIFY_BUILD_TIME === 'true' ||
-    process.env.BUILD_MODE === 'static' ||
-    !process.env.DATABASE_URL ||
-    (process.env.NODE_ENV === 'production' && !process.env.NETLIFY);
-
-  // Always return early if no database URL (covers most build scenarios)
-  if (!process.env.DATABASE_URL) {
-    logWarn('Analytics users accessed without database configuration - returning empty data');
-    return NextResponse.json({
-      data: {
-        userMetrics: [],
-        sessionData: [],
-        lastUpdated: new Date().toISOString(),
-      },
-      message: 'Analytics data not available during build process',
+    logDebug('API: Getting user analytics data', {
+      component: 'UserAnalyticsAPI',
+      operation: 'GET /api/analytics/users',
+      query,
+      userId: user.id,
+      requestId,
     });
-  }
 
-  try {
-    // Parse and validate query parameters (already parsed via createRoute)
-    const validatedQuery = query as z.infer<typeof UserAnalyticsSchema>;
+    try {
+      // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
+      const IS_BUILD_TIME =
+        process.env.NEXT_PHASE === 'phase-production-build' ||
+        process.env.NETLIFY_BUILD_TIME === 'true' ||
+        process.env.BUILD_MODE === 'static' ||
+        !process.env.DATABASE_URL ||
+        (process.env.NODE_ENV === 'production' && !process.env.NETLIFY);
 
-    // Dynamic import of Prisma to avoid build-time initialization
-    const { default: prisma } = await import('@/lib/db/prisma');
+      // Always return early if no database URL (covers most build scenarios)
+      if (!process.env.DATABASE_URL || IS_BUILD_TIME) {
+        logInfo('Analytics users accessed without database configuration - returning empty data', {
+          component: 'UserAnalyticsAPI',
+          operation: 'GET /api/analytics/users',
+          isBuildTime: IS_BUILD_TIME,
+          hasDatabaseUrl: !!process.env.DATABASE_URL,
+          userId: user.id,
+          requestId,
+        });
 
-    // Build date filters with proper typing
-    const dateFilters: Prisma.DateTimeFilter = {};
-    if (validatedQuery.dateFrom) {
-      dateFilters.gte = new Date(validatedQuery.dateFrom);
-    }
-    if (validatedQuery.dateTo) {
-      dateFilters.lte = new Date(validatedQuery.dateTo);
-    }
-
-    // Consolidated, optimized queries using JOINs and aggregations
-    type UserAggRow = {
-      id: string;
-      name: string;
-      email: string;
-      department: string;
-      lastLogin: Date | null;
-      createdAt: Date;
-      roles: string[];
-      eventCount: number;
-      lastActivity: Date | null;
-      avgPerformanceImprovement: number;
-    };
-
-    const eventWhereParts: Prisma.Sql[] = [];
-    if (validatedQuery.userId)
-      eventWhereParts.push(Prisma.sql`e."userId" = ${validatedQuery.userId}`);
-    if (dateFilters.gte) eventWhereParts.push(Prisma.sql`e."timestamp" >= ${dateFilters.gte}`);
-    if (dateFilters.lte) eventWhereParts.push(Prisma.sql`e."timestamp" <= ${dateFilters.lte}`);
-    const eventWhere =
-      eventWhereParts.length > 0
-        ? Prisma.sql`WHERE ${Prisma.join(eventWhereParts, ' AND ')}`
-        : Prisma.empty;
-
-    const userWhere = validatedQuery.userId
-      ? Prisma.sql`WHERE u."id" = ${validatedQuery.userId}`
-      : Prisma.empty;
-
-    const usersWithAgg = await prisma.$queryRaw<UserAggRow[]>`
-      WITH role_agg AS (
-        SELECT ur."userId" AS user_id, array_agg(DISTINCT r."name") AS roles
-        FROM "user_roles" ur
-        JOIN "roles" r ON r."id" = ur."roleId"
-        WHERE ur."isActive" = true
-        GROUP BY ur."userId"
-      ),
-      event_agg AS (
-        SELECT e."userId" AS user_id,
-               COUNT(*) AS event_count,
-               MAX(e."timestamp") AS last_activity,
-               AVG(e."performanceImprovement") AS avg_improvement
-        FROM "hypothesis_validation_events" e
-        ${eventWhere}
-        GROUP BY e."userId"
-      )
-      SELECT u."id" AS id,
-             u."name" AS name,
-             u."email" AS email,
-             u."department" AS department,
-             u."lastLogin" AS "lastLogin",
-             u."createdAt" AS "createdAt",
-             COALESCE(ra.roles, ARRAY[]::text[]) AS roles,
-             COALESCE(ea.event_count, 0)::int AS "eventCount",
-             COALESCE(ea.last_activity, u."lastLogin") AS "lastActivity",
-             COALESCE(ea.avg_improvement, 0) AS "avgPerformanceImprovement"
-      FROM "users" u
-      LEFT JOIN role_agg ra ON ra.user_id = u."id"
-      LEFT JOIN event_agg ea ON ea.user_id = u."id"
-      ${userWhere}
-      ORDER BY u."lastLogin" DESC NULLS LAST
-      LIMIT ${validatedQuery.limit}
-    `;
-
-    // Compact summary in a single round trip
-    type SummaryRow = {
-      totalUsers: number;
-      activeUsers: number;
-      totalEvents: number;
-      totalMetrics: number;
-      avgPerformanceImprovement: number;
-    };
-
-    const dateNowMinus7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const userWhereForSummary = validatedQuery.userId
-      ? Prisma.sql`WHERE u."id" = ${validatedQuery.userId}`
-      : Prisma.empty;
-    const eventsWhereForSummary = eventWhere; // reuse same filter
-
-    const activeWhereParts: Prisma.Sql[] = [];
-    if (validatedQuery.userId) activeWhereParts.push(Prisma.sql`u."id" = ${validatedQuery.userId}`);
-    activeWhereParts.push(Prisma.sql`u."lastLogin" IS NOT NULL`);
-    activeWhereParts.push(Prisma.sql`u."lastLogin" > ${dateNowMinus7}`);
-    const activeUsersWhere = Prisma.sql`${activeWhereParts.length ? Prisma.sql`WHERE ${Prisma.join(activeWhereParts, ' AND ')}` : Prisma.empty}`;
-
-    const [summaryRow] = await prisma.$queryRaw<SummaryRow[]>`
-      SELECT
-        (SELECT COUNT(*) FROM "users" u ${userWhereForSummary})::int AS "totalUsers",
-        (SELECT COUNT(*) FROM "users" u ${activeUsersWhere})::int AS "activeUsers",
-        ${
-          validatedQuery.includeEvents
-            ? Prisma.sql`(SELECT COUNT(*) FROM "hypothesis_validation_events" e ${eventsWhereForSummary})::int`
-            : Prisma.sql`0`
-        } AS "totalEvents",
-        (SELECT COUNT(*) FROM "user_story_metrics" m
-          ${
-            dateFilters.gte || dateFilters.lte
-              ? Prisma.sql`WHERE ${Prisma.join(
-                  [
-                    ...(dateFilters.gte ? [Prisma.sql`m."createdAt" >= ${dateFilters.gte}`] : []),
-                    ...(dateFilters.lte ? [Prisma.sql`m."createdAt" <= ${dateFilters.lte}`] : []),
-                  ],
-                  ' AND '
-                )}`
-              : Prisma.empty
-          })::int AS "totalMetrics",
-        ${
-          validatedQuery.includeEvents
-            ? Prisma.sql`COALESCE((SELECT AVG(e."performanceImprovement") FROM "hypothesis_validation_events" e ${eventsWhereForSummary}), 0)`
-            : Prisma.sql`0`
-        } AS "avgPerformanceImprovement"
-    `;
-
-    // Optional detailed lists
-    type EventRow = {
-      id: string;
-      userId: string;
-      hypothesis: string;
-      userStoryId: string;
-      componentId: string;
-      action: string;
-      actualValue: number | null;
-      targetValue: number | null;
-      performanceImprovement: number | null;
-      timestamp: Date;
-    };
-
-    const events: EventRow[] = validatedQuery.includeEvents
-      ? await prisma.$queryRaw<EventRow[]>`
-          SELECT e."id", e."userId", e."hypothesis"::text AS "hypothesis", e."userStoryId", e."componentId",
-                 e."action", e."actualValue", e."targetValue", e."performanceImprovement", e."timestamp"
-          FROM "hypothesis_validation_events" e
-          ${eventsWhereForSummary}
-          ORDER BY e."timestamp" DESC
-          LIMIT 100
-        `
-      : [];
-
-    type MetricRow = {
-      id: string;
-      userStoryId: string;
-      hypothesis: string[];
-      acceptanceCriteria: string[];
-      performanceTargets: any;
-      actualPerformance: any;
-      createdAt: Date;
-    };
-
-    const metrics: MetricRow[] = validatedQuery.includeMetrics
-      ? await prisma.$queryRaw<MetricRow[]>`
-          SELECT m."id", m."userStoryId", m."hypothesis", m."acceptanceCriteria",
-                 m."performanceTargets", m."actualPerformance", m."createdAt"
-          FROM "user_story_metrics" m
-          ${
-            dateFilters.gte || dateFilters.lte
-              ? Prisma.sql`WHERE ${Prisma.join(
-                  [
-                    ...(dateFilters.gte ? [Prisma.sql`m."createdAt" >= ${dateFilters.gte}`] : []),
-                    ...(dateFilters.lte ? [Prisma.sql`m."createdAt" <= ${dateFilters.lte}`] : []),
-                  ],
-                  ' AND '
-                )}`
-              : Prisma.empty
-          }
-          ORDER BY m."createdAt" DESC
-          LIMIT 50
-        `
-      : [];
-
-    // Build response using already-aggregated data
-    const analytics = {
-      summary: {
-        totalUsers: Number(summaryRow?.totalUsers ?? usersWithAgg.length),
-        activeUsers: Number(
-          summaryRow?.activeUsers ??
-            usersWithAgg.filter((u: any) => u.lastLogin && new Date(u.lastLogin) > dateNowMinus7)
-              .length
-        ),
-        totalEvents: Number(
-          summaryRow?.totalEvents ?? (validatedQuery.includeEvents ? events.length : 0)
-        ),
-        totalMetrics: Number(
-          summaryRow?.totalMetrics ?? (validatedQuery.includeMetrics ? metrics.length : 0)
-        ),
-        avgPerformanceImprovement: Number(
-          summaryRow?.avgPerformanceImprovement ??
-            (validatedQuery.includeEvents && events.length > 0
-              ? events.reduce((sum, e) => sum + (e.performanceImprovement || 0), 0) / events.length
-              : 0)
-        ),
-      },
-      users: usersWithAgg.map((u: any) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        department: u.department,
-        lastLogin: u.lastLogin,
-        createdAt: u.createdAt,
-        roles: u.roles,
-        eventCount: u.eventCount,
-        lastActivity: u.lastActivity,
-      })),
-      events: validatedQuery.includeEvents ? events : [],
-      metrics: validatedQuery.includeMetrics ? metrics : [],
-      performance: {
-        responseTime: Date.now() - startTime,
-        timestamp: new Date().toISOString(),
-      },
-    };
-
-    // Track analytics access for hypothesis validation
-    await trackAnalyticsAccessEvent(prisma, user.id, 'user_analytics', analytics.summary);
-
-    return NextResponse.json({
-      success: true,
-      data: analytics,
-      message: `Retrieved analytics for ${usersWithAgg.length} users`,
-    });
-  } catch (error) {
-    const responseTime = Date.now() - startTime;
-
-    // Log the error using ErrorHandlingService
-    errorHandlingService.processError(error);
-
-    if (error instanceof z.ZodError) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Validation failed for analytics parameters',
-          code: ErrorCodes.VALIDATION.INVALID_INPUT,
-          cause: error,
-          metadata: {
-            component: 'UserAnalyticsRoute',
-            operation: 'getUserAnalytics',
-            validationErrors: error.errors,
-            responseTime,
+        return NextResponse.json({
+          data: {
+            userMetrics: [],
+            sessionData: [],
+            lastUpdated: new Date().toISOString(),
           },
-        }),
-        'Validation failed',
-        ErrorCodes.VALIDATION.INVALID_INPUT,
-        400,
-        { userFriendlyMessage: 'Please check your analytics parameters and try again.' }
-      );
-    }
-
-    return createApiErrorResponse(
-      new StandardError({
-        message: 'User analytics retrieval failed',
-        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
-        cause: error instanceof Error ? error : undefined,
-        metadata: {
-          component: 'UserAnalyticsRoute',
-          operation: 'getUserAnalytics',
-          responseTime,
-        },
-      }),
-      'Analytics failed',
-      ErrorCodes.SYSTEM.INTERNAL_ERROR,
-      500,
-      {
-        userFriendlyMessage:
-          'An unexpected error occurred while retrieving analytics. Please try again later.',
+          message: 'Analytics data not available during build process',
+        });
       }
-    );
-  }
+
+      // Parse and validate query parameters (already parsed via createRoute)
+      const validatedQuery = query as z.infer<typeof UserAnalyticsSchema>;
+
+      // Track analytics access event
+      await analyticsService.trackAnalyticsAccessEvent(
+        user.id,
+        COMPONENT_MAPPING.userStories[0],
+        'getUserAnalytics',
+        { query: validatedQuery }
+      );
+
+      // Convert query to service filters
+      const filters: any = {
+        userId: validatedQuery.userId,
+        dateFrom: validatedQuery.dateFrom ? new Date(validatedQuery.dateFrom) : undefined,
+        dateTo: validatedQuery.dateTo ? new Date(validatedQuery.dateTo) : undefined,
+        includeEvents: validatedQuery.includeEvents,
+        includeMetrics: validatedQuery.includeMetrics,
+        limit: validatedQuery.limit,
+      };
+
+      // Delegate to service layer (business logic belongs here)
+      const analyticsData = await withAsyncErrorHandler(
+        () => analyticsService.getUserAnalytics(filters),
+        'GET user analytics failed',
+        { component: 'UserAnalyticsAPI', operation: 'GET' }
+      );
+
+      const loadTime = performance.now() - start;
+
+      logInfo('API: User analytics data retrieved successfully', {
+        component: 'UserAnalyticsAPI',
+        operation: 'GET /api/analytics/users',
+        userCount: analyticsData.userMetrics.length,
+        sessionCount: analyticsData.sessionData.length,
+        totalUsers: analyticsData.summary.totalUsers,
+        totalEvents: analyticsData.summary.totalEvents,
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        requestId,
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: analyticsData,
+        message: 'User analytics retrieved successfully',
+        meta: {
+          responseTimeMs: Math.round(loadTime),
+          component: COMPONENT_MAPPING,
+        },
+      });
+    } catch (error) {
+      const loadTime = performance.now() - start;
+
+      logError('API: Error getting user analytics data', {
+        component: 'UserAnalyticsAPI',
+        operation: 'GET /api/analytics/users',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        requestId,
+      });
+
+      return errorHandler.createErrorResponse(error, 'Failed to get user analytics');
+    }
   }
 );
-
-/**
- * Track analytics access event for hypothesis validation
- */
-async function trackAnalyticsAccessEvent(
-  prisma: any,
-  userId: string,
-  analyticsType: string,
-  summary: AnalyticsSummary
-) {
-  try {
-    await prisma.hypothesisValidationEvent.create({
-      data: {
-        userId,
-        hypothesis: 'H8', // Performance Analytics
-        userStoryId: 'US-5.1',
-        componentId: 'UserAnalytics',
-        action: 'analytics_accessed',
-        measurementData: {
-          analyticsType,
-          totalUsers: summary.totalUsers,
-          activeUsers: summary.activeUsers,
-          totalEvents: summary.totalEvents,
-          totalMetrics: summary.totalMetrics,
-          avgPerformanceImprovement: summary.avgPerformanceImprovement,
-          responseTime: summary.responseTime || 0,
-          timestamp: new Date().toISOString(),
-        },
-        targetValue: 1000, // Target: analytics load in <1 second
-        actualValue: summary.responseTime || 0,
-        performanceImprovement: (summary.responseTime || 0) < 1000 ? 1 : 0,
-        userRole: 'user',
-        sessionId: `analytics_access_${Date.now()}`,
-      },
-    });
-  } catch (error) {
-    errorHandlingService.processError(
-      error,
-      'Failed to track analytics access event',
-      ErrorCodes.ANALYTICS.TRACKING_ERROR,
-      {
-        component: 'UserAnalyticsRoute',
-        operation: 'trackAnalyticsAccessEvent',
-        userId,
-        analyticsType,
-      }
-    );
-    // Don't throw error as this is non-critical
-  }
-}

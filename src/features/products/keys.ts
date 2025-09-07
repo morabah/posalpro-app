@@ -21,10 +21,11 @@ export const qk = {
       limit: number,
       sortBy: string,
       sortOrder: 'asc' | 'desc',
+      cursor?: string,
       filters?: Record<string, unknown>
     ) => [
       ...qk.products.lists(),
-      { search, limit, sortBy, sortOrder, filters }
+      { search, limit, sortBy, sortOrder, cursor, filters }
     ] as const,
 
     byId: (id: string) => [...qk.products.all, 'byId', id] as const,

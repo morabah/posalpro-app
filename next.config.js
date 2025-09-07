@@ -40,7 +40,7 @@ const baseConfig = {
   },
 
   // 🚨 CRITICAL: Prevent database connections during build
-  serverExternalPackages: [],
+  serverExternalPackages: ['async_hooks'],
 
   // ✅ CRITICAL: Optimize images for performance
   images: {
@@ -55,7 +55,11 @@ const baseConfig = {
   },
 
   // Keep strict checks; do not ignore errors during builds
-  typescript: { ignoreBuildErrors: false },
+  typescript: {
+    ignoreBuildErrors: false,
+    // Optimize TypeScript compilation
+    tsconfigPath: './tsconfig.build.json',
+  },
   // Build without lint: explicitly ignore ESLint during builds per request
   eslint: { ignoreDuringBuilds: true },
 
@@ -66,6 +70,23 @@ const baseConfig = {
 
   // ✅ CRITICAL: Enhanced webpack configuration for bundle optimization
   webpack: (config, { dev, isServer }) => {
+    // Handle Node.js built-in modules for client-side compatibility
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        'node:async_hooks': false,
+        async_hooks: false,
+        'node:crypto': false,
+        crypto: false,
+        'node:fs': false,
+        fs: false,
+        'node:path': false,
+        path: false,
+        'node:os': false,
+        os: false,
+      };
+    }
+
     // Exclude archived files from build
     config.module.rules.push({
       test: /\.(ts|tsx|js|jsx)$/,

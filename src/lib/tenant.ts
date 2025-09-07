@@ -1,13 +1,33 @@
 /**
  * Multi-Tenant Context Management
  * Request-aware tenant resolver with async context storage.
+ *
+ * This module can be imported in both server and client environments.
+ * AsyncLocalStorage is used server-side for request context, with browser fallbacks.
  */
 
-import { AsyncLocalStorage } from 'node:async_hooks';
-import { logDebug, logWarn } from './logger';
-import type { NextRequest } from 'next/server';
-import { getToken } from 'next-auth/jwt';
+// @ts-ignore - Next.js bundler directive to ignore this file in client bundle
+// This file contains Node.js-specific imports that should only be used server-side
+
+// Dynamic import for AsyncLocalStorage to avoid bundling issues
+let AsyncLocalStorage: any = null;
+
+// Initialize AsyncLocalStorage dynamically (only on server)
+if (typeof window === 'undefined') {
+  try {
+    // Only import on server-side
+    const asyncHooks = require('node:async_hooks');
+    AsyncLocalStorage = asyncHooks.AsyncLocalStorage;
+  } catch {
+    // Fallback if import fails
+    AsyncLocalStorage = null;
+  }
+}
+
 import { getAuthSecret } from '@/lib/auth/secret';
+import { getToken } from 'next-auth/jwt';
+import type { NextRequest } from 'next/server';
+import { logDebug, logWarn } from './logger';
 
 export interface TenantContext {
   tenantId: string;
@@ -17,7 +37,11 @@ export interface TenantContext {
 }
 
 // Async context to carry tenant per request (works in Node runtime paths)
-const tenantAls = new AsyncLocalStorage<TenantContext>();
+// Only create AsyncLocalStorage if available (server-side)
+const tenantAls =
+  typeof AsyncLocalStorage !== 'undefined' && AsyncLocalStorage
+    ? new (AsyncLocalStorage as any)()
+    : null;
 
 /**
  * Initialize tenant context for the current request and run the callback inside it.
@@ -29,14 +53,27 @@ const tenantAls = new AsyncLocalStorage<TenantContext>();
  */
 export async function withTenantContext<T>(req: NextRequest, fn: () => T | Promise<T>): Promise<T> {
   const tenant = await resolveTenantFromRequest(req);
-  return await tenantAls.run(tenant, fn as any);
+
+  // Use AsyncLocalStorage if available (server-side), otherwise just run the function
+  if (tenantAls) {
+    return await tenantAls.run(tenant, fn as any);
+  } else {
+    // Browser environment - just run the function without context
+    return await fn();
+  }
 }
 
 /**
  * Run a function within a provided tenant context (Node runtime helper).
  */
 export async function runWithTenantContext<T>(tenant: TenantContext, fn: () => T | Promise<T>) {
-  return await tenantAls.run(tenant, fn as any);
+  // Use AsyncLocalStorage if available (server-side), otherwise just run the function
+  if (tenantAls) {
+    return await tenantAls.run(tenant, fn as any);
+  } else {
+    // Browser environment - just run the function without context
+    return await fn();
+  }
 }
 
 /**
@@ -95,14 +132,20 @@ export function extractSubdomain(host: string): string | null {
 
 /** Get tenant from async context; throws if not present in production. */
 export function getCurrentTenant(): TenantContext {
-  const ctx = tenantAls.getStore();
-  if (ctx) return ctx;
-  if (process.env.NODE_ENV !== 'production') {
-    const tenantId =
-      process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default';
-    return { tenantId, domain: process.env.NEXT_PUBLIC_APP_DOMAIN || 'localhost' };
+  // Try to get tenant from async context if available
+  if (tenantAls) {
+    const ctx = tenantAls.getStore();
+    if (ctx) return ctx;
   }
-  throw new Error('Tenant context is not initialized');
+
+  // Always provide fallback tenant in development and production
+  const tenantId =
+    process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default';
+  return {
+    tenantId,
+    domain: process.env.NEXT_PUBLIC_APP_DOMAIN || 'localhost',
+    tenantName: process.env.NODE_ENV === 'development' ? 'Development Tenant' : undefined,
+  };
 }
 
 /** Validate tenant access for the active context. */

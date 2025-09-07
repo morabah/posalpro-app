@@ -37,6 +37,8 @@ export interface RouteConfig<
   requireAuth?: boolean;
   /** Optional per-route entitlements required (by key). */
   entitlements?: string[];
+  /** Optional per-route user permissions required. */
+  permissions?: string[];
   /**
    * Optional API deprecation metadata for this route.
    * When provided, standard headers will be added:
@@ -224,6 +226,17 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
           );
           if (!ok) {
             throw forbidden('Missing entitlements');
+          }
+        }
+
+        // User permissions enforcement: require all listed permissions for the user
+        if (config.permissions && config.permissions.length > 0) {
+          const userPermissions = (user as any).permissions || [];
+          const hasAllPermissions = config.permissions.every(permission =>
+            userPermissions.includes(permission) || userPermissions.includes('*:*')
+          );
+          if (!hasAllPermissions) {
+            throw forbidden('Missing permissions');
           }
         }
 

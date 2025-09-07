@@ -93,7 +93,9 @@ export function EnhancedProductSelectionStep({
     limit: 100,
     sortBy: 'name',
     sortOrder: 'asc',
-    isActive: true,
+    filters: {
+      isActive: true,
+    },
   });
 
   // Flatten the paginated data for compatibility

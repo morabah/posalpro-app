@@ -1,0 +1,36 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./config/tsconfig.core.tsbuildinfo"
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/**/*.ts",
+    "src/lib/**/*.tsx",
+    "src/types/**/*.ts",
+    "src/hooks/**/*.ts",
+    "src/utils/**/*.ts",
+    "src/services/**/*.ts",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/app/**",
+    "src/components/**",
+    "src/features/**",
+    "templates/**",
+    "docs/**",
+    "scripts/**",
+    "test/**",
+    "src/test/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "archive/**",
+    "src/archived/**",
+    "temp-migration/**",
+    "backups/**"
+  ],
+  "references": []
+}
+

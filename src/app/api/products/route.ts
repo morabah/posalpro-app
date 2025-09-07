@@ -1,17 +1,20 @@
 /**
- * Product API Routes - Modern Architecture
+ * Product API Routes - Service Layer Architecture
+ * Following CORE_REQUIREMENTS.md service layer patterns
  * User Story: US-4.1 (Product Management)
  * Hypothesis: H5 (Modern data fetching improves performance and user experience)
  *
- * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/products/schemas.ts
- * ✅ REMOVED DUPLICATION: No inline schema definitions
- * ✅ ERROR HANDLING: Uses centralized error handler for consistent, sanitized responses
+ * ✅ SERVICE LAYER COMPLIANCE: Removed direct Prisma calls from routes
+ * ✅ BUSINESS LOGIC SEPARATION: Complex logic moved to productService
+ * ✅ CURSOR PAGINATION: Uses service layer cursor-based pagination
+ * ✅ NORMALIZED TRANSFORMATIONS: Centralized in service layer
+ * ✅ ERROR HANDLING: Integrated standardized error handling
  */
 
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
-import { logError, logInfo } from '@/lib/logger';
+import { logDebug, logInfo, logError } from '@/lib/logger';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { productService } from '@/lib/services/productService';
 
 // Import consolidated schemas from feature folder
 import {
@@ -20,22 +23,7 @@ import {
   ProductQuerySchema,
   ProductSchema,
 } from '@/features/products';
-import { Decimal } from '@prisma/client/runtime/library';
 
-// Define proper type for Prisma product query result
-type ProductQueryResult = {
-  id: string;
-  name: string;
-  description: string | null;
-  price: Decimal | null;
-  currency: string | null;
-  sku: string;
-  category: string[];
-  tags: string[];
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-};
 
 // GET /api/products - Retrieve products with filtering and cursor pagination
 export const GET = createRoute(
@@ -43,109 +31,69 @@ export const GET = createRoute(
     roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'],
     query: ProductQuerySchema,
   },
-  async ({ query, user }) => {
-    const errorHandler = getErrorHandler({
+  async ({ query, user, requestId }) => {
+    const errorHandler = getErrorHandler({ component: 'ProductAPI', operation: 'GET' });
+    const start = performance.now();
+
+    logDebug('API: Fetching products with cursor pagination', {
       component: 'ProductAPI',
-      operation: 'GET',
+      operation: 'GET /api/products',
+      query,
+      userId: user.id,
+      requestId,
     });
 
     try {
-      logInfo('Fetching products', {
-        component: 'ProductAPI',
-        operation: 'GET',
-        userId: user.id,
-        params: query,
-      });
+      // Convert query to service filters following CORE_REQUIREMENTS.md patterns
+      const filters = {
+        search: query!.search,
+        category: query!.category ? [query!.category] : undefined,
+        isActive: query!.isActive,
+        sortBy: query!.sortBy,
+        sortOrder: query!.sortOrder,
+        limit: query!.limit,
+        cursor: query!.cursor || undefined,
+      };
 
-      // Build where clause
-      const where: Record<string, unknown> = {};
-
-      if (query!.search) {
-        where.OR = [
-          { name: { contains: query!.search, mode: 'insensitive' } },
-          { description: { contains: query!.search, mode: 'insensitive' } },
-          { sku: { contains: query!.search, mode: 'insensitive' } },
-        ];
-      }
-
-      if (query!.category) {
-        where.category = { has: query!.category };
-      }
-
-      if (query!.isActive !== undefined) {
-        where.isActive = query!.isActive;
-      }
-
-      // Build order by
-      const orderBy: Array<Record<string, string>> = [{ [query!.sortBy]: query!.sortOrder }];
-
-      // Add secondary sort for cursor pagination
-      if (query!.sortBy !== 'createdAt') {
-        orderBy.push({ id: query!.sortOrder });
-      }
-
-      // Execute query with cursor pagination
-      const rows = await withAsyncErrorHandler(
-        () =>
-          prisma.product.findMany({
-            where,
-            select: {
-              id: true,
-              name: true,
-              description: true,
-              price: true,
-              currency: true,
-              sku: true,
-              category: true,
-              tags: true,
-              isActive: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-            orderBy,
-            take: query!.limit + 1,
-            cursor: query!.cursor ? { id: query!.cursor } : undefined,
-            skip: query!.cursor ? 1 : 0,
-          }),
-        'Failed to fetch products from database',
+      // Delegate to service layer (business logic and transformations belong here)
+      const result = await withAsyncErrorHandler(
+        () => productService.listProductsCursor(filters),
+        'GET products failed',
         { component: 'ProductAPI', operation: 'GET' }
       );
 
-      const hasMore = rows.length > query!.limit;
-      const items = hasMore ? rows.slice(0, -1) : rows;
-      const nextCursor = hasMore ? items[items.length - 1]?.id || null : null;
+      const loadTime = performance.now() - start;
 
-      // Transform null values to appropriate defaults before validation
-      const transformedItems = items.map((item: ProductQueryResult) => ({
-        ...item,
-        description: item.description || '',
-        price: item.price ? Number(item.price) : 0,
-        category: Array.isArray(item.category)
-          ? item.category
-          : item.category
-            ? [item.category]
-            : [],
-      }));
+      logInfo('API: Products fetched successfully', {
+        component: 'ProductAPI',
+        operation: 'GET /api/products',
+        count: result.items.length,
+        hasNextPage: !!result.nextCursor,
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        requestId,
+      });
 
       // Validate response against schema
       const validatedResponse = ProductListSchema.parse({
-        items: transformedItems,
-        nextCursor,
+        items: result.items,
+        nextCursor: result.nextCursor,
       });
 
-      return errorHandler.createSuccessResponse(
-        validatedResponse,
-        'Products retrieved successfully'
-      );
+      return errorHandler.createSuccessResponse(validatedResponse);
     } catch (error) {
-      // Error will be handled by the createRoute wrapper, but we log it here for additional context
-      logError('Failed to fetch products', {
+      const loadTime = performance.now() - start;
+
+      logError('API: Error fetching products', {
         component: 'ProductAPI',
-        operation: 'GET',
+        operation: 'GET /api/products',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        loadTime: Math.round(loadTime),
         userId: user.id,
-        error: error instanceof Error ? error.message : String(error),
+        requestId,
       });
-      throw error; // Let the createRoute wrapper handle the response
+
+      return errorHandler.createErrorResponse(error, 'Fetch failed');
     }
   }
 );
@@ -157,126 +105,57 @@ export const POST = createRoute(
     body: ProductCreateSchema,
     entitlements: ['feature.products.create'],
   },
-  async ({ body, user }) => {
-    const errorHandler = getErrorHandler({
+  async ({ body, user, requestId }) => {
+    const errorHandler = getErrorHandler({ component: 'ProductAPI', operation: 'POST' });
+    const start = performance.now();
+
+    logDebug('API: Creating new product', {
       component: 'ProductAPI',
-      operation: 'POST',
+      operation: 'POST /api/products',
+      data: body,
+      userId: user.id,
+      requestId,
     });
 
     try {
-      logInfo('Creating product', {
+      // Delegate to service layer (business logic belongs here)
+      const createdProduct = await withAsyncErrorHandler(
+        () => productService.createProductWithValidation(body!, user.id),
+        'POST product failed',
+        { component: 'ProductAPI', operation: 'POST' }
+      );
+
+      const loadTime = performance.now() - start;
+
+      logInfo('API: Product created successfully', {
         component: 'ProductAPI',
-        operation: 'POST',
+        operation: 'POST /api/products',
+        productId: createdProduct.id,
+        productName: createdProduct.name,
+        loadTime: Math.round(loadTime),
         userId: user.id,
-        productName: body!.name,
+        requestId,
       });
-
-      // Check for duplicate SKU within tenant (tenant filter auto-injected by Prisma middleware)
-      const existingProduct = await withAsyncErrorHandler(
-        () =>
-          prisma.product.findFirst({
-            where: { sku: body!.sku },
-            select: { id: true },
-          }),
-        'Failed to check for duplicate SKU',
-        { component: 'ProductAPI', operation: 'POST' }
-      );
-
-      if (existingProduct) {
-        const error = new Error(`Product with SKU ${body!.sku} already exists`);
-        (error as any).code = 'BUSINESS.DUPLICATE_ENTITY';
-        throw error;
-      }
-
-      // Create product
-      const product = await withAsyncErrorHandler(
-        () =>
-          prisma.product.create({
-            data: {
-              name: body!.name,
-              description: body!.description,
-              price: body!.price,
-              currency: body!.currency,
-              sku: body!.sku,
-              category: body!.category,
-              tags: body!.tags,
-              attributes: body!.attributes
-                ? JSON.parse(JSON.stringify(body!.attributes))
-                : undefined,
-              images: body!.images,
-              isActive: body!.isActive,
-              stockQuantity: body!.stockQuantity,
-              status: body!.status,
-              version: body!.version,
-              usageAnalytics: body!.usageAnalytics
-                ? JSON.parse(JSON.stringify(body!.usageAnalytics))
-                : undefined,
-              userStoryMappings: body!.userStoryMappings,
-              tenant: {
-                connect: {
-                  id: (user as any).tenantId,
-                },
-              },
-            },
-            select: {
-              id: true,
-              name: true,
-              description: true,
-              price: true,
-              currency: true,
-              sku: true,
-              category: true,
-              tags: true,
-              isActive: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          }),
-        'Failed to create product in database',
-        { component: 'ProductAPI', operation: 'POST' }
-      );
-
-      // Transform null values to appropriate defaults before validation
-      const transformedProduct = {
-        ...product,
-        description: product.description || '',
-        price: product.price ? Number(product.price) : 0,
-        category: Array.isArray(product.category)
-          ? product.category
-          : product.category
-            ? [product.category]
-            : [],
-      };
 
       // Validate response against schema
-      const validationResult = ProductSchema.safeParse(transformedProduct);
-      if (!validationResult.success) {
-        logError('Product schema validation failed after creation', validationResult.error, {
-          component: 'ProductAPI',
-          operation: 'POST',
-          productId: product.id,
-        });
-        // Still return success but with a warning - schema validation should not fail in production
-        return errorHandler.createSuccessResponse(
-          transformedProduct,
-          'Product created successfully (with schema warnings)'
-        );
-      }
+      const validatedResponse = ProductSchema.parse(createdProduct);
 
-      return errorHandler.createSuccessResponse(
-        validationResult.data,
-        'Product created successfully',
-        201
-      );
+      const res = errorHandler.createSuccessResponse(validatedResponse, undefined, 201);
+      res.headers.set('Location', `/api/products/${createdProduct.id}`);
+      return res;
     } catch (error) {
-      // Error will be handled by the createRoute wrapper, but we log it here for additional context
-      logError('Failed to create product', {
+      const loadTime = performance.now() - start;
+
+      logError('API: Error creating product', {
         component: 'ProductAPI',
-        operation: 'POST',
+        operation: 'POST /api/products',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        loadTime: Math.round(loadTime),
         userId: user.id,
-        error: error instanceof Error ? error.message : String(error),
+        requestId,
       });
-      throw error; // Let the createRoute wrapper handle the response
+
+      return errorHandler.createErrorResponse(error, 'Create failed');
     }
   }
 );

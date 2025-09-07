@@ -838,6 +838,242 @@ export class CustomerService {
       });
     }
   }
+
+  /**
+   * Cursor-based list method following CORE_REQUIREMENTS.md patterns
+   * Returns normalized data with proper transformations
+   */
+  async listCustomersCursor(filters: CustomerFilters = {}): Promise<{
+    items: Customer[];
+    nextCursor: string | null;
+  }> {
+    try {
+      const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
+      const tenant = getCurrentTenant();
+
+      // Build where clause following service layer patterns
+      const where: Prisma.CustomerWhereInput = {
+        tenantId: tenant.tenantId,
+        ...this.buildWhereClause(filters),
+      };
+
+      // Build order by with cursor pagination support
+      const orderBy: Array<Record<string, Prisma.SortOrder>> = this.buildOrderByClause(filters);
+
+      // Execute query with cursor pagination
+      const rows = await prisma.customer.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          industry: true,
+          status: true,
+          tier: true,
+          tags: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy,
+        take: limit + 1, // Take one extra to check if there are more
+        ...(filters.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
+      });
+
+      // Determine if there are more pages and extract items
+      const hasNextPage = rows.length > limit;
+      const items = hasNextPage ? rows.slice(0, limit) : rows;
+      const nextCursor = hasNextPage ? rows[limit - 1].id : null;
+
+      // Normalize data following service layer patterns
+      const normalizedItems = items.map(item => this.normalizeCustomerData(item));
+
+      return {
+        items: normalizedItems as Customer[],
+        nextCursor,
+      };
+    } catch (error) {
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to list customers with cursor pagination',
+        code: ErrorCodes.DATA.DATABASE_ERROR,
+        cause: error,
+        metadata: {
+          component: 'CustomerService',
+          operation: 'listCustomersCursor',
+          filters,
+        },
+      });
+    }
+  }
+
+  /**
+   * Enhanced customer creation with validation
+   * Following CORE_REQUIREMENTS.md service layer patterns
+   */
+  async createCustomerWithValidation(data: CreateCustomerData, userId: string): Promise<Customer> {
+    try {
+      const tenant = getCurrentTenant();
+
+      // Check for duplicate email within tenant (business logic belongs in service)
+      const existingCustomer = await prisma.customer.findFirst({
+        where: {
+          email: data.email,
+          tenantId: tenant.tenantId,
+        },
+        select: { id: true },
+      });
+
+      if (existingCustomer) {
+        throw new StandardError({
+          message: `Customer with email ${data.email} already exists`,
+          code: ErrorCodes.DATA.CONFLICT,
+          metadata: {
+            component: 'CustomerService',
+            operation: 'createCustomerWithValidation',
+            email: data.email,
+            tenantId: tenant.tenantId,
+          },
+        });
+      }
+
+      // Create customer with proper data normalization
+      const customer = await prisma.customer.create({
+        data: {
+          tenantId: tenant.tenantId,
+          name: data.name,
+          email: data.email,
+          industry: data.industry,
+          status: CustomerStatus.ACTIVE,
+          tier: data.tier || CustomerTier.STANDARD,
+          tags: data.tags || [],
+          revenue: data.revenue,
+          website: data.website,
+          phone: data.phone,
+          address: data.address || null,
+          metadata: data.metadata ? toPrismaJson(data.metadata) : undefined,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          industry: true,
+          status: true,
+          tier: true,
+          tags: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      // Normalize and return
+      return this.normalizeCustomerData(customer) as Customer;
+    } catch (error) {
+      errorHandlingService.processError(error);
+
+      if (error instanceof StandardError) {
+        throw error;
+      }
+
+      if (isPrismaError(error)) {
+        throw new StandardError({
+          message: `Database operation failed during customer creation`,
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'CustomerService',
+            operation: 'createCustomerWithValidation',
+            email: data.email,
+          },
+        });
+      }
+
+      throw new StandardError({
+        message: 'Failed to create customer with validation',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error,
+        metadata: {
+          component: 'CustomerService',
+          operation: 'createCustomerWithValidation',
+        },
+      });
+    }
+  }
+
+  /**
+   * Helper: Build where clause for filtering
+   * Following CORE_REQUIREMENTS.md patterns
+   */
+  private buildWhereClause(filters: CustomerFilters): Prisma.CustomerWhereInput {
+    const where: Prisma.CustomerWhereInput = {};
+
+    if (filters.search) {
+      where.OR = [
+        { name: { contains: filters.search, mode: 'insensitive' } },
+        { email: { contains: filters.search, mode: 'insensitive' } },
+        { industry: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (filters.status && filters.status.length > 0) {
+      where.status = { in: filters.status };
+    }
+
+    if (filters.tier && filters.tier.length > 0) {
+      where.tier = { in: filters.tier };
+    }
+
+    if (filters.industry && filters.industry.length > 0) {
+      where.industry = { in: filters.industry };
+    }
+
+    if (filters.tags && filters.tags.length > 0) {
+      where.tags = { hasSome: filters.tags };
+    }
+
+    if (filters.revenueMin !== undefined || filters.revenueMax !== undefined) {
+      where.revenue = {};
+      if (filters.revenueMin !== undefined) (where.revenue as any).gte = filters.revenueMin;
+      if (filters.revenueMax !== undefined) (where.revenue as any).lte = filters.revenueMax;
+    }
+
+    if (filters.createdAfter || filters.createdBefore) {
+      where.createdAt = {};
+      if (filters.createdAfter) (where.createdAt as any).gte = filters.createdAfter;
+      if (filters.createdBefore) (where.createdAt as any).lte = filters.createdBefore;
+    }
+
+    return where;
+  }
+
+  /**
+   * Helper: Build order by clause with cursor pagination support
+   */
+  private buildOrderByClause(filters: CustomerFilters): Array<Record<string, Prisma.SortOrder>> {
+    const sortBy = filters.sortBy || 'createdAt';
+    const sortOrder = filters.sortOrder || 'desc';
+
+    const orderBy: Array<Record<string, Prisma.SortOrder>> = [{ [sortBy]: sortOrder }];
+
+    // Add secondary sort for cursor pagination stability
+    if (sortBy !== 'id') {
+      orderBy.push({ id: sortOrder });
+    }
+
+    return orderBy;
+  }
+
+  /**
+   * Helper: Normalize customer data (Decimal conversion, null handling)
+   * Following CORE_REQUIREMENTS.md transformation patterns
+   */
+  private normalizeCustomerData(customer: any): any {
+    return {
+      ...customer,
+      industry: customer.industry || '',
+      revenue: customer.revenue ? Number(customer.revenue) : 0,
+      tags: customer.tags || [],
+    };
+  }
 }
 
 // Singleton instance

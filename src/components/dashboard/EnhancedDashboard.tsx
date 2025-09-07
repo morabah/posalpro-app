@@ -19,7 +19,6 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { useExecutiveDashboard } from '@/features/dashboard/hooks';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
 import { useDashboardFilters, useDashboardUIActions } from '@/lib/store/dashboardStore';
@@ -35,6 +34,7 @@ import {
   TrophyIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
+import { useQuery } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
@@ -628,12 +628,26 @@ export default function EnhancedDashboard() {
   const [funnelData, setFunnelData] = useState<ConversionFunnel[]>([]);
   const [riskData, setRiskData] = useState<RiskIndicator[]>([]);
   const { timeRange, status: statusFilter /*, search: searchFilter*/ } = useDashboardFilters();
+  // Use enhanced dashboard data instead of executive dashboard
   const {
     data: dashboardData,
     isLoading: loading,
     error,
     refetch,
-  } = useExecutiveDashboard('3M', false);
+  } = useQuery({
+    queryKey: ['enhanced-dashboard-stats'],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/enhanced-stats?fresh=true');
+      if (!response.ok) {
+        throw new Error('Failed to fetch enhanced dashboard stats');
+      }
+      return response.json();
+    },
+    staleTime: 30000,
+    gcTime: 120000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const { setFilters } = useDashboardUIActions();
 
@@ -652,14 +666,14 @@ export default function EnhancedDashboard() {
       operation: 'derive',
     });
 
-    // Extract data from the consistent API response structure
-    const responseData = dashboardData?.data;
-    const metrics = responseData?.metrics;
+    // Extract data from the enhanced dashboard API response structure
+    const responseData = dashboardData as any;
+    const data = responseData?.data;
 
-    // Skip if metrics is null or undefined
-    if (!metrics) {
+    // Skip if data is null or undefined
+    if (!data) {
       logDebug('dashboard_parse_error', {
-        error: 'Metrics data is null or undefined',
+        error: 'Enhanced dashboard data is null or undefined',
         component: 'EnhancedDashboard',
         operation: 'data_validation',
       });
@@ -668,48 +682,46 @@ export default function EnhancedDashboard() {
 
     setKpis(prev => ({
       ...prev,
-      totalRevenue: Number(metrics.totalRevenue || 0),
-      monthlyRevenue: Number(metrics.monthlyRevenue || 0),
-      revenueGrowth: Number(metrics.quarterlyGrowth || 0), // Using quarterly as revenue growth
-      totalProposals: Number(metrics.totalProposals || 0),
-      activeProposals: Number(metrics.closingThisMonth || 0), // Using closingThisMonth as active proposals
-      wonProposals: Number(metrics.wonDeals || 0),
-      winRate: Math.round(Number(metrics.winRate || 0)),
-      avgProposalValue: Number(metrics.avgDealSize || 0),
-      avgCycleTime: Number(metrics.avgSalesCycle || 0),
-      overdueCount: Number(metrics.atRiskDeals || 0),
-      atRiskCount: Number(metrics.atRiskDeals || 0),
-      totalCustomers: Number(metrics.teamSize || 0), // Using teamSize as proxy for customers
-      activeCustomers: Number(metrics.teamSize || 0),
-      customerGrowth: Number(metrics.quarterlyGrowth || 0),
-      avgCustomerValue: Number(metrics.avgDealSize || 0), // Using avgDealSize as proxy
-      proposalGrowth: Number(metrics.quarterlyGrowth || 0),
+      totalRevenue: Number(data.totalRevenue || 0),
+      monthlyRevenue: Number(data.monthlyRevenue || 0),
+      revenueGrowth: Number(data.revenueGrowth || 0),
+      totalProposals: Number(data.totalProposals || 0),
+      activeProposals: Number(data.activeProposals || 0),
+      wonProposals: Number(data.wonProposals || 0),
+      winRate: Number(data.winRate || 0),
+      avgProposalValue: Number(data.avgProposalValue || 0),
+      avgCycleTime: Number(data.avgCycleTime || 0),
+      overdueCount: Number(data.overdueCount || 0),
+      atRiskCount: Number(data.atRiskCount || 0),
+      totalCustomers: Number(data.totalCustomers || 0),
+      activeCustomers: Number(data.activeCustomers || 0),
+      customerGrowth: Number(data.customerGrowth || 0),
+      avgCustomerValue: Number(data.avgCustomerValue || 0),
+      proposalGrowth: Number(data.proposalGrowth || 0),
     }));
 
-    // Use revenue chart from parsed data - map period to month
+    // Use revenue chart from enhanced dashboard data
     setRevenueData(
-      (responseData.revenueChart || []).map((item: any) => ({
-        month: String(item?.period || ''),
-        revenue: Number(item?.actual || 0),
+      (data.revenueHistory || []).map((item: any) => ({
+        month: String(item?.month || ''),
+        revenue: Number(item?.revenue || 0),
         target: Number(item?.target || 0),
-        proposals: Number(metrics.totalProposals || 0), // Use total proposals since per-period data not available
+        proposals: Number(item?.proposals || 0),
       }))
     );
 
-    // Convert pipeline stages to conversion funnel format
-    const funnelData: ConversionFunnel[] = (responseData.pipelineStages || []).map(
-      (stage: any) => ({
-        stage: String(stage.stage || ''),
-        count: Number(stage.count || 0),
-        conversionRate: Number(stage.conversionRate || 0),
-        value: Number(stage.value || 0),
-      })
-    );
+    // Convert conversion funnel from enhanced dashboard data
+    const funnelData: ConversionFunnel[] = (data.conversionFunnel || []).map((stage: any) => ({
+      stage: String(stage.stage || ''),
+      count: Number(stage.count || 0),
+      conversionRate: Number(stage.conversionRate || 0),
+      value: Number(stage.value || 0),
+    }));
     setFunnelData(funnelData);
 
-    // Calculate risk indicators using available data
-    const overdue = Number(metrics.atRiskDeals || 0);
-    const atRiskCount = Number(metrics.atRiskDeals || 0);
+    // Calculate risk indicators using enhanced dashboard data
+    const overdue = Number(data.overdueCount || 0);
+    const atRiskCount = Number(data.atRiskCount || 0);
 
     const riskItems: RiskIndicator[] = [];
     if (overdue > 0) {
@@ -735,9 +747,9 @@ export default function EnhancedDashboard() {
       component: 'EnhancedDashboard',
       userStory: 'US-1.1',
       hypothesis: 'H1',
-      totalProposals: Number(metrics?.totalProposals || 0),
-      totalRevenue: Number(metrics?.totalRevenue || 0),
-      winRate: Number(metrics?.winRate || 0),
+      totalProposals: Number(data?.totalProposals || 0),
+      totalRevenue: Number(data?.totalRevenue || 0),
+      winRate: Number(data?.winRate || 0),
     });
   }, [dashboardData, analytics]);
 

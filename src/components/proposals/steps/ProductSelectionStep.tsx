@@ -175,8 +175,10 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
     limit: 50,
     sortBy,
     sortOrder,
-    category: category || undefined,
-    isActive: true,
+    filters: {
+      category: category || undefined,
+      isActive: true,
+    },
   });
 
   // Flatten the paginated data for compatibility

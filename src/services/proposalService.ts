@@ -9,7 +9,7 @@
  * ✅ IMPLEMENTS: Modern architecture with proper separation of concerns
  */
 
-import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
+import { ErrorCodes, processError, StandardError } from '@/lib/errors/ErrorHandlingService';
 import { http } from '@/lib/http';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 
@@ -91,7 +91,7 @@ export type ProposalUpdate = Partial<ProposalCreateData>;
 
 export class ProposalService {
   private static instance: ProposalService | null = null;
-  private errorHandlingService = ErrorHandlingService.getInstance();
+  // Error handling service instance removed - using standalone functions
 
   static getInstance(): ProposalService {
     if (!ProposalService.instance) {
@@ -103,10 +103,20 @@ export class ProposalService {
   private constructor() {}
 
   async getProposals(
-    params: Partial<ProposalQueryData> = {}
+    params: {
+      search?: string;
+      department?: string;
+      role?: string;
+      status?: string;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+      limit?: number;
+      cursor?: string;
+      filters?: Record<string, unknown>;
+    } = {}
   ): Promise<{ items: Proposal[]; nextCursor: string | null }> {
     const start = performance.now();
-    logDebug('Fetching proposals', {
+    logDebug('Fetching proposals with cursor pagination', {
       component: 'ProposalService',
       operation: 'getProposals',
       params,
@@ -117,32 +127,21 @@ export class ProposalService {
     try {
       const searchParams = new URLSearchParams();
 
-      // Add query parameters
+      // Add query parameters matching new API interface
       if (params.search) searchParams.set('search', params.search);
       if (params.limit) searchParams.set('limit', params.limit.toString());
       if (params.cursor) searchParams.set('cursor', params.cursor);
       if (params.sortBy) searchParams.set('sortBy', params.sortBy);
       if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
-      if (params.status) searchParams.set('status', params.status);
-      if (params.priority) searchParams.set('priority', params.priority);
-      if (params.customerId) searchParams.set('customerId', params.customerId);
-      if (params.assignedTo) searchParams.set('assignedTo', params.assignedTo);
-      if (params.dueBefore)
-        searchParams.set(
-          'dueBefore',
-          typeof params.dueBefore === 'string'
-            ? params.dueBefore
-            : new Date(params.dueBefore as unknown as string).toISOString()
-        );
-      if (params.dueAfter)
-        searchParams.set(
-          'dueAfter',
-          typeof params.dueAfter === 'string'
-            ? params.dueAfter
-            : new Date(params.dueAfter as unknown as string).toISOString()
-        );
-      if (typeof (params as any).openOnly !== 'undefined')
-        searchParams.set('openOnly', String((params as any).openOnly));
+
+      // Add filter parameters
+      if (params.filters) {
+        Object.entries(params.filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            searchParams.set(key, String(value));
+          }
+        });
+      }
 
       // Use centralized HTTP client
       const data = await http.get<{ items: Proposal[]; nextCursor: string | null }>(
@@ -160,7 +159,7 @@ export class ProposalService {
 
       return data;
     } catch (error: unknown) {
-      const processed = this.errorHandlingService.processError(
+      const processed = processError(
         error,
         'Failed to fetch proposals',
         ErrorCodes.API.NETWORK_ERROR,
@@ -197,7 +196,7 @@ export class ProposalService {
 
       return data;
     } catch (error: unknown) {
-      const processed = this.errorHandlingService.processError(
+      const processed = processError(
         error,
         'Failed to fetch proposal',
         ErrorCodes.API.NETWORK_ERROR,
@@ -235,7 +234,7 @@ export class ProposalService {
 
       return data;
     } catch (error: unknown) {
-      const processed = this.errorHandlingService.processError(
+      const processed = processError(
         error,
         'Failed to create proposal',
         ErrorCodes.API.NETWORK_ERROR,
@@ -274,7 +273,7 @@ export class ProposalService {
 
       return data;
     } catch (error: unknown) {
-      const processed = this.errorHandlingService.processError(
+      const processed = processError(
         error,
         'Failed to update proposal',
         ErrorCodes.API.NETWORK_ERROR,
@@ -351,7 +350,7 @@ export class ProposalService {
 
       return data;
     } catch (error: unknown) {
-      const processed = this.errorHandlingService.processError(
+      const processed = processError(
         error,
         'Failed to delete proposal',
         ErrorCodes.API.NETWORK_ERROR,
@@ -400,7 +399,7 @@ export class ProposalService {
 
       return data;
     } catch (error: unknown) {
-      const processed = this.errorHandlingService.processError(
+      const processed = processError(
         error,
         'Failed to fetch proposal stats',
         ErrorCodes.API.NETWORK_ERROR,
@@ -436,7 +435,7 @@ export class ProposalService {
 
       return data;
     } catch (error: unknown) {
-      const processed = this.errorHandlingService.processError(
+      const processed = processError(
         error,
         'Failed to bulk delete proposals',
         ErrorCodes.API.NETWORK_ERROR,
@@ -477,7 +476,7 @@ export class ProposalService {
 
       return data;
     } catch (error: unknown) {
-      const processed = this.errorHandlingService.processError(
+      const processed = processError(
         error,
         'Failed to update proposal workflow status',
         ErrorCodes.API.NETWORK_ERROR,

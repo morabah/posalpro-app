@@ -22,8 +22,9 @@ export const qk = {
       limit: number,
       sortBy: string,
       sortOrder: 'asc' | 'desc',
+      cursor?: string,
       filters?: Record<string, unknown>
-    ) => [...qk.proposals.lists(), { search, limit, sortBy, sortOrder, filters }] as const,
+    ) => [...qk.proposals.lists(), { search, limit, sortBy, sortOrder, cursor, filters }] as const,
 
     byId: (id: string) => [...qk.proposals.all, 'byId', id] as const,
     search: (query: string, limit: number) =>

@@ -930,6 +930,253 @@ export class ProductService {
       });
     }
   }
+
+  /**
+   * Cursor-based list method following CORE_REQUIREMENTS.md patterns
+   * Returns normalized data with proper transformations
+   */
+  async listProductsCursor(filters: ProductFilters = {}): Promise<{
+    items: Product[];
+    nextCursor: string | null;
+  }> {
+    try {
+      const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
+      const tenant = getCurrentTenant();
+
+      // Build where clause following service layer patterns
+      const where: Prisma.ProductWhereInput = {
+        tenantId: tenant.tenantId,
+        ...this.buildWhereClause(filters),
+      };
+
+      // Build order by with cursor pagination support
+      const orderBy: Array<Record<string, Prisma.SortOrder>> = this.buildOrderByClause(filters);
+
+      // Execute query with cursor pagination
+      const rows = await prisma.product.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          price: true,
+          currency: true,
+          sku: true,
+          category: true,
+          tags: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy,
+        take: limit + 1, // Take one extra to check if there are more
+        ...(filters.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
+      });
+
+      // Determine if there are more pages and extract items
+      const hasNextPage = rows.length > limit;
+      const items = hasNextPage ? rows.slice(0, limit) : rows;
+      const nextCursor = hasNextPage ? rows[limit - 1].id : null;
+
+      // Normalize data following service layer patterns
+      const normalizedItems = items.map(item => this.normalizeProductData(item));
+
+      return {
+        items: normalizedItems as Product[],
+        nextCursor,
+      };
+    } catch (error) {
+      errorHandlingService.processError(error);
+      throw new StandardError({
+        message: 'Failed to list products with cursor pagination',
+        code: ErrorCodes.DATA.DATABASE_ERROR,
+        cause: error,
+        metadata: {
+          component: 'ProductService',
+          operation: 'listProductsCursor',
+          filters,
+        },
+      });
+    }
+  }
+
+  /**
+   * Enhanced product creation with SKU validation
+   * Following CORE_REQUIREMENTS.md service layer patterns
+   */
+  async createProductWithValidation(data: CreateProductData, userId: string): Promise<Product> {
+    try {
+      const tenant = getCurrentTenant();
+
+      // Check for duplicate SKU within tenant (business logic belongs in service)
+      const existingProduct = await prisma.product.findFirst({
+        where: {
+          sku: data.sku,
+          tenantId: tenant.tenantId,
+        },
+        select: { id: true },
+      });
+
+      if (existingProduct) {
+        throw new StandardError({
+          message: `Product with SKU ${data.sku} already exists`,
+          code: ErrorCodes.DATA.CONFLICT,
+          metadata: {
+            component: 'ProductService',
+            operation: 'createProductWithValidation',
+            sku: data.sku,
+            tenantId: tenant.tenantId,
+          },
+        });
+      }
+
+      // Create product with proper data normalization
+      const product = await prisma.product.create({
+        data: {
+          tenantId: tenant.tenantId,
+          name: data.name,
+          description: data.description,
+          sku: data.sku,
+          price: data.price,
+          currency: data.currency || 'USD',
+          category: Array.isArray(data.category)
+            ? data.category
+            : data.category
+              ? [data.category]
+              : [],
+          tags: data.tags || [],
+          attributes: data.attributes ? toPrismaJson(data.attributes) : undefined,
+          images: data.images || [],
+          userStoryMappings: data.userStoryMappings || [],
+          isActive: true,
+          stockQuantity: 0,
+          status: 'ACTIVE',
+          version: 1,
+        },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          price: true,
+          currency: true,
+          sku: true,
+          category: true,
+          tags: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      // Normalize and return
+      return this.normalizeProductData(product) as Product;
+    } catch (error) {
+      errorHandlingService.processError(error);
+
+      if (error instanceof StandardError) {
+        throw error;
+      }
+
+      if (isPrismaError(error)) {
+        throw new StandardError({
+          message: `Database operation failed during product creation`,
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'ProductService',
+            operation: 'createProductWithValidation',
+            sku: data.sku,
+          },
+        });
+      }
+
+      throw new StandardError({
+        message: 'Failed to create product with validation',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error,
+        metadata: {
+          component: 'ProductService',
+          operation: 'createProductWithValidation',
+        },
+      });
+    }
+  }
+
+  /**
+   * Helper: Build where clause for filtering
+   * Following CORE_REQUIREMENTS.md patterns
+   */
+  private buildWhereClause(filters: ProductFilters): Prisma.ProductWhereInput {
+    const where: Prisma.ProductWhereInput = {};
+
+    if (filters.search) {
+      where.OR = [
+        { name: { contains: filters.search, mode: 'insensitive' } },
+        { description: { contains: filters.search, mode: 'insensitive' } },
+        { sku: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (filters.category && filters.category.length > 0) {
+      where.category = { hasSome: filters.category };
+    }
+
+    if (filters.tags && filters.tags.length > 0) {
+      where.tags = { hasSome: filters.tags };
+    }
+
+    if (filters.isActive !== undefined) {
+      where.isActive = filters.isActive;
+    }
+
+    if (filters.priceMin !== undefined || filters.priceMax !== undefined) {
+      where.price = {};
+      if (filters.priceMin !== undefined) (where.price as any).gte = filters.priceMin;
+      if (filters.priceMax !== undefined) (where.price as any).lte = filters.priceMax;
+    }
+
+    if (filters.sku) {
+      where.sku = { contains: filters.sku, mode: 'insensitive' };
+    }
+
+    return where;
+  }
+
+  /**
+   * Helper: Build order by clause with cursor pagination support
+   */
+  private buildOrderByClause(filters: ProductFilters): Array<Record<string, Prisma.SortOrder>> {
+    const sortBy = filters.sortBy || 'createdAt';
+    const sortOrder = filters.sortOrder || 'desc';
+
+    const orderBy: Array<Record<string, Prisma.SortOrder>> = [{ [sortBy]: sortOrder }];
+
+    // Add secondary sort for cursor pagination stability
+    if (sortBy !== 'id') {
+      orderBy.push({ id: sortOrder });
+    }
+
+    return orderBy;
+  }
+
+  /**
+   * Helper: Normalize product data (Decimal conversion, null handling)
+   * Following CORE_REQUIREMENTS.md transformation patterns
+   */
+  private normalizeProductData(product: any): any {
+    return {
+      ...product,
+      description: product.description || '',
+      price: product.price ? Number(product.price) : 0,
+      category: Array.isArray(product.category)
+        ? product.category
+        : product.category
+          ? [product.category]
+          : [],
+      tags: product.tags || [],
+      images: product.images || [],
+    };
+  }
 }
 
 // Singleton instance

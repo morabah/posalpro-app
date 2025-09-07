@@ -6097,6 +6097,16 @@ async function extractFrontendFields(targetComponent?: string): Promise<Record<s
       continue;
     }
 
+    // Skip components that are likely false positives
+    if (shouldSkipComponent(componentName, content)) {
+      continue;
+    }
+
+    // Only analyze components that actually make API calls or use data fetching
+    if (!hasDataFetchingPatterns(content)) {
+      continue;
+    }
+
     // Extract form field patterns
     const fieldNames = extractComponentFields(content);
     const fields: Record<string, any> = {};
@@ -6114,6 +6124,388 @@ async function extractFrontendFields(targetComponent?: string): Promise<Record<s
   }
 
   return frontendFields;
+}
+
+/**
+ * Component classification system to distinguish between different component types
+ */
+interface ComponentClassification {
+  type: 'api-data-fetching' | 'form-component' | 'ui-display' | 'mixed' | 'unknown';
+  confidence: number; // 0-1, how confident we are in the classification
+  reasons: string[];
+}
+
+/**
+ * Classify component type based on content analysis
+ */
+function classifyComponent(componentName: string, content: string): ComponentClassification {
+  const reasons: string[] = [];
+  let apiDataFetchingScore = 0;
+  let formComponentScore = 0;
+  let uiDisplayScore = 0;
+
+  // API Data Fetching Indicators
+  const apiDataFetchingPatterns = [
+    // React Query patterns
+    { pattern: /useQuery\s*\(/g, score: 3, reason: 'Uses React Query' },
+    { pattern: /useInfiniteQuery\s*\(/g, score: 3, reason: 'Uses infinite queries' },
+    { pattern: /useMutation\s*\(/g, score: 2, reason: 'Uses mutations' },
+
+    // API Client patterns
+    { pattern: /apiClient\.get\s*\(/g, score: 3, reason: 'Uses apiClient.get' },
+    { pattern: /apiClient\.post\s*\(/g, score: 2, reason: 'Uses apiClient.post' },
+    { pattern: /apiClient\.put\s*\(/g, score: 2, reason: 'Uses apiClient.put' },
+    { pattern: /apiClient\.delete\s*\(/g, score: 2, reason: 'Uses apiClient.delete' },
+
+    // Service method calls
+    { pattern: /await\s+\w+Service\./g, score: 2, reason: 'Calls service methods' },
+
+    // Data extraction patterns
+    { pattern: /response\.data/g, score: 2, reason: 'Extracts response.data' },
+    { pattern: /data\?\..*\.map/g, score: 2, reason: 'Maps over data arrays' },
+    { pattern: /data\.pages/g, score: 2, reason: 'Uses paginated data' },
+
+    // Hook patterns for data fetching
+    { pattern: /use\w+Data\s*\(/g, score: 2, reason: 'Uses data fetching hooks' },
+    { pattern: /use\w+Query\s*\(/g, score: 2, reason: 'Uses query hooks' },
+  ];
+
+  // Form Component Indicators
+  const formComponentPatterns = [
+    // Form libraries
+    { pattern: /useForm\s*\(/g, score: 3, reason: 'Uses React Hook Form' },
+    { pattern: /react-hook-form/g, score: 2, reason: 'Imports React Hook Form' },
+    { pattern: /zodResolver/g, score: 2, reason: 'Uses Zod validation' },
+
+    // Form field patterns
+    { pattern: /FormField/g, score: 2, reason: 'Uses FormField components' },
+    { pattern: /Input\s+name=/g, score: 2, reason: 'Has named input fields' },
+    { pattern: /Select\s+name=/g, score: 2, reason: 'Has named select fields' },
+    { pattern: /Checkbox\s+name=/g, score: 2, reason: 'Has named checkbox fields' },
+
+    // Form submission patterns
+    { pattern: /onSubmit\s*=/g, score: 2, reason: 'Has form submission handler' },
+    { pattern: /handleSubmit/g, score: 2, reason: 'Uses form submission' },
+
+    // Form validation patterns
+    { pattern: /validation\./g, score: 2, reason: 'Uses validation patterns' },
+    { pattern: /errors\./g, score: 1, reason: 'Handles form errors' },
+    { pattern: /touched\./g, score: 1, reason: 'Tracks field touched state' },
+  ];
+
+  // UI Display Component Indicators
+  const uiDisplayPatterns = [
+    // Props-based data
+    {
+      pattern: /interface\s+\w+Props\s*{[^}]*\w+:\s*\w+\[\]/g,
+      score: 3,
+      reason: 'Receives array data as props',
+    },
+    {
+      pattern: /interface\s+\w+Props\s*{[^}]*\w+:\s*\w+\s*\[\]/g,
+      score: 2,
+      reason: 'Receives data arrays as props',
+    },
+
+    // Display patterns
+    { pattern: /\.map\s*\(\s*\([^)]*\)\s*=>/g, score: 2, reason: 'Maps over props data' },
+    { pattern: /props\./g, score: 1, reason: 'Uses props for data' },
+
+    // UI-only patterns
+    { pattern: /Badge|Button|Card|Modal|Dropdown/g, score: 1, reason: 'Uses UI components' },
+    { pattern: /className.*=.*["'].*["']/g, score: 1, reason: 'Has styling classes' },
+  ];
+
+  // Score API Data Fetching patterns
+  apiDataFetchingPatterns.forEach(({ pattern, score, reason }) => {
+    const matches = content.match(pattern);
+    if (matches) {
+      apiDataFetchingScore += score * matches.length;
+      reasons.push(`${reason} (${matches.length} matches)`);
+    }
+  });
+
+  // Score Form Component patterns
+  formComponentPatterns.forEach(({ pattern, score, reason }) => {
+    const matches = content.match(pattern);
+    if (matches) {
+      formComponentScore += score * matches.length;
+      reasons.push(`${reason} (${matches.length} matches)`);
+    }
+  });
+
+  // Score UI Display patterns
+  uiDisplayPatterns.forEach(({ pattern, score, reason }) => {
+    const matches = content.match(pattern);
+    if (matches) {
+      uiDisplayScore += score * matches.length;
+      reasons.push(`${reason} (${matches.length} matches)`);
+    }
+  });
+
+  // Determine component type based on scores
+  const maxScore = Math.max(apiDataFetchingScore, formComponentScore, uiDisplayScore);
+  const totalScore = apiDataFetchingScore + formComponentScore + uiDisplayScore;
+
+  let type: ComponentClassification['type'] = 'unknown';
+  let confidence = 0;
+
+  if (maxScore === 0) {
+    type = 'unknown';
+    confidence = 0;
+  } else if (
+    apiDataFetchingScore === maxScore &&
+    apiDataFetchingScore > formComponentScore &&
+    apiDataFetchingScore > uiDisplayScore
+  ) {
+    type = 'api-data-fetching';
+    confidence = Math.min(apiDataFetchingScore / Math.max(totalScore, 1), 1);
+  } else if (formComponentScore === maxScore && formComponentScore > uiDisplayScore) {
+    type = 'form-component';
+    confidence = Math.min(formComponentScore / Math.max(totalScore, 1), 1);
+  } else if (uiDisplayScore === maxScore) {
+    type = 'ui-display';
+    confidence = Math.min(uiDisplayScore / Math.max(totalScore, 1), 1);
+  } else {
+    type = 'mixed';
+    confidence = Math.min(maxScore / Math.max(totalScore, 1), 0.8); // Lower confidence for mixed
+  }
+
+  // Adjust confidence based on component name patterns
+  if (
+    componentName.toLowerCase().includes('form') ||
+    componentName.toLowerCase().includes('field')
+  ) {
+    if (type === 'form-component') confidence = Math.min(confidence + 0.2, 1);
+  }
+  if (
+    componentName.toLowerCase().includes('list') ||
+    componentName.toLowerCase().includes('table')
+  ) {
+    if (type === 'ui-display') confidence = Math.min(confidence + 0.2, 1);
+  }
+  if (
+    componentName.toLowerCase().includes('dashboard') ||
+    componentName.toLowerCase().includes('page')
+  ) {
+    if (type === 'api-data-fetching') confidence = Math.min(confidence + 0.1, 1);
+  }
+
+  return { type, confidence, reasons };
+}
+
+/**
+ * Generate a summary of component classifications for reporting
+ */
+function generateClassificationSummary(frontendFields: Record<string, any>): any {
+  const summary = {
+    total: 0,
+    apiDataFetching: 0,
+    formComponents: 0,
+    uiDisplay: 0,
+    mixed: 0,
+    unknown: 0,
+    skipped: 0,
+    details: [] as Array<{
+      component: string;
+      type: string;
+      confidence: number;
+      reasons: string[];
+    }>,
+  };
+
+  for (const [componentName, componentData] of Object.entries(frontendFields)) {
+    try {
+      const componentContent = fs.readFileSync(componentData.file, 'utf-8');
+      const classification = classifyComponent(componentName, componentContent);
+
+      summary.total++;
+      summary[classification.type]++;
+
+      summary.details.push({
+        component: componentName,
+        type: classification.type,
+        confidence: classification.confidence,
+        reasons: classification.reasons,
+      });
+    } catch (error) {
+      summary.skipped++;
+    }
+  }
+
+  return summary;
+}
+
+/**
+ * Skip components that are likely false positives based on classification
+ */
+function shouldSkipComponent(componentName: string, content: string): boolean {
+  // Skip test files
+  if (componentName.includes('.test') || componentName.includes('.spec')) {
+    return true;
+  }
+
+  // Skip example/demo components
+  if (
+    componentName.toLowerCase().includes('example') ||
+    componentName.toLowerCase().includes('demo') ||
+    componentName.toLowerCase().includes('backup')
+  ) {
+    return true;
+  }
+
+  // Skip UI-only components (no data fetching)
+  const uiOnlyComponents = [
+    'Avatar',
+    'Badge',
+    'Button',
+    'Card',
+    'Checkbox',
+    'Input',
+    'Label',
+    'LoadingSpinner',
+    'SkeletonLoader',
+    'Tabs',
+    'Modal',
+    'Dropdown',
+    'CardLayout',
+    'AppSidebar',
+    'MobileNavigation',
+  ];
+
+  if (uiOnlyComponents.some(ui => componentName.includes(ui))) {
+    return true;
+  }
+
+  // Skip components that are clearly UI layout components
+  if (
+    componentName.includes('Layout') ||
+    componentName.includes('Shell') ||
+    componentName.includes('Skeleton') ||
+    componentName.includes('Navigation')
+  ) {
+    return true;
+  }
+
+  // Use component classification to make smarter decisions
+  const classification = classifyComponent(componentName, content);
+
+  // Skip form components and UI display components with high confidence
+  if (
+    (classification.type === 'form-component' || classification.type === 'ui-display') &&
+    classification.confidence > 0.6
+  ) {
+    return true;
+  }
+
+  // Skip mixed components with low confidence (likely false positives)
+  if (classification.type === 'mixed' && classification.confidence < 0.4) {
+    return true;
+  }
+
+  // Skip unknown components
+  if (classification.type === 'unknown') {
+    return true;
+  }
+
+  // Only analyze API data-fetching components and high-confidence mixed components
+  return false;
+}
+
+/**
+ * Check if component has data fetching patterns (API calls, React Query, etc.)
+ */
+function hasDataFetchingPatterns(content: string): boolean {
+  // Look for React Query patterns
+  const reactQueryPatterns = [
+    /useQuery\s*\(/,
+    /useMutation\s*\(/,
+    /useInfiniteQuery\s*\(/,
+    /@tanstack\/react-query/,
+    /react-query/,
+  ];
+
+  // Look for API client patterns
+  const apiClientPatterns = [
+    /apiClient\./,
+    /useApiClient/,
+    /useHttpClient/,
+    /fetch\s*\(/,
+    /axios\./,
+    /\.get\s*\(/,
+    /\.post\s*\(/,
+    /\.put\s*\(/,
+    /\.delete\s*\(/,
+  ];
+
+  // Look for service patterns
+  const servicePatterns = [
+    /Service\./,
+    /service\./,
+    /\.get[A-Z]\w*\(/,
+    /\.create[A-Z]\w*\(/,
+    /\.update[A-Z]\w*\(/,
+    /\.delete[A-Z]\w*\(/,
+  ];
+
+  // Look for data extraction patterns
+  const dataExtractionPatterns = [
+    /response\.data/,
+    /data\.data/,
+    /apiResponse\./,
+    /dashboardData\./,
+    /\.items/,
+    /\.results/,
+  ];
+
+  const allPatterns = [
+    ...reactQueryPatterns,
+    ...apiClientPatterns,
+    ...servicePatterns,
+    ...dataExtractionPatterns,
+  ];
+
+  return allPatterns.some(pattern => pattern.test(content));
+}
+
+/**
+ * Check if component has API data extraction patterns (more specific than general data fetching)
+ */
+function hasApiDataExtractionPatterns(content: string): boolean {
+  // Look for specific API response extraction patterns
+  const apiExtractionPatterns = [
+    // Direct API response access
+    /response\.data/,
+    /apiResponse\./,
+    /dashboardData\./,
+    /\.data\s*\|\|/,
+    /\.data\?\./,
+
+    // React Query data access
+    /data\?\./,
+    /data\.pages/,
+    /data\.items/,
+    /data\.results/,
+
+    // API client response handling
+    /await\s+\w+\.get/,
+    /await\s+\w+\.post/,
+    /await\s+\w+\.put/,
+    /await\s+\w+\.delete/,
+
+    // Service method calls
+    /Service\.get/,
+    /Service\.create/,
+    /Service\.update/,
+    /Service\.delete/,
+
+    // Hook data extraction
+    /useQuery.*queryFn/,
+    /useMutation.*mutationFn/,
+    /useInfiniteQuery.*queryFn/,
+  ];
+
+  return apiExtractionPatterns.some(pattern => pattern.test(content));
 }
 
 async function analyzeBackendSchemas(): Promise<Record<string, any>> {
@@ -8410,6 +8802,16 @@ async function handleFieldValueMismatchDetection(api: ApiClient, targetComponent
       error: string;
       suggestedFix: string;
     }>,
+    responseStructureIssues: [] as Array<{
+      component: string;
+      hook: string;
+      endpoint: string;
+      issue: string;
+      currentPattern: string;
+      suggestedPattern: string;
+      severity: 'high' | 'medium' | 'low';
+    }>,
+    classificationSummary: null as any,
   };
 
   try {
@@ -8437,6 +8839,13 @@ async function handleFieldValueMismatchDetection(api: ApiClient, targetComponent
 
     // Step 4: Compare and detect mismatches
     await detectFieldMismatches(frontendFields, backendSchemas, apiEndpoints, detectedIssues, api);
+
+    // Step 4.5: Detect response structure issues (double-wrapped responses, data extraction problems)
+    await detectResponseStructureIssues(frontendFields, detectedIssues);
+
+    // Add classification summary
+    const classificationSummary = generateClassificationSummary(frontendFields);
+    detectedIssues.classificationSummary = classificationSummary;
 
     // Step 5: Show results
     console.log('\n📊 Detection Results:\n');
@@ -8479,10 +8888,38 @@ async function handleFieldValueMismatchDetection(api: ApiClient, targetComponent
       });
     }
 
+    if (detectedIssues.responseStructureIssues.length > 0) {
+      console.log('\n🔴 Response Structure Issues:');
+      detectedIssues.responseStructureIssues.forEach((issue, index) => {
+        const severityIcon =
+          issue.severity === 'high' ? '🔴' : issue.severity === 'medium' ? '🟡' : '🟢';
+        console.log(`\n${index + 1}. ${severityIcon} Component: ${issue.component}`);
+        console.log(`   Hook: ${issue.hook}`);
+        console.log(`   Endpoint: ${issue.endpoint}`);
+        console.log(`   Issue: ${issue.issue}`);
+        console.log(`   Current pattern: ${issue.currentPattern}`);
+        console.log(`   Suggested pattern: ${issue.suggestedPattern}`);
+      });
+    }
+
+    // Show classification summary
+    if (detectedIssues.classificationSummary) {
+      const summary = detectedIssues.classificationSummary;
+      console.log(`\n🏷️  Component Classification Summary:`);
+      console.log(`   • Total Components Analyzed: ${summary.total}`);
+      console.log(`   • API Data-Fetching: ${summary.apiDataFetching}`);
+      console.log(`   • Form Components: ${summary.formComponents}`);
+      console.log(`   • UI Display: ${summary.uiDisplay}`);
+      console.log(`   • Mixed: ${summary.mixed}`);
+      console.log(`   • Unknown: ${summary.unknown}`);
+      console.log(`   • Skipped: ${summary.skipped}`);
+    }
+
     const totalIssues =
       detectedIssues.enumMismatches.length +
       detectedIssues.typeMismatches.length +
-      detectedIssues.validationFailures.length;
+      detectedIssues.validationFailures.length +
+      detectedIssues.responseStructureIssues.length;
 
     if (totalIssues === 0) {
       console.log('✅ No field value mismatches detected!');
@@ -8500,6 +8937,221 @@ async function handleFieldValueMismatchDetection(api: ApiClient, targetComponent
       '❌ Error during mismatch detection:',
       error instanceof Error ? error.message : error
     );
+  }
+}
+
+async function detectResponseStructureIssues(
+  frontendFields: Record<string, any>,
+  detectedIssues: any
+) {
+  console.log('\n🔍 Analyzing response structure patterns...\n');
+
+  for (const [componentName, componentData] of Object.entries(frontendFields)) {
+    try {
+      const componentContent = fs.readFileSync(componentData.file, 'utf-8');
+
+      // Use component classification to focus on API data-fetching components
+      const classification = classifyComponent(componentName, componentContent);
+
+      // Only analyze components that are likely to have API data extraction issues
+      if (
+        classification.type !== 'api-data-fetching' &&
+        !(classification.type === 'mixed' && classification.confidence > 0.5)
+      ) {
+        console.log(
+          `⏭️  Skipping ${componentName} (${classification.type}, confidence: ${classification.confidence.toFixed(2)})`
+        );
+        continue;
+      }
+
+      console.log(
+        `🔍 Analyzing ${componentName} (${classification.type}, confidence: ${classification.confidence.toFixed(2)})`
+      );
+
+      // Detect double-wrapped response patterns
+      await detectDoubleWrappedResponsePatterns(componentName, componentContent, detectedIssues);
+
+      // Detect data extraction issues
+      await detectDataExtractionIssues(componentName, componentContent, detectedIssues);
+
+      // Detect hook response format mismatches
+      await detectHookResponseMismatches(componentName, componentContent, detectedIssues);
+    } catch (error) {
+      console.log(`⚠️  Could not analyze component: ${componentName}`);
+    }
+  }
+}
+
+async function detectDoubleWrappedResponsePatterns(
+  componentName: string,
+  componentContent: string,
+  detectedIssues: any
+) {
+  // Look for patterns like: data?.data?.field or responseData.data.data.field
+  const doubleWrappedPatterns = [
+    /data\?\.\s*data\?\.\s*(\w+)/g,
+    /responseData\.\s*data\.\s*data\.\s*(\w+)/g,
+    /dashboardData\.\s*data\.\s*data\.\s*(\w+)/g,
+    /apiResponse\.\s*data\.\s*data\.\s*(\w+)/g,
+  ];
+
+  // Look for single-wrapped patterns that might be incorrect
+  const singleWrappedPatterns = [
+    /const\s+(\w+)\s*=\s*(\w+)\.\s*data\s*\|\|\s*\2/g,
+    /(\w+)\.\s*data\s*\|\|\s*\1/g,
+  ];
+
+  let hasDoubleWrapped = false;
+  let hasSingleWrapped = false;
+
+  for (const pattern of doubleWrappedPatterns) {
+    const matches = componentContent.match(pattern);
+    if (matches && matches.length > 0) {
+      hasDoubleWrapped = true;
+      break;
+    }
+  }
+
+  for (const pattern of singleWrappedPatterns) {
+    const matches = componentContent.match(pattern);
+    if (matches && matches.length > 0) {
+      hasSingleWrapped = true;
+      break;
+    }
+  }
+
+  // Detect potential double-wrapped response issues
+  if (hasDoubleWrapped) {
+    detectedIssues.responseStructureIssues.push({
+      component: componentName,
+      hook: 'Unknown',
+      endpoint: 'Unknown',
+      issue: 'Double-wrapped response pattern detected - may indicate response structure mismatch',
+      currentPattern: 'data?.data?.field or responseData.data.data.field',
+      suggestedPattern:
+        'Use defensive extraction: data?.data?.data?.field || data?.data?.field || data?.field',
+      severity: 'high' as const,
+    });
+  }
+
+  // Detect potential single-wrapped issues that might need double-wrapped handling
+  if (
+    (hasSingleWrapped && componentContent.includes('useQuery')) ||
+    componentContent.includes('useMutation')
+  ) {
+    detectedIssues.responseStructureIssues.push({
+      component: componentName,
+      hook: 'React Query Hook',
+      endpoint: 'API Endpoint',
+      issue: 'Single-wrapped extraction pattern may not handle double-wrapped responses',
+      currentPattern: 'data?.data || data',
+      suggestedPattern: 'Use defensive extraction: data?.data?.data || data?.data || data',
+      severity: 'medium' as const,
+    });
+  }
+}
+
+async function detectDataExtractionIssues(
+  componentName: string,
+  componentContent: string,
+  detectedIssues: any
+) {
+  // Look for direct property access that might fail
+  const directAccessPatterns = [
+    /(\w+)\.\s*(\w+)\s*=\s*(\w+)\.\s*(\w+)/g,
+    /setMetrics\s*\(\s*(\w+)\.\s*(\w+)\s*\)/g,
+    /setData\s*\(\s*(\w+)\.\s*(\w+)\s*\)/g,
+  ];
+
+  // Look for undefined/null checks
+  const safetyChecks = [/if\s*\(\s*(\w+)\s*\)\s*{/g, /(\w+)\s*\?\s*\.\s*(\w+)/g];
+
+  let hasDirectAccess = false;
+  let hasSafetyChecks = false;
+
+  for (const pattern of directAccessPatterns) {
+    const matches = componentContent.match(pattern);
+    if (matches && matches.length > 0) {
+      hasDirectAccess = true;
+      break;
+    }
+  }
+
+  for (const pattern of safetyChecks) {
+    const matches = componentContent.match(pattern);
+    if (matches && matches.length > 0) {
+      hasSafetyChecks = true;
+      break;
+    }
+  }
+
+  if (hasDirectAccess && !hasSafetyChecks) {
+    detectedIssues.responseStructureIssues.push({
+      component: componentName,
+      hook: 'Data Extraction',
+      endpoint: 'API Response',
+      issue: 'Direct property access without safety checks may cause runtime errors',
+      currentPattern: 'data.field or response.property',
+      suggestedPattern: 'Use optional chaining: data?.field or response?.property',
+      severity: 'medium' as const,
+    });
+  }
+}
+
+async function detectHookResponseMismatches(
+  componentName: string,
+  componentContent: string,
+  detectedIssues: any
+) {
+  // Look for useQuery/useMutation hooks
+  const hookPatterns = [
+    /useQuery\s*\(\s*{[^}]*queryFn[^}]*}/g,
+    /useMutation\s*\(\s*{[^}]*mutationFn[^}]*}/g,
+  ];
+
+  // Look for data destructuring patterns
+  const dataDestructuringPatterns = [
+    /const\s*{\s*data\s*,\s*isLoading\s*}\s*=\s*(\w+)/g,
+    /const\s*{\s*data\s*}\s*=\s*(\w+)/g,
+  ];
+
+  let hasHooks = false;
+  let hasDataDestructuring = false;
+
+  for (const pattern of hookPatterns) {
+    const matches = componentContent.match(pattern);
+    if (matches && matches.length > 0) {
+      hasHooks = true;
+      break;
+    }
+  }
+
+  for (const pattern of dataDestructuringPatterns) {
+    const matches = componentContent.match(pattern);
+    if (matches && matches.length > 0) {
+      hasDataDestructuring = true;
+      break;
+    }
+  }
+
+  if (hasHooks && hasDataDestructuring) {
+    // Check if component handles different response formats
+    const hasDefensiveExtraction =
+      componentContent.includes('?.') ||
+      componentContent.includes('||') ||
+      componentContent.includes('data?.data');
+
+    if (!hasDefensiveExtraction) {
+      detectedIssues.responseStructureIssues.push({
+        component: componentName,
+        hook: 'React Query Hook',
+        endpoint: 'API Response',
+        issue: 'Component may not handle different response formats (single vs double-wrapped)',
+        currentPattern: 'Direct data access without defensive extraction',
+        suggestedPattern: 'Use defensive extraction: data?.data?.field || data?.field',
+        severity: 'high' as const,
+      });
+    }
   }
 }
 

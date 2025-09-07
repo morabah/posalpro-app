@@ -406,11 +406,13 @@ function ProductTable() {
   const { data, error, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage } =
     useInfiniteProductsMigrated({
       search: filters.search || undefined,
-      category: filters.category || undefined,
-      isActive: filters.isActive,
       sortBy: filters.sortBy,
       sortOrder: filters.sortOrder,
       limit: 50,
+      filters: {
+        category: filters.category || undefined,
+        isActive: filters.isActive,
+      },
     });
 
   const products = useMemo(() => {

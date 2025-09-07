@@ -3,6 +3,8 @@
  * Provides standardized build-time detection and database connection prevention
  */
 
+import { NextResponse } from 'next/server';
+
 /**
  * Comprehensive build-time detection
  * Returns true if the application is running during build time
@@ -28,10 +30,10 @@ export function shouldSkipDatabase(): boolean {
  * Get build-time safe response for API routes
  */
 export function getBuildTimeResponse(message: string = 'Data not available during build process') {
-  return {
+  return NextResponse.json({
     success: true,
     data: [],
     message,
     timestamp: new Date().toISOString(),
-  };
+  });
 }

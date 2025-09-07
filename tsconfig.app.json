@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./config/tsconfig.app.tsbuildinfo"
+  },
+  "include": ["src/app/**/*.ts", "src/app/**/*.tsx", "src/components/**/*.ts", "src/components/**/*.tsx"],
+  "exclude": [
+    "node_modules",
+    "templates/**",
+    "docs/**",
+    "scripts/**",
+    "test/**",
+    "src/test/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "archive/**",
+    "src/archived/**",
+    "temp-migration/**",
+    "backups/**"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.core.json"
+    }
+  ]
+}
+

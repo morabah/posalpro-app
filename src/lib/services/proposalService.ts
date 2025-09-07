@@ -1563,7 +1563,7 @@ export class ProposalService {
           approvedAt: true,
           validUntil: true,
           priority: true,
-          value: true,
+          totalValue: true,
           currency: true,
           status: true,
           tags: true,
@@ -1826,7 +1826,7 @@ export class ProposalService {
   private normalizeProposalData(proposal: any): any {
     return {
       ...proposal,
-      value: proposal.value ? Number(proposal.value) : undefined,
+      value: proposal.totalValue ? Number(proposal.totalValue) : undefined,
       description: proposal.description || '',
       userStoryTracking: proposal.userStoryTracking || {},
       customer: proposal.customer

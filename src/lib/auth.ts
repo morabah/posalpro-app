@@ -487,11 +487,23 @@ export const authOptions: NextAuthOptions = {
  */
 function generatePermissionsFromRoles(roles: string[]): string[] {
   const rolePermissionMap: Partial<Record<string, string[]>> = {
-    'System Administrator': ['*:*'],
+    'System Administrator': [
+      '*:*',
+      'feature.analytics.users',
+      'feature.analytics.dashboard',
+      'feature.analytics.insights',
+      'feature.search.suggestions'
+    ],
     'Proposal Manager': ['proposals:read', 'proposals:write', 'proposals:manage'],
     'Subject Matter Expert (SME)': ['content:read', 'content:write', 'validation:execute'],
     'Senior SME': ['content:read', 'content:write', 'validation:execute', 'mentoring:execute'],
-    Executive: ['proposals:approve', 'reports:read', 'analytics:read'],
+    Executive: [
+      'proposals:approve',
+      'reports:read',
+      'analytics:read',
+      'feature.analytics.users',
+      'feature.analytics.dashboard'
+    ],
     'Content Manager': ['content:read', 'content:write', 'content:manage'],
     'Technical SME': ['content:read', 'content:write', 'validation:execute'],
     'Proposal Specialist': ['proposals:read', 'proposals:write'],

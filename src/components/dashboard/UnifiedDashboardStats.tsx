@@ -134,8 +134,9 @@ export const UnifiedDashboardStats = memo(() => {
   // Single source of truth for dashboard data
   const { data: dashboardData, isLoading, error } = useExecutiveDashboard('3M', false);
 
-  // Extract metrics from the consistent API response structure
-  const stats = dashboardData?.data?.metrics || null;
+  // Extract metrics from the direct data structure
+  const responseData = dashboardData as any;
+  const stats = responseData?.metrics || null;
 
   // SSR-safe last updated label to avoid hydration mismatch
   const [lastUpdated, setLastUpdated] = useState<string>('');

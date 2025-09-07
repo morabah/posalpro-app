@@ -1,19 +1,18 @@
-import { logError, logInfo } from '@/lib/logger'; /**
- * PosalPro MVP2 - Search Suggestions API Routes
- * Auto-complete and search suggestions functionality
+/**
+ * PosalPro MVP2 - Search Suggestions API Route - Service Layer Architecture
+ * Following CORE_REQUIREMENTS.md service layer patterns
  * Component Traceability: US-1.1, US-1.2, H1
+ *
+ * ✅ SERVICE LAYER COMPLIANCE: Removed direct suggestion logic from routes
+ * ✅ BUSINESS LOGIC SEPARATION: Complex suggestions moved to searchService
+ * ✅ PERFORMANCE OPTIMIZATION: Cached and limited suggestion queries
+ * ✅ ERROR HANDLING: Integrated standardized error handling
  */
 
 import { createRoute } from '@/lib/api/route';
-import {
-  customerQueries,
-  productQueries,
-  proposalQueries,
-  userQueries,
-  workflowQueries,
-  executeQuery,
-} from '@/lib/db/database';
-import prisma from '@/lib/db/prisma';
+import { logDebug, logInfo, logError } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { searchService } from '@/lib/services/searchService';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -31,7 +30,7 @@ import { z } from 'zod';
  */
 const SuggestionsQuerySchema = z.object({
   q: z.string().min(1, 'Query is required'),
-  type: z.enum(['all', 'content', 'proposals', 'products', 'customers']).default('all'),
+  type: z.enum(['all', 'content', 'proposals', 'products', 'customers', 'users']).default('all'),
   limit: z.coerce.number().min(1).max(20).default(10),
 });
 
@@ -42,304 +41,84 @@ export const GET = createRoute(
   {
     roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'],
     query: SuggestionsQuerySchema,
-    entitlements: ['feature.search.suggestions'],
+    permissions: ['feature.search.suggestions'],
   },
-  async ({ req, user, query }) => {
+  async ({ query, user, requestId }) => {
+    const errorHandler = getErrorHandler({ component: 'SearchSuggestionsAPI', operation: 'GET' });
+    const start = performance.now();
+
+    logDebug('API: Getting search suggestions', {
+      component: 'SearchSuggestionsAPI',
+      operation: 'GET /api/search/suggestions',
+      query,
+      userId: user.id,
+      requestId,
+    });
+
     try {
       const validatedQuery = query as z.infer<typeof SuggestionsQuerySchema>;
-      const searchTerm = validatedQuery.q.toLowerCase();
 
-      const suggestions = await Promise.all([
-        getContentSuggestions(searchTerm, validatedQuery.limit),
-        getProductSuggestions(searchTerm, validatedQuery.limit),
-        getCustomerSuggestions(searchTerm, validatedQuery.limit),
-        getTagSuggestions(searchTerm, validatedQuery.limit),
-        getRecentSearches(user.id, searchTerm, validatedQuery.limit),
-      ]);
+      // Delegate to service layer (business logic belongs here)
+      const result = await withAsyncErrorHandler(
+        () => searchService.getSearchSuggestions(
+          validatedQuery.q,
+          validatedQuery.type,
+          validatedQuery.limit
+        ),
+        'GET search suggestions failed',
+        { component: 'SearchSuggestionsAPI', operation: 'GET' }
+      );
 
-      const allSuggestions = suggestions.flat();
-      const uniqueSuggestions = Array.from(new Map(allSuggestions.map(item => [item.text, item])).values());
-      const sortedSuggestions = uniqueSuggestions
-        .sort((a, b) => (b.score || 0) - (a.score || 0))
-        .slice(0, validatedQuery.limit);
+      const loadTime = performance.now() - start;
 
-      await logInfo('Search suggestions success', {
+      logInfo('API: Search suggestions retrieved successfully', {
+        component: 'SearchSuggestionsAPI',
+        operation: 'GET /api/search/suggestions',
         query: validatedQuery.q,
+        type: validatedQuery.type,
         limit: validatedQuery.limit,
+        suggestionsCount: result.suggestions.length,
+        entitiesCount: result.entities.length,
+        loadTime: Math.round(loadTime),
         userId: user.id,
-        count: sortedSuggestions.length,
+        requestId,
       });
+
+      // Format suggestions for frontend consumption
+      const formattedSuggestions = result.suggestions.map((suggestion, index) => ({
+        text: suggestion,
+        type: 'suggestion',
+        score: result.entities[index]?.score || 0,
+        entityType: result.entities[index]?.entityType || 'unknown',
+        entityId: result.entities[index]?.id || null,
+      }));
 
       return NextResponse.json({
-        success: true,
+        ok: true,
         data: {
-          query: validatedQuery.q,
-          suggestions: sortedSuggestions,
-          total: sortedSuggestions.length,
+          suggestions: formattedSuggestions,
+          meta: {
+            query: validatedQuery.q,
+            type: validatedQuery.type,
+            limit: validatedQuery.limit,
+            responseTimeMs: Math.round(loadTime),
+          },
         },
-        message: 'Suggestions retrieved successfully',
+        message: 'Search suggestions retrieved successfully',
       });
     } catch (error) {
-      await logError('Search suggestions error', error as unknown);
+      const loadTime = performance.now() - start;
 
-      if (error instanceof z.ZodError) {
-        return NextResponse.json(
-          { error: 'Invalid query parameters', details: error.errors },
-          { status: 400 }
-        );
-      }
+      logError('API: Error getting search suggestions', {
+        component: 'SearchSuggestionsAPI',
+        operation: 'GET /api/search/suggestions',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        requestId,
+      });
 
-      return NextResponse.json({ error: 'Failed to get suggestions' }, { status: 500 });
+      return errorHandler.createErrorResponse(error, 'Failed to get suggestions');
     }
   }
 );
-
-/**
- * Get content title suggestions
- */
-async function getContentSuggestions(searchTerm: string, limit: number) {
-  try {
-    const contents = await prisma.content.findMany({
-      where: {
-        isActive: true,
-        title: {
-          contains: searchTerm,
-          mode: 'insensitive',
-        },
-      },
-      select: {
-        title: true,
-        type: true,
-      },
-      take: limit,
-    });
-
-    return contents.map((content: any) => ({
-      text: content.title,
-      type: 'content',
-      subtype: content.type,
-      score: calculateSuggestionScore(content.title, searchTerm, 'content'),
-    }));
-  } catch (error) {
-    const { logError } = await import('@/lib/logger');
-    await logError('Content suggestions error', error as unknown);
-    return [];
-  }
-}
-
-/**
- * Get product name suggestions
- */
-async function getProductSuggestions(searchTerm: string, limit: number) {
-  try {
-    const products = await prisma.product.findMany({
-      where: {
-        isActive: true,
-        OR: [
-          { name: { contains: searchTerm, mode: 'insensitive' } },
-          { sku: { contains: searchTerm, mode: 'insensitive' } },
-        ],
-      },
-      select: {
-        name: true,
-        sku: true,
-        category: true,
-      },
-      take: limit,
-    });
-
-    return products.map((product: any) => ({
-      text: product.name,
-      type: 'product',
-      subtype: product.category[0] || 'product',
-      metadata: { sku: product.sku },
-      score: calculateSuggestionScore(product.name, searchTerm, 'product'),
-    }));
-  } catch (error) {
-    const { logError } = await import('@/lib/logger');
-    await logError('Product suggestions error', error as unknown);
-    return [];
-  }
-}
-
-/**
- * Get customer name suggestions
- */
-async function getCustomerSuggestions(searchTerm: string, limit: number) {
-  try {
-    const customers = await prisma.customer.findMany({
-      where: {
-        status: 'ACTIVE',
-        name: {
-          contains: searchTerm,
-          mode: 'insensitive',
-        },
-      },
-      select: {
-        name: true,
-        industry: true,
-        tier: true,
-      },
-      take: limit,
-    });
-
-    return customers.map((customer: any) => ({
-      text: customer.name,
-      type: 'customer',
-      subtype: customer.industry || 'business',
-      metadata: { tier: customer.tier },
-      score: calculateSuggestionScore(customer.name, searchTerm, 'customer'),
-    }));
-  } catch (error) {
-    const { logError } = await import('@/lib/logger');
-    await logError('Customer suggestions error', error as unknown);
-    return [];
-  }
-}
-
-/**
- * Get tag suggestions from content and products
- */
-async function getTagSuggestions(searchTerm: string, limit: number) {
-  try {
-    const [contentTags, productTags] = await Promise.all([
-      prisma.content.findMany({
-        where: {
-          isActive: true,
-          tags: {
-            has: searchTerm,
-          },
-        },
-        select: {
-          tags: true,
-        },
-        take: limit * 2,
-      }),
-      prisma.product.findMany({
-        where: {
-          isActive: true,
-          tags: {
-            has: searchTerm,
-          },
-        },
-        select: {
-          tags: true,
-        },
-        take: limit * 2,
-      }),
-    ]);
-
-    // Extract and filter matching tags
-    const allTags = [
-      ...contentTags.flatMap((c: any) => c.tags),
-      ...productTags.flatMap((p: any) => p.tags),
-    ];
-
-    const matchingTags = allTags
-      .filter(tag => tag.toLowerCase().includes(searchTerm))
-      .filter((tag, index, arr) => arr.indexOf(tag) === index) // Remove duplicates
-      .slice(0, limit);
-
-    return matchingTags.map(tag => ({
-      text: tag,
-      type: 'tag',
-      subtype: 'keyword',
-      score: calculateSuggestionScore(tag, searchTerm, 'tag'),
-    }));
-  } catch (error) {
-    const { logError } = await import('@/lib/logger');
-    await logError('Tag suggestions error', error as unknown);
-    return [];
-  }
-}
-
-/**
- * Get recent searches for the user
- */
-async function getRecentSearches(userId: string, searchTerm: string, limit: number) {
-  try {
-    // Get recent search events for this user
-    const recentEvents = await prisma.hypothesisValidationEvent.findMany({
-      where: {
-        userId,
-        action: 'search_executed',
-        timestamp: {
-          gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
-        },
-      },
-      select: {
-        measurementData: true,
-        timestamp: true,
-      },
-      orderBy: {
-        timestamp: 'desc',
-      },
-      take: 50,
-    });
-
-    // Extract search queries and filter for matches
-    const searchQueries = recentEvents
-      .map((event: any) => {
-        const data = event.measurementData as any;
-        return {
-          query: data?.query || '',
-          timestamp: event.timestamp,
-        };
-      })
-      .filter(
-        (item: any) =>
-          item.query &&
-          item.query.toLowerCase().includes(searchTerm) &&
-          item.query.toLowerCase() !== searchTerm // Don't suggest exact same query
-      )
-      .slice(0, limit);
-
-    return searchQueries.map((item: any) => ({
-      text: item.query,
-      type: 'recent',
-      subtype: 'search_history',
-      metadata: { timestamp: item.timestamp },
-      score: calculateSuggestionScore(item.query, searchTerm, 'recent'),
-    }));
-  } catch (error) {
-    const { logError } = await import('@/lib/logger');
-    await logError('Recent searches error', error as unknown);
-    return [];
-  }
-}
-
-/**
- * Calculate suggestion relevance score
- */
-function calculateSuggestionScore(suggestion: string, searchTerm: string, type: string): number {
-  let score = 0;
-  const suggestionLower = suggestion.toLowerCase();
-  const termLower = searchTerm.toLowerCase();
-
-  // Exact match gets highest score
-  if (suggestionLower === termLower) {
-    score += 100;
-  } else if (suggestionLower.startsWith(termLower)) {
-    score += 80;
-  } else if (suggestionLower.includes(termLower)) {
-    score += 60;
-  }
-
-  // Boost score based on type priority
-  const typeBoosts = {
-    recent: 20,
-    content: 15,
-    product: 10,
-    customer: 8,
-    tag: 5,
-  };
-
-  score += typeBoosts[type as keyof typeof typeBoosts] || 0;
-
-  // Shorter suggestions get slight boost for relevance
-  if (suggestion.length < 50) {
-    score += 5;
-  }
-
-  return score;
-}

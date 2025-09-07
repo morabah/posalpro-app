@@ -2565,3 +2565,199 @@ queryClient.refetchQueries({
 **Result**: **SUCCESSFUL DATABASE MISMATCH DETECTION** - CLI-based analysis now
 systematically identifies and resolves all schema inconsistencies before they
 cause runtime failures.
+
+---
+
+## 🔧 **Double-Wrapped API Response Data Extraction Fix (Latest)**
+
+### **Migration Goal**: Fix dashboard components showing zeros despite APIs returning real data due to double-wrapped response structure
+
+**Final Status**: ✅ **SUCCESSFUL** - Dashboard components now correctly extract
+data from double-wrapped API responses.
+
+### **Core Challenge**: API response structure mismatch between hook return format and component data extraction logic
+
+**Problem**: The `useExecutiveDashboard` hook was returning data in a
+double-wrapped format, but the component was trying to extract data using
+single-wrapped logic, causing all metrics to display as zeros.
+
+**Symptoms**:
+
+- Dashboard showing zeros for all metrics (Total Revenue: $0, Total Proposals:
+  0, Win Rate: 0%)
+- API endpoints returning real data (confirmed via app-cli testing)
+- Console logs showing successful data fetching but
+  `responseData.metrics: undefined`
+- Component state not updating despite successful API calls
+
+**Root Cause**: Double-wrapped API response structure where the hook returned:
+
+```javascript
+{
+  success: true,
+  data: {
+    success: true,
+    data: {
+      metrics: { totalRevenue: 450000, totalProposals: 8, conversionRate: 37.5, ... },
+      revenueChart: [...],
+      teamPerformance: [...],
+      pipelineStages: [...]
+    },
+    meta: {...}
+  },
+  meta: {...}
+}
+```
+
+But the component was extracting using single-wrapped logic:
+
+```javascript
+const responseData = dashboardData.data || dashboardData; // Wrong - gets entire object
+const metrics = responseData.metrics; // undefined because metrics is nested deeper
+```
+
+### **Solution Applied**
+
+#### **Data Extraction Logic Fix**
+
+```typescript
+// ❌ BEFORE: Single-wrapped extraction logic
+const responseData = dashboardData.data || dashboardData;
+const metrics = responseData.metrics; // undefined
+
+// ✅ AFTER: Double-wrapped extraction logic
+const responseData = dashboardData.data?.data || dashboardData.data;
+const metrics = responseData?.metrics; // correctly extracts nested data
+```
+
+#### **Generalized Pattern for Any Double-Wrapped Response**
+
+```typescript
+// ✅ UNIVERSAL PATTERN: Handle both single and double-wrapped responses
+const extractNestedData = (apiResponse: any, targetProperty: string) => {
+  // Handle double-wrapped response
+  if (apiResponse?.data?.data?.[targetProperty]) {
+    return apiResponse.data.data[targetProperty];
+  }
+
+  // Handle single-wrapped response
+  if (apiResponse?.data?.[targetProperty]) {
+    return apiResponse.data[targetProperty];
+  }
+
+  // Handle direct response
+  if (apiResponse?.[targetProperty]) {
+    return apiResponse[targetProperty];
+  }
+
+  return null;
+};
+
+// Usage in component
+const metrics = extractNestedData(dashboardData, 'metrics');
+const revenueChart = extractNestedData(dashboardData, 'revenueChart');
+const teamPerformance = extractNestedData(dashboardData, 'teamPerformance');
+```
+
+#### **Debugging Strategy for Data Extraction Issues**
+
+```typescript
+// ✅ COMPREHENSIVE DEBUGGING: Log all levels of data structure
+useEffect(() => {
+  console.log('Raw API response:', data);
+  console.log('First level data:', data?.data);
+  console.log('Second level data:', data?.data?.data);
+  console.log('Target property:', data?.data?.data?.metrics);
+
+  // Extract data with fallback logic
+  const responseData = data?.data?.data || data?.data || data;
+  console.log('Final extracted data:', responseData);
+}, [data]);
+```
+
+### **Migration Success Metrics**
+
+**Before Fix**:
+
+- Dashboard displaying zeros for all metrics
+- `responseData.metrics: undefined` in console logs
+- API returning real data but component unable to extract it
+- Poor user experience with misleading dashboard information
+
+**After Fix**:
+
+- ✅ Dashboard displaying real metrics (Total Revenue: $450,000, Total
+  Proposals: 8, Win Rate: 37.5%)
+- ✅ Proper data extraction from double-wrapped response structure
+- ✅ All dashboard components working correctly
+- ✅ 100% TypeScript compliance maintained
+
+### **Prevention Framework (Double-Wrapped Response Handling)**
+
+1. **Response Structure Analysis**:
+   - Always log the complete API response structure during development
+   - Use browser dev tools to inspect actual response format
+   - Test API endpoints independently with app-cli to verify data structure
+
+2. **Defensive Data Extraction**:
+
+   ```typescript
+   // ✅ DEFENSIVE PATTERN: Handle multiple response formats
+   const getNestedProperty = (obj: any, path: string[]) => {
+     return path.reduce((current, key) => current?.[key], obj);
+   };
+
+   // Usage
+   const metrics =
+     getNestedProperty(dashboardData, ['data', 'data', 'metrics']) ||
+     getNestedProperty(dashboardData, ['data', 'metrics']) ||
+     getNestedProperty(dashboardData, ['metrics']);
+   ```
+
+3. **Hook Response Format Standardization**:
+   - Document expected response format for each hook
+   - Use consistent response wrapping patterns across all hooks
+   - Consider unwrapping responses at the hook level to simplify component usage
+
+4. **Component Data Access Patterns**:
+
+   ```typescript
+   // ✅ STANDARDIZED PATTERN: Always check for nested structure
+   const { data, isLoading } = useDashboardHook();
+
+   useEffect(() => {
+     if (data) {
+       // Handle multiple possible response structures
+       const actualData = data?.data?.data || data?.data || data;
+       if (actualData?.metrics) {
+         setMetrics(actualData.metrics);
+       }
+     }
+   }, [data]);
+   ```
+
+5. **Testing Strategy**:
+   - Test with real API responses, not mocked data
+   - Verify data extraction logic with actual response structures
+   - Add unit tests for data extraction functions
+
+### **Common Double-Wrapped Response Patterns**
+
+| Response Type   | Structure                                                              | Extraction Pattern               |
+| --------------- | ---------------------------------------------------------------------- | -------------------------------- |
+| Single-wrapped  | `{ success: true, data: { metrics: {...} } }`                          | `data.data.metrics`              |
+| Double-wrapped  | `{ success: true, data: { success: true, data: { metrics: {...} } } }` | `data.data.data.metrics`         |
+| Direct response | `{ metrics: {...} }`                                                   | `data.metrics`                   |
+| Mixed format    | Variable nesting levels                                                | Use defensive extraction pattern |
+
+### **Related Issues This Fixes**
+
+- Dashboard components showing zeros despite successful API calls
+- Component state not updating with real data
+- Data extraction failures in React Query hooks
+- Inconsistent response format handling across components
+- Frontend-backend data flow mismatches
+
+**Result**: **SUCCESSFUL DOUBLE-WRAPPED RESPONSE FIX** - Dashboard components
+now correctly handle double-wrapped API responses and display real data instead
+of zeros, providing accurate user experience.

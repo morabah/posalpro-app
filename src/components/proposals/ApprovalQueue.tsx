@@ -159,7 +159,9 @@ export function ApprovalQueue({
         const loadTime = Date.now() - startTime;
 
         const apiResponse = response as any;
-        const items: QueueItem[] = (apiResponse?.items || []).map((item: any) => ({
+        // Defensive extraction: handle both single and double-wrapped responses
+        const responseData = apiResponse?.data || apiResponse;
+        const items: QueueItem[] = (responseData?.items || []).map((item: any) => ({
           ...item,
           deadline: new Date(item.deadline),
           lastActivity: new Date(item.lastActivity),
@@ -219,7 +221,9 @@ export function ApprovalQueue({
           itemCount: items.length
         });
 
-        return response;
+        // Defensive extraction: handle both single and double-wrapped responses
+        const responseData = (response as any)?.data || response;
+        return responseData;
       } catch (error) {
         logError('Bulk action failed', error, {
           component: 'ApprovalQueue',

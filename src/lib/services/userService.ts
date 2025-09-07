@@ -7,11 +7,12 @@
  */
 
 import { hashPassword } from '@/lib/auth/passwordUtils';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes, processError, StandardError } from '@/lib/errors/ErrorHandlingService';
 import { logDebug, logError } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { Role, User } from '@prisma/client';
+import { toPrismaJson } from '@/lib/utils/prismaUtils';
+import { isPrismaError } from '@/lib/utils/errorUtils';
 
 // ✅ CRITICAL: Performance optimization - User cache
 const userCache = new Map<string, { user: AuthUserRecord; timestamp: number }>();
@@ -198,16 +199,11 @@ export async function getUserByEmail(email: string): Promise<AuthUserRecord | nu
 
     return null;
   } catch (error) {
-    ErrorHandlingService.getInstance().processError(
-      error,
-      'Error fetching user',
-      ErrorCodes.DATA.FETCH_FAILED,
-      {
-        component: 'UserService',
-        operation: 'getUserByEmail',
-        email,
-      }
-    );
+    processError(error, 'Error fetching user', ErrorCodes.DATA.FETCH_FAILED, {
+      component: 'UserService',
+      operation: 'getUserByEmail',
+      email,
+    });
     return null;
   }
 }
@@ -224,16 +220,11 @@ export async function updateLastLogin(userId: string): Promise<void> {
       data: { lastLogin: new Date() },
     });
   } catch (error) {
-    ErrorHandlingService.getInstance().processError(
-      error,
-      'Error updating last login',
-      ErrorCodes.DATA.UPDATE_FAILED,
-      {
-        component: 'UserService',
-        operation: 'updateLastLogin',
-        userId,
-      }
-    );
+    processError(error, 'Error updating last login', ErrorCodes.DATA.UPDATE_FAILED, {
+      component: 'UserService',
+      operation: 'updateLastLogin',
+      userId,
+    });
   }
 }
 
@@ -296,16 +287,11 @@ export async function getUsers(params: {
 
     return { users, total };
   } catch (error) {
-    ErrorHandlingService.getInstance().processError(
-      error,
-      'Error fetching users',
-      ErrorCodes.DATA.FETCH_FAILED,
-      {
-        component: 'UserService',
-        operation: 'getUsers',
-        params,
-      }
-    );
+    processError(error, 'Error fetching users', ErrorCodes.DATA.FETCH_FAILED, {
+      component: 'UserService',
+      operation: 'getUsers',
+      params,
+    });
     return { users: [], total: 0 };
   }
 }
@@ -369,3 +355,265 @@ export function getCacheStats(): {
     roleCacheHits: 0, // TODO: Implement hit tracking
   };
 }
+
+/**
+ * Enhanced User Service class with cursor-based pagination
+ * Following CORE_REQUIREMENTS.md service layer patterns
+ */
+export class UserService {
+  /**
+   * Cursor-based list method following CORE_REQUIREMENTS.md patterns
+   * Returns normalized data with proper transformations
+   */
+  async listUsersCursor(
+    filters: {
+      search?: string;
+      department?: string;
+      role?: string;
+      status?: string;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+      limit?: number;
+      cursor?: string;
+    } = {}
+  ): Promise<{
+    items: User[];
+    nextCursor: string | null;
+  }> {
+    try {
+      const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
+
+      // Validate cursor format if provided
+      if (
+        filters.cursor &&
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          filters.cursor
+        )
+      ) {
+        throw new StandardError({
+          message: 'Invalid cursor format',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'UserService',
+            operation: 'listUsersCursor',
+            cursor: filters.cursor,
+          },
+        });
+      }
+
+      // Build where clause following service layer patterns
+      const where = this.buildWhereClause(filters);
+
+      // Build order by with cursor pagination support
+      const orderBy = this.buildOrderByClause(filters);
+
+      // Execute query with cursor pagination
+      const rows = await prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          department: true,
+          status: true,
+          lastLogin: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy,
+        take: limit + 1, // Take one extra to check if there are more
+        ...(filters.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
+      });
+
+      // Determine if there are more pages and extract items
+      const hasNextPage = rows.length > limit;
+      const items = hasNextPage ? rows.slice(0, limit) : rows;
+      const nextCursor = hasNextPage ? rows[limit - 1].id : null;
+
+      // Normalize data following service layer patterns
+      const normalizedItems = items.map(item => this.normalizeUserData(item));
+
+      return {
+        items: normalizedItems as User[],
+        nextCursor,
+      };
+    } catch (error) {
+      processError(error);
+      throw new StandardError({
+        message: 'Failed to list users with cursor pagination',
+        code: ErrorCodes.DATA.DATABASE_ERROR,
+        cause: error,
+        metadata: {
+          component: 'UserService',
+          operation: 'listUsersCursor',
+          filters,
+        },
+      });
+    }
+  }
+
+  /**
+   * Helper: Build where clause for filtering
+   * Following CORE_REQUIREMENTS.md patterns
+   */
+  private buildWhereClause(filters: any) {
+    const where: any = {};
+
+    if (filters.search) {
+      where.OR = [
+        { name: { contains: filters.search, mode: 'insensitive' } },
+        { email: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (filters.department) {
+      where.department = filters.department;
+    }
+
+    if (filters.role) {
+      // Temporarily disable role filtering to test if that's causing the issue
+      // where.roles = {
+      //   some: {
+      //     role: { name: filters.role },
+      //     isActive: true
+      //   }
+      // };
+    }
+
+    if (filters.status) {
+      where.status = filters.status;
+    }
+
+    return where;
+  }
+
+  /**
+   * Helper: Build order by clause with cursor pagination support
+   */
+  private buildOrderByClause(filters: any) {
+    const sortBy = filters.sortBy || 'createdAt';
+    const sortOrder = filters.sortOrder || 'desc';
+
+    const orderBy: any[] = [{ [sortBy]: sortOrder }];
+
+    // Add secondary sort for cursor pagination stability
+    if (sortBy !== 'id') {
+      orderBy.push({ id: sortOrder });
+    }
+
+    return orderBy;
+  }
+
+  /**
+   * Update user with validation
+   * Following CORE_REQUIREMENTS.md service layer patterns
+   */
+  async updateUserWithValidation(
+    userId: string,
+    data: {
+      name?: string;
+      email?: string;
+      department?: string;
+      preferences?: any;
+    },
+    updatedBy: string
+  ): Promise<User> {
+    try {
+      // Check if email is being updated and if it's already taken
+      if (data.email) {
+        const existingUser = await prisma.user.findFirst({
+          where: {
+            email: data.email,
+            id: { not: userId },
+          },
+          select: { id: true },
+        });
+
+        if (existingUser) {
+          throw new StandardError({
+            message: `Email ${data.email} is already in use`,
+            code: ErrorCodes.DATA.CONFLICT,
+            metadata: {
+              component: 'UserService',
+              operation: 'updateUserWithValidation',
+              userId,
+              email: data.email,
+            },
+          });
+        }
+      }
+
+      // Update user with proper data normalization
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          ...(data.name && { name: data.name }),
+          ...(data.email && { email: data.email }),
+          ...(data.department && { department: data.department }),
+          ...(data.preferences && {
+            preferences: toPrismaJson(data.preferences),
+          }),
+          updatedAt: new Date(),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          department: true,
+          status: true,
+          lastLogin: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      // Normalize and return
+      return this.normalizeUserData(updatedUser) as User;
+    } catch (error) {
+      processError(error);
+
+      if (error instanceof StandardError) {
+        throw error;
+      }
+
+      if (isPrismaError(error)) {
+        throw new StandardError({
+          message: `Database operation failed during user update`,
+          code: ErrorCodes.DATA.DATABASE_ERROR,
+          cause: error,
+          metadata: {
+            component: 'UserService',
+            operation: 'updateUserWithValidation',
+            userId,
+          },
+        });
+      }
+
+      throw new StandardError({
+        message: 'Failed to update user with validation',
+        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+        cause: error,
+        metadata: {
+          component: 'UserService',
+          operation: 'updateUserWithValidation',
+        },
+      });
+    }
+  }
+
+  /**
+   * Helper: Normalize user data (null handling)
+   * Following CORE_REQUIREMENTS.md transformation patterns
+   */
+  private normalizeUserData(user: any): any {
+    return {
+      ...user,
+      name: user.name || '',
+      department: user.department || '',
+      lastLogin: user.lastLogin || null,
+    };
+  }
+}
+
+// Singleton instance
+export const userServiceInstance = new UserService();

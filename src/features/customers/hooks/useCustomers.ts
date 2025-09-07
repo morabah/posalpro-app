@@ -38,7 +38,7 @@ export function useInfiniteCustomers({
   industry?: string;
 }) {
   return useInfiniteQuery({
-    queryKey: customerKeys.customers.list(search, limit, sortBy, sortOrder, { status, tier, industry }),
+    queryKey: customerKeys.customers.list(search, limit, sortBy, sortOrder, undefined, { status, tier, industry }),
     queryFn: ({ pageParam }) =>
       customerService.getCustomers({
         search,

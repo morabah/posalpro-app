@@ -1,84 +1,116 @@
+/**
+ * PosalPro MVP2 - Analytics Insights API Route - Service Layer Architecture
+ * Following CORE_REQUIREMENTS.md service layer patterns
+ * Component Traceability: US-6.1, US-6.2, H6, H7, H8
+ *
+ * ✅ SERVICE LAYER COMPLIANCE: Removed direct analytics logic from routes
+ * ✅ BUSINESS LOGIC SEPARATION: Complex insights moved to analyticsService
+ * ✅ PERFORMANCE OPTIMIZATION: Cached and optimized queries
+ * ✅ ERROR HANDLING: Integrated standardized error handling
+ */
+
 import { createRoute } from '@/lib/api/route';
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logDebug, logInfo, logError } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { analyticsService } from '@/lib/services/analyticsService';
 import { NextResponse } from 'next/server';
-import { logWarn } from '@/lib/logger';
+import { z } from 'zod';
 
-const errorHandlingService = ErrorHandlingService.getInstance();
+// Ensure this route is not statically evaluated during build
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
+/**
+ * Query schema for analytics insights
+ */
+const InsightsQuerySchema = z.object({
+  limit: z.coerce.number().min(1).max(50).default(10),
+});
+
+/**
+ * GET /api/analytics/insights - Get analytics insights and recent activity
+ */
 export const GET = createRoute(
   {
     roles: ['admin', 'manager', 'viewer', 'System Administrator', 'Administrator'],
-    entitlements: ['feature.analytics.insights'],
+    query: InsightsQuerySchema,
+    permissions: ['feature.analytics.insights'],
   },
-  async ({ req }) => {
-    // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
-    const isBuildTime =
-      process.env.NETLIFY_BUILD_TIME === 'true' ||
-      (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL);
+  async ({ req, user, query, requestId }) => {
+    const errorHandler = getErrorHandler({ component: 'AnalyticsInsightsAPI', operation: 'GET' });
+    const start = performance.now();
 
-    if (isBuildTime) {
-      logWarn('Analytics insights accessed without database configuration - returning empty data');
-      return NextResponse.json({
-        data: { insights: [], lastUpdated: new Date().toISOString() },
-        message: 'Analytics data not available during build process',
-      });
-    }
+    logDebug('API: Getting analytics insights', {
+      component: 'AnalyticsInsightsAPI',
+      operation: 'GET /api/analytics/insights',
+      query,
+      userId: user.id,
+      requestId,
+    });
 
     try {
-      const { default: prisma } = await import('@/lib/db/prisma');
-      if (!prisma) {
-        throw new Error('Failed to load Prisma client');
+      // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
+      const IS_BUILD_TIME =
+        process.env.NETLIFY_BUILD_TIME === 'true' ||
+        (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL);
+
+      if (IS_BUILD_TIME) {
+        logInfo('Analytics insights accessed during build - returning empty data', {
+          component: 'AnalyticsInsightsAPI',
+          operation: 'GET /api/analytics/insights',
+          userId: user.id,
+          requestId,
+        });
+
+        return NextResponse.json({
+          data: { insights: [], lastUpdated: new Date().toISOString() },
+          message: 'Analytics data not available during build process',
+        });
       }
-      const prismaClient = prisma;
 
-      const { searchParams } = new URL(req.url);
-      const limit = Math.min(parseInt(searchParams.get('limit') || '10', 10), 50);
+      // Parse and validate query parameters
+      const validatedQuery = query as z.infer<typeof InsightsQuerySchema>;
 
-      const [events, recentProposals] = await Promise.all([
-        prismaClient.hypothesisValidationEvent.findMany({
-          orderBy: { timestamp: 'desc' },
-          take: limit,
-          select: { id: true, hypothesis: true, performanceImprovement: true, timestamp: true, userId: true },
-        }),
-        prismaClient.proposal.findMany({
-          orderBy: { updatedAt: 'desc' },
-          take: limit,
-          select: { id: true, title: true, status: true, updatedAt: true },
-        }),
-      ]);
-
-      const insights = [
-        ...events.map((e: any) => ({
-          id: `evt-${e.id}`,
-          type: 'optimization' as const,
-          message: `Recent validation for ${e.hypothesis}: +${
-            Math.round((e.performanceImprovement ?? 0) * 100) / 100
-          }% improvement`,
-          confidence: 0.85,
-          priority: 'Medium' as const,
-          actionable: false,
-        })),
-        ...recentProposals.map((p: any) => ({
-          id: `pr-${p.id}`,
-          type: 'risk' as const,
-          message: `Proposal "${p.title}" status: ${p.status}`,
-          confidence: 0.7,
-          priority: 'Low' as const,
-          actionable: false,
-        })),
-      ].slice(0, limit);
-
-      return NextResponse.json({ success: true, data: insights });
-    } catch (error) {
-      errorHandlingService.processError(
-        error,
-        'Insights fetch failed',
-        ErrorCodes.DATA.FETCH_FAILED,
-        { route: '/api/analytics/insights' }
+      // Delegate to service layer (business logic belongs here)
+      const insightsData = await withAsyncErrorHandler(
+        () => analyticsService.getAnalyticsInsights(validatedQuery.limit),
+        'GET analytics insights failed',
+        { component: 'AnalyticsInsightsAPI', operation: 'GET' }
       );
-      return NextResponse.json({ success: true, data: [] }, { status: 200 });
+
+      const loadTime = performance.now() - start;
+
+      logInfo('API: Analytics insights retrieved successfully', {
+        component: 'AnalyticsInsightsAPI',
+        operation: 'GET /api/analytics/insights',
+        insightsCount: insightsData.insights.length,
+        limit: validatedQuery.limit,
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        requestId,
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: insightsData,
+        message: 'Analytics insights retrieved successfully',
+        meta: {
+          responseTimeMs: Math.round(loadTime),
+        },
+      });
+    } catch (error) {
+      const loadTime = performance.now() - start;
+
+      logError('API: Error getting analytics insights', {
+        component: 'AnalyticsInsightsAPI',
+        operation: 'GET /api/analytics/insights',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        requestId,
+      });
+
+      return errorHandler.createErrorResponse(error, 'Failed to get analytics insights');
     }
   }
 );
-

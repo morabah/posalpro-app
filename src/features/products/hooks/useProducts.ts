@@ -29,20 +29,20 @@ export function useInfiniteProductsMigrated({
   limit = 20,
   sortBy = 'createdAt',
   sortOrder = 'desc',
-  category,
-  isActive,
+  cursor,
+  filters,
 }: {
   search?: string;
   limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
-  category?: string;
-  isActive?: boolean;
+  cursor?: string;
+  filters?: Record<string, unknown>;
 } = {}) {
   const { get } = useHttpClient();
 
   return useInfiniteQuery({
-    queryKey: productKeys.products.list(search, limit, sortBy, sortOrder, { category, isActive }),
+    queryKey: productKeys.products.list(search, limit, sortBy, sortOrder, cursor, filters),
     queryFn: async ({ pageParam }) => {
       logDebug('Fetching products with cursor pagination', {
         component: 'useInfiniteProductsMigrated',
@@ -51,9 +51,8 @@ export function useInfiniteProductsMigrated({
         limit,
         sortBy,
         sortOrder,
-        category,
-        isActive,
         cursor: pageParam,
+        filters,
         userStory: 'US-4.1',
         hypothesis: 'H5',
       });
@@ -63,9 +62,16 @@ export function useInfiniteProductsMigrated({
       if (limit) params.append('limit', limit.toString());
       if (sortBy) params.append('sortBy', sortBy);
       if (sortOrder) params.append('sortOrder', sortOrder);
-      if (category) params.append('category', category);
-      if (isActive !== undefined) params.append('isActive', isActive.toString());
       if (pageParam) params.append('cursor', pageParam);
+
+      // Add filter parameters
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            params.append(key, String(value));
+          }
+        });
+      }
 
       const response = await get<{ items: Product[]; nextCursor: string | null }>(
         `/api/products?${params.toString()}`

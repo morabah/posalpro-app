@@ -98,8 +98,8 @@ export const GET = createRoute(
         withAsyncErrorHandler(
           () =>
             prisma.proposal.aggregate({
-              _sum: { value: true },
-              where: { value: { not: null } },
+              _sum: { totalValue: true },
+              where: { totalValue: { not: null } },
             }),
           'Failed to aggregate proposal values',
           { component: 'ProposalStatsAPI', operation: 'VALUE_AGGREGATE' }
@@ -116,7 +116,7 @@ export const GET = createRoute(
         ),
       ]);
 
-      const totalValue = totalValueResult._sum.value || 0;
+      const totalValue = Number(totalValueResult._sum.totalValue) || 0;
 
       // Calculate win rate
       const acceptedCount =

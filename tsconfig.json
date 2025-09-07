@@ -12,6 +12,8 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "composite": true,
+    "tsBuildInfoFile": ".next/cache/tsconfig.tsbuildinfo",
     "types": ["node", "jest"],
     "plugins": [
       {
@@ -21,8 +23,44 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "target": "ES2017"
+    "target": "ES2017",
+
+    // Performance optimizations
+    "assumeChangesOnlyAffectDirectDependencies": true,
+    "disableReferencedProjectLoad": false,
+    "disableSourceOfProjectReferenceRedirect": false,
+    "disableSolutionSearching": false,
+    "skipDefaultLibCheck": true,
+    "preserveWatchOutput": true,
+
+    // Memory optimizations
+    "maxNodeModuleJsDepth": 0,
+    "traceResolution": false,
+    "listEmittedFiles": false,
+    "listFiles": false,
+    "explainFiles": false,
+    "extendedDiagnostics": false,
+
+    // Build optimizations
+    "declaration": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "sourceMap": false,
+    "removeComments": false,
+    "importHelpers": false,
+    "downlevelIteration": false
   },
+  "references": [
+    {
+      "path": "./tsconfig.core.json"
+    },
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.dashboard.json"
+    }
+  ],
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": [
     "node_modules",

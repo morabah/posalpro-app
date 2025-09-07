@@ -145,6 +145,11 @@ export interface ProductFilters {
   priceMax?: number;
   sku?: string;
   search?: string;
+  // Cursor pagination properties (following CORE_REQUIREMENTS.md)
+  limit?: number;
+  cursor?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface ProductSortOptions {

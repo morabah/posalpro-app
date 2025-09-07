@@ -35,35 +35,18 @@ export function useInfiniteProposals({
   limit = 20,
   sortBy = 'createdAt',
   sortOrder = 'desc',
-  status,
-  priority,
-  customerId,
-  assignedTo,
+  cursor,
+  filters,
 }: {
   search?: string;
   limit?: number;
   sortBy?: 'createdAt' | 'updatedAt' | 'title' | 'status' | 'priority' | 'value';
   sortOrder?: 'asc' | 'desc';
-  status?:
-    | 'DRAFT'
-    | 'IN_REVIEW'
-    | 'PENDING_APPROVAL'
-    | 'APPROVED'
-    | 'REJECTED'
-    | 'SUBMITTED'
-    | 'ACCEPTED'
-    | 'DECLINED';
-  priority?: 'LOW' | 'MEDIUM' | 'HIGH';
-  customerId?: string;
-  assignedTo?: string;
+  cursor?: string;
+  filters?: Record<string, unknown>;
 } = {}) {
   return useInfiniteQuery({
-    queryKey: proposalKeys.proposals.list(search, limit, sortBy, sortOrder, {
-      status,
-      priority,
-      customerId,
-      assignedTo,
-    }),
+    queryKey: proposalKeys.proposals.list(search, limit, sortBy, sortOrder, cursor, filters),
     queryFn: async ({ pageParam }) => {
       logDebug('Fetching proposals with cursor pagination', {
         component: 'useInfiniteProposals',
@@ -72,36 +55,19 @@ export function useInfiniteProposals({
         limit,
         sortBy,
         sortOrder,
-        status,
-        priority,
-        customerId,
-        assignedTo,
-        cursor: pageParam,
+        cursor: pageParam || undefined,
+        filters,
         userStory: 'US-3.2',
         hypothesis: 'H4',
       });
 
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (limit) params.append('limit', limit.toString());
-      if (sortBy) params.append('sortBy', sortBy);
-      if (sortOrder) params.append('sortOrder', sortOrder);
-      if (status) params.append('status', status);
-      if (priority) params.append('priority', priority);
-      if (customerId) params.append('customerId', customerId);
-      if (assignedTo) params.append('assignedTo', assignedTo);
-      if (pageParam) params.append('cursor', pageParam);
-
       const data = await proposalService.getProposals({
         search,
         limit,
-        cursor: pageParam,
         sortBy,
         sortOrder,
-        status,
-        priority,
-        customerId,
-        assignedTo,
+        cursor: pageParam || undefined,
+        filters,
       });
 
       logInfo('Proposals fetched successfully', {

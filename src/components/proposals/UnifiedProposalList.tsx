@@ -249,7 +249,9 @@ export default function UnifiedProposalList() {
   // Single source of truth for proposal list data
   const { data, isLoading, error, fetchNextPage, hasNextPage } = useInfiniteProposals({
     search: dashboardSearch || '',
-    status: apiStatus,
+    filters: {
+      status: apiStatus,
+    },
   });
 
   // Extract proposals from infinite query data and filter out any undefined/null items

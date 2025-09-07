@@ -1,15 +1,18 @@
 /**
- * PosalPro MVP2 - Analytics Dashboard API
- * Provides comprehensive analytics summary across all hypothesis validation,
- * user story tracking, and performance measurement entities
+ * PosalPro MVP2 - Analytics Dashboard API Route - Service Layer Architecture
+ * Following CORE_REQUIREMENTS.md service layer patterns
+ * Component Traceability: US-6.1, US-6.2, H6, H7, H8
+ *
+ * ✅ SERVICE LAYER COMPLIANCE: Removed direct analytics logic from routes
+ * ✅ BUSINESS LOGIC SEPARATION: Complex analytics moved to analyticsService
+ * ✅ PERFORMANCE OPTIMIZATION: Cached and optimized queries
+ * ✅ ERROR HANDLING: Integrated standardized error handling
  */
 
 import { createRoute } from '@/lib/api/route';
-
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logWarn } from '@/lib/logger';
-import { assertApiKey } from '@/server/api/apiKeyGuard';
+import { logDebug, logInfo, logError } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { analyticsService } from '@/lib/services/analyticsService';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { shouldSkipDatabase, getBuildTimeResponse } from '@/lib/buildGuard';
@@ -17,8 +20,6 @@ import { shouldSkipDatabase, getBuildTimeResponse } from '@/lib/buildGuard';
 // Ensure this route is not statically evaluated during build
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-const errorHandlingService = ErrorHandlingService.getInstance();
 
 /**
  * Component Traceability Matrix
@@ -41,48 +42,100 @@ const DashboardQuerySchema = z.object({
 });
 
 /**
- * Analytics health score calculation data interface
- */
-interface AnalyticsHealthScoreData {
-  hypothesisMetrics: {
-    successRate: number;
-  };
-  userStoryMetrics: {
-    completionPercentage: number;
-  };
-  performanceBaselines: {
-    totalBaselines: number;
-    onTrackCount: number;
-  };
-  componentTraceability: {
-    validationRate: number;
-  };
-}
-
-/**
- * GET - Retrieve comprehensive analytics dashboard data
+ * GET /api/analytics/dashboard - Get comprehensive analytics dashboard data
  */
 export const GET = createRoute(
   {
     roles: ['admin', 'manager', 'viewer', 'System Administrator', 'Administrator'],
     query: DashboardQuerySchema,
-    entitlements: ['feature.analytics.dashboard'],
+    permissions: ['feature.analytics.dashboard'],
   },
-  async () => {
-    // 🚨 TEMPORARY BUILD FIX: Return immediately during build
-    // This prevents any database operations during Next.js build process
-    return NextResponse.json({
-      success: true,
-      data: {
-        hypothesisMetrics: [],
-        userStoryMetrics: [],
-        performanceBaselines: [],
-        componentTraceability: [],
-        healthScore: 0,
-        lastUpdated: new Date().toISOString(),
-        recentActivity: [],
-      },
-      message: 'Analytics temporarily disabled during build',
+  async ({ req, user, query, requestId }) => {
+    const errorHandler = getErrorHandler({ component: 'AnalyticsDashboardAPI', operation: 'GET' });
+    const start = performance.now();
+
+    logDebug('API: Getting analytics dashboard data', {
+      component: 'AnalyticsDashboardAPI',
+      operation: 'GET /api/analytics/dashboard',
+      query,
+      userId: user.id,
+      requestId,
     });
+
+    try {
+      // Check for build-time safety
+      if (shouldSkipDatabase()) {
+        logInfo('Analytics dashboard accessed during build - returning build-time response', {
+          component: 'AnalyticsDashboardAPI',
+          operation: 'GET /api/analytics/dashboard',
+          userId: user.id,
+          requestId,
+        });
+
+        return NextResponse.json(getBuildTimeResponse());
+      }
+
+      // Track analytics access event
+      await analyticsService.trackAnalyticsAccessEvent(
+        user.id,
+        COMPONENT_MAPPING.userStories[0],
+        'getAnalyticsDashboard',
+        { query }
+      );
+
+      // Parse and validate query parameters
+      const validatedQuery = query as z.infer<typeof DashboardQuerySchema>;
+
+      // Convert query to service filters
+      const filters = {
+        timeRange: validatedQuery.timeRange,
+        hypothesis: validatedQuery.hypothesis,
+        environment: validatedQuery.environment,
+      };
+
+      // Delegate to service layer (business logic belongs here)
+      const dashboardData = await withAsyncErrorHandler(
+        () => analyticsService.getAnalyticsDashboard(filters),
+        'GET analytics dashboard failed',
+        { component: 'AnalyticsDashboardAPI', operation: 'GET' }
+      );
+
+      const loadTime = performance.now() - start;
+
+      logInfo('API: Analytics dashboard data retrieved successfully', {
+        component: 'AnalyticsDashboardAPI',
+        operation: 'GET /api/analytics/dashboard',
+        healthScore: dashboardData.healthScore,
+        hypothesisCount: dashboardData.hypothesisMetrics.length,
+        userStoryCount: dashboardData.userStoryMetrics.length,
+        totalUsers: dashboardData.summary.totalUsers,
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        requestId,
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: dashboardData,
+        message: 'Analytics dashboard data retrieved successfully',
+        meta: {
+          responseTimeMs: Math.round(loadTime),
+          component: COMPONENT_MAPPING,
+        },
+      });
+    } catch (error) {
+      const loadTime = performance.now() - start;
+
+      logError('API: Error getting analytics dashboard data', {
+        component: 'AnalyticsDashboardAPI',
+        operation: 'GET /api/analytics/dashboard',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        loadTime: Math.round(loadTime),
+        userId: user.id,
+        requestId,
+      });
+
+      return errorHandler.createErrorResponse(error, 'Failed to get analytics dashboard data');
+    }
   }
 );
