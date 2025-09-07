@@ -2,6 +2,7 @@ import { createRoute } from '@/lib/api/route';
 import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { optimizedProductService } from '@/lib/services/OptimizedProductService';
 import { NextResponse } from 'next/server';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 // Permission checks are enforced via createRoute roles and entitlements
 
 /**
@@ -16,45 +17,52 @@ export const GET = createRoute(
     entitlements: ['feature.products.analytics'],
   },
   async ({ req }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductStatsOptimizedAPI',
+      operation: 'GET',
+    });
     const requestStart = Date.now();
     const filters: any = {};
+
     try {
       // RBAC handled via createRoute roles; granular permission string skipped here
 
       // Parse query parameters
       const { searchParams } = new URL(req.url);
-    const dateFromParam = searchParams.get('dateFrom');
-    const dateToParam = searchParams.get('dateTo');
-    const categoryParam = searchParams.get('category');
-    const isActiveParam = searchParams.get('isActive');
+      const dateFromParam = searchParams.get('dateFrom');
+      const dateToParam = searchParams.get('dateTo');
+      const categoryParam = searchParams.get('category');
+      const isActiveParam = searchParams.get('isActive');
 
-    // Build filters
+      // Build filters
 
-    if (dateFromParam) {
-      filters.dateFrom = new Date(dateFromParam);
-    }
+      if (dateFromParam) {
+        filters.dateFrom = new Date(dateFromParam);
+      }
 
-    if (dateToParam) {
-      filters.dateTo = new Date(dateToParam);
-    }
+      if (dateToParam) {
+        filters.dateTo = new Date(dateToParam);
+      }
 
-    if (categoryParam) {
-      filters.category = categoryParam.split(',').filter(Boolean);
-    }
+      if (categoryParam) {
+        filters.category = categoryParam.split(',').filter(Boolean);
+      }
 
-    if (isActiveParam !== null) {
-      filters.isActive = isActiveParam === 'true';
-    }
+      if (isActiveParam !== null) {
+        filters.isActive = isActiveParam === 'true';
+      }
 
-
-
-    // Get optimized stats
-    const stats = await optimizedProductService.getOptimizedProductStats(filters);
+      // Get optimized stats
+      const stats = await withAsyncErrorHandler(
+        () => optimizedProductService.getOptimizedProductStats(filters),
+        'Failed to retrieve optimized product stats',
+        { component: 'ProductStatsOptimizedAPI', operation: 'GET' }
+      );
 
     const totalTime = Date.now() - requestStart;
 
     // Add performance metadata
-    const response = {
+    const responseData = {
       ...stats,
       metadata: {
         queryTime: totalTime,
@@ -64,39 +72,30 @@ export const GET = createRoute(
       },
     };
 
-    return NextResponse.json(response);
+    return errorHandler.createSuccessResponse(
+      responseData,
+      'Product statistics retrieved successfully'
+    );
   } catch (error) {
-    // Use standardized error handling
-    errorHandlingService.processError(
+    const systemError = errorHandlingService.processError(
       error,
       'Optimized product stats failed',
       ErrorCodes.DATA.QUERY_FAILED,
       {
-        component: 'ProductStatsOptimizedRoute',
-        operation: 'getOptimizedProductStats',
+        component: 'ProductStatsOptimizedAPI',
+        operation: 'GET',
         filters: filters,
         requestTime: Date.now() - requestStart,
       }
     );
 
-    if (error instanceof StandardError) {
-      return NextResponse.json(
-        {
-          error: error.message,
-          code: error.code,
-          metadata: error.metadata,
-        },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        error: 'Failed to retrieve product statistics',
-        code: ErrorCodes.DATA.QUERY_FAILED,
-      },
-      { status: 500 }
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Failed to retrieve product statistics',
+      ErrorCodes.DATA.QUERY_FAILED,
+      500
     );
+    return errorResponse;
   }
   }
 );

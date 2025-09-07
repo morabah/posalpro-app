@@ -17,41 +17,63 @@ import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { NextRequest, NextResponse } from 'next/server';
 import { RegisterSchema } from '@/features/auth';
 import { z } from 'zod';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 // Rate limiting configuration (5 attempts per minute)
 // Uses established Redis-based infrastructure from src/lib/security.ts
 
 export async function POST(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'AuthRegisterRoute',
+    operation: 'POST',
+  });
+
   try {
     // Rate limiting using established Redis-based infrastructure
     const ip =
       request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
 
-    const isLimited = await rateLimiter.isLimited(ip, 5, 60 * 1000); // 5 attempts per minute
+    const isLimited = await withAsyncErrorHandler(
+      () => rateLimiter.isLimited(ip, 5, 60 * 1000), // 5 attempts per minute
+      'Failed to check rate limit',
+      { component: 'AuthRegisterRoute', operation: 'RATE_LIMIT_CHECK' }
+    );
+
     if (isLimited) {
-      const remainingAttempts = await rateLimiter.getRemainingAttempts(ip, 5);
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Rate limit exceeded for registration attempts',
-          code: ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
-          metadata: {
-            component: 'RegisterRoute',
-            operation: 'registerUser',
-            ip,
-            limit: 5,
-            windowMs: 60 * 1000,
-            remainingAttempts,
-          },
-        }),
+      const remainingAttempts = await withAsyncErrorHandler(
+        () => rateLimiter.getRemainingAttempts(ip, 5),
+        'Failed to get remaining rate limit attempts',
+        { component: 'AuthRegisterRoute', operation: 'RATE_LIMIT_CHECK' }
+      );
+
+      const rateLimitError = new StandardError({
+        message: 'Rate limit exceeded for registration attempts',
+        code: ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+        metadata: {
+          component: 'AuthRegisterRoute',
+          operation: 'registerUser',
+          ip,
+          limit: 5,
+          windowMs: 60 * 1000,
+          remainingAttempts,
+        },
+      });
+
+      const errorResponse = errorHandler.createErrorResponse(
+        rateLimitError,
         'Too many attempts',
         ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
-        429,
-        { userFriendlyMessage: 'Too many registration attempts. Please try again later.' }
+        429
       );
+      return errorResponse;
     }
 
     // Parse and validate request body
-    const body = await request.json();
+    const body = await withAsyncErrorHandler(
+      () => request.json(),
+      'Failed to parse registration request body',
+      { component: 'AuthRegisterRoute', operation: 'POST' }
+    );
     const validatedData = RegisterSchema.parse(body);
 
     // Combine first and last name
@@ -59,12 +81,17 @@ export async function POST(request: NextRequest) {
 
     // Create user in database
     logger.info('📝 Creating user:', validatedData.email);
-    const user = await createUser({
-      email: validatedData.email,
-      name: fullName,
-      password: validatedData.password,
-      department: validatedData.department,
-    });
+    const user = await withAsyncErrorHandler(
+      () =>
+        createUser({
+          email: validatedData.email,
+          name: fullName,
+          password: validatedData.password,
+          department: validatedData.department,
+        }),
+      'Failed to create user in database',
+      { component: 'AuthRegisterRoute', operation: 'CREATE_USER' }
+    );
 
     logger.info('👤 User created:', {
       id: user.id,
@@ -78,18 +105,19 @@ export async function POST(request: NextRequest) {
     logger.info('🔐 Roles to be assigned:', validatedData.roles);
 
     // Return success response
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'Registration successful! You can now log in with your credentials.',
-        data: {
-          userId: user.id,
-          email: user.email,
-          name: user.name,
-          department: user.department,
-        },
+    const responseData = {
+      message: 'Registration successful! You can now log in with your credentials.',
+      data: {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        department: user.department,
       },
-      { status: 201 }
+    };
+
+    return errorHandler.createSuccessResponse(
+      responseData,
+      'User registration completed successfully'
     );
   } catch (error) {
     // Log the error using ErrorHandlingService

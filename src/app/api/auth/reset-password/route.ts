@@ -1,4 +1,5 @@
-import { logger } from '@/lib/logger';/**
+import { logger } from '@/lib/logger';
+/**
  * PosalPro MVP2 - Password Reset API Route
  * Secure password reset with token validation
  */
@@ -6,6 +7,8 @@ import { logger } from '@/lib/logger';/**
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 
 // Validation schemas
 const requestResetSchema = z.object({
@@ -51,17 +54,38 @@ const isRateLimited = (ip: string): boolean => {
 };
 
 export async function POST(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'AuthResetPasswordRoute',
+    operation: 'POST',
+  });
+
   try {
     const ip = request.headers.get('x-forwarded-for') || 'unknown';
 
     if (isRateLimited(ip)) {
-      return NextResponse.json(
-        { error: 'Too many reset attempts. Please try again later.' },
-        { status: 429 }
+      const rateLimitError = new StandardError({
+        message: 'Too many reset attempts. Please try again later.',
+        code: ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+        metadata: {
+          component: 'AuthResetPasswordRoute',
+          operation: 'resetPassword',
+          ip,
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        rateLimitError,
+        'Too many reset attempts',
+        ErrorCodes.SECURITY.RATE_LIMIT_EXCEEDED,
+        429
       );
+      return errorResponse;
     }
 
-    const body = await request.json();
+    const body = await withAsyncErrorHandler(
+      () => request.json(),
+      'Failed to parse password reset request body',
+      { component: 'AuthResetPasswordRoute', operation: 'POST' }
+    );
     const { action } = body;
 
     if (action === 'request') {
@@ -78,11 +102,13 @@ export async function POST(request: NextRequest) {
       // 3. Send email with reset link
 
       // Placeholder response (always return success for security)
-      return NextResponse.json(
-        {
-          message: 'If an account with that email exists, you will receive a password reset link.',
-        },
-        { status: 200 }
+      const requestResponse = {
+        message: 'If an account with that email exists, you will receive a password reset link.',
+      };
+
+      return errorHandler.createSuccessResponse(
+        requestResponse,
+        'Password reset request processed successfully'
       );
     } else if (action === 'confirm') {
       // Confirm password reset
@@ -96,25 +122,72 @@ export async function POST(request: NextRequest) {
       // 5. Invalidate reset token
       // 6. Log security event
 
-      return NextResponse.json(
-        {
-          message: 'Password reset successfully.',
-        },
-        { status: 200 }
+      const confirmResponse = {
+        message: 'Password reset successfully.',
+      };
+
+      return errorHandler.createSuccessResponse(
+        confirmResponse,
+        'Password reset completed successfully'
       );
     } else {
-      return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+      const validationError = new StandardError({
+        message: 'Invalid action',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        metadata: {
+          component: 'AuthResetPasswordRoute',
+          operation: 'resetPassword',
+          action,
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Invalid action',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
+      );
+      return errorResponse;
     }
   } catch (error) {
     logger.error('Password reset error:', error);
 
+    // Handle specialized ZodError with detailed validation feedback
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
+      const validationError = new StandardError({
+        message: 'Validation failed',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        cause: error,
+        metadata: {
+          component: 'AuthResetPasswordRoute',
+          operation: 'resetPassword',
+          validationErrors: error.errors,
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
       );
+      return errorResponse;
     }
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Handle all other errors with the generic error handler
+    const systemError = new StandardError({
+      message: 'Internal server error during password reset',
+      code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      cause: error instanceof Error ? error : undefined,
+      metadata: {
+        component: 'AuthResetPasswordRoute',
+        operation: 'resetPassword',
+      },
+    });
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
+    );
+    return errorResponse;
   }
 }

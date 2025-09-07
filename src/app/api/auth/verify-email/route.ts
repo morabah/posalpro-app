@@ -1,10 +1,13 @@
-import { logger } from '@/lib/logger';/**
+import { logger } from '@/lib/logger';
+/**
  * PosalPro MVP2 - Email Verification API Route
  * Secure email verification with token validation
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 
 // Validation schema for email verification
 const verifyEmailSchema = z.object({
@@ -17,8 +20,17 @@ const resendVerificationSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'AuthVerifyEmailRoute',
+    operation: 'POST',
+  });
+
   try {
-    const body = await request.json();
+    const body = await withAsyncErrorHandler(
+      () => request.json(),
+      'Failed to parse request body',
+      { component: 'AuthVerifyEmailRoute', operation: 'POST' }
+    );
     const { action } = body;
 
     if (action === 'verify') {
@@ -33,12 +45,14 @@ export async function POST(request: NextRequest) {
       // 5. Log verification event
 
       // Placeholder response
-      return NextResponse.json(
-        {
-          message: 'Email verified successfully. You can now log in.',
-          verified: true,
-        },
-        { status: 200 }
+      const responseData = {
+        message: 'Email verified successfully. You can now log in.',
+        verified: true,
+      };
+
+      return errorHandler.createSuccessResponse(
+        responseData,
+        'Email verified successfully'
       );
     } else if (action === 'resend') {
       // Resend verification email
@@ -51,30 +65,74 @@ export async function POST(request: NextRequest) {
       // 4. Log resend event
 
       // Placeholder response
-      return NextResponse.json(
-        {
-          message: 'Verification email sent. Please check your inbox.',
-        },
-        { status: 200 }
+      const responseData = {
+        message: 'Verification email sent. Please check your inbox.',
+      };
+
+      return errorHandler.createSuccessResponse(
+        responseData,
+        'Verification email sent successfully'
       );
     } else {
-      return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+      const validationError = new StandardError({
+        message: 'Invalid action',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        metadata: {
+          component: 'AuthVerifyEmailRoute',
+          operation: 'POST',
+          action,
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Invalid action',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
+      );
+      return errorResponse;
     }
   } catch (error) {
     logger.error('Email verification error:', error);
 
+    // Handle specialized ZodError with detailed validation feedback
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
-        { status: 400 }
+      const validationError = new StandardError({
+        message: 'Validation failed',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        cause: error,
+        metadata: {
+          component: 'AuthVerifyEmailRoute',
+          operation: 'POST',
+          validationErrors: error.errors,
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
       );
+      return errorResponse;
     }
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Handle all other errors with the generic error handler
+    const systemError = new Error('Internal server error during email verification');
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
+    );
+    return errorResponse;
   }
 }
 
 export async function GET(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'AuthVerifyEmailRoute',
+    operation: 'GET',
+  });
+
   try {
     // Handle email verification from URL query parameters
     const { searchParams } = new URL(request.url);
@@ -82,15 +140,32 @@ export async function GET(request: NextRequest) {
     const email = searchParams.get('email');
 
     if (!token) {
+      // For GET requests that return redirects, we still want to log the error
+      // but we need to return the redirect response
+      logger.warn('Email verification GET request missing token', {
+        component: 'AuthVerifyEmailRoute',
+        operation: 'GET',
+        email,
+      });
       return NextResponse.redirect(new URL('/auth/error?error=InvalidToken', request.url));
     }
 
     // In a real implementation, you would verify the token here
+    // For now, we'll simulate success
+
+    logger.info('Email verification GET request successful', {
+      component: 'AuthVerifyEmailRoute',
+      operation: 'GET',
+      email,
+    });
 
     // Redirect to success page
     return NextResponse.redirect(new URL('/auth/login?verified=true', request.url));
   } catch (error) {
-    logger.error('Email verification error:', error);
+    logger.error('Email verification GET error:', error);
+
+    // For GET requests that return redirects, we still want to log the error
+    // but we need to return the redirect response
     return NextResponse.redirect(new URL('/auth/error?error=VerificationFailed', request.url));
   }
 }

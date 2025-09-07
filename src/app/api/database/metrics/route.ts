@@ -7,12 +7,13 @@
  */
 
 import { createRoute } from '@/lib/api/route';
-import { ErrorHandlingService } from '@/lib/errors';
+import { ErrorHandlingService, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { DatabaseOptimizationService } from '@/lib/services/DatabaseOptimizationService';
 import { PrismaClient } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 /**
  * Component Traceability Matrix
@@ -54,12 +55,21 @@ function initializeServices() {
  * Fetch real-time database performance metrics
  */
 export const GET = createRoute({}, async ({ req }) => {
+  const errorHandler = getErrorHandler({
+    component: 'DatabaseMetricsAPI',
+    operation: 'GET',
+  });
+
   initializeServices();
 
   try {
     await validateApiPermission(req, { resource: 'metrics', action: 'read' });
     // Get optimization service metrics
-    const optimizationMetrics = optimizationService.getPerformanceMetrics();
+    const optimizationMetrics = await withAsyncErrorHandler(
+      async () => await optimizationService.getPerformanceMetrics(),
+      'Failed to retrieve optimization metrics',
+      { component: 'DatabaseMetricsAPI', operation: 'GET' }
+    );
 
     // Simulate real-time metrics (in production, these would come from actual monitoring)
     const currentMetrics = {
@@ -186,8 +196,7 @@ export const GET = createRoute({}, async ({ req }) => {
       },
     ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-    return NextResponse.json({
-      success: true,
+    const metricsData = {
       metrics: currentMetrics,
       comparisons,
       events,
@@ -196,9 +205,14 @@ export const GET = createRoute({}, async ({ req }) => {
       component: 'DatabaseMetricsAPI',
       userStories: COMPONENT_MAPPING.userStories,
       hypotheses: COMPONENT_MAPPING.hypotheses,
-    });
+    };
+
+    return errorHandler.createSuccessResponse(
+      metricsData,
+      'Database metrics retrieved successfully'
+    );
   } catch (error) {
-    errorHandlingService.processError(
+    const systemError = errorHandlingService.processError(
       error,
       'Failed to fetch database metrics',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
@@ -210,15 +224,13 @@ export const GET = createRoute({}, async ({ req }) => {
       }
     );
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to fetch database metrics',
-        message: errorHandlingService.getUserFriendlyMessage(error),
-        timestamp: new Date().toISOString(),
-      },
-      { status: 500 }
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Failed to fetch database metrics',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
     );
+    return errorResponse;
   }
 });
 
@@ -227,39 +239,72 @@ export const GET = createRoute({}, async ({ req }) => {
  * Record custom performance metrics
  */
 export const POST = createRoute({}, async ({ req }) => {
+  const errorHandler = getErrorHandler({
+    component: 'DatabaseMetricsAPI',
+    operation: 'POST',
+  });
+
   initializeServices();
 
   try {
     await validateApiPermission(req, { resource: 'metrics', action: 'update' });
-    const body = await req.json();
+    const body = await withAsyncErrorHandler(
+      () => req.json(),
+      'Failed to parse request body',
+      { component: 'DatabaseMetricsAPI', operation: 'POST' }
+    );
     const { metric, value, hypothesis, metadata } = body;
 
     // Validate required fields
     if (!metric || typeof value !== 'number' || !hypothesis) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Missing required fields: metric, value, hypothesis',
-          timestamp: new Date().toISOString(),
+      const validationError = new StandardError({
+        message: 'Missing required fields: metric, value, hypothesis',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        metadata: {
+          component: 'DatabaseMetricsAPI',
+          operation: 'POST',
+          receivedFields: Object.keys(body),
         },
-        { status: 400 }
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
       );
+      return errorResponse;
     }
 
     // For now, just log the performance metric (in production, store in database)
-    const { logInfo } = await import('@/lib/logger');
-    await logInfo('Performance metric recorded', { metric, value, hypothesis });
+    const logger = await withAsyncErrorHandler(
+      () => import('@/lib/logger'),
+      'Failed to import logger',
+      { component: 'DatabaseMetricsAPI', operation: 'POST' }
+    );
+    const { logInfo } = logger;
 
-    return NextResponse.json({
-      success: true,
-      message: 'Performance metric recorded successfully',
+    await withAsyncErrorHandler(
+      async () => {
+        logInfo('Performance metric recorded', { metric, value, hypothesis });
+        return Promise.resolve();
+      },
+      'Failed to log performance metric',
+      { component: 'DatabaseMetricsAPI', operation: 'POST' }
+    );
+
+    const metricData = {
       metric,
       value,
       hypothesis,
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    return errorHandler.createSuccessResponse(
+      metricData,
+      'Performance metric recorded successfully'
+    );
   } catch (error) {
-    errorHandlingService.processError(
+    const systemError = errorHandlingService.processError(
       error,
       'Failed to record performance metric',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
@@ -271,14 +316,12 @@ export const POST = createRoute({}, async ({ req }) => {
       }
     );
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to record performance metric',
-        message: errorHandlingService.getUserFriendlyMessage(error),
-        timestamp: new Date().toISOString(),
-      },
-      { status: 500 }
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Failed to record performance metric',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
     );
+    return errorResponse;
   }
 });

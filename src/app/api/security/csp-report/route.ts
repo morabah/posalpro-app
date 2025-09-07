@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auditLogger } from '@/lib/security/hardening';
 import { setCache } from '@/lib/redis';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 
 interface LegacyCspReport {
   'csp-report'?: {
@@ -37,6 +39,11 @@ function getClientIp(req: NextRequest): string {
 }
 
 export async function POST(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'SecurityCSPReportRoute',
+    operation: 'POST',
+  });
+
   try {
     const contentType = request.headers.get('content-type') || '';
     const ip = getClientIp(request);
@@ -47,7 +54,11 @@ export async function POST(request: NextRequest) {
     // Parse body according to content-type
     if (contentType.includes('application/reports+json')) {
       // Reporting API sends an array of report envelopes
-      const body = (await request.json()) as ReportingApiEnvelope[];
+      const body = await withAsyncErrorHandler(
+        () => request.json() as Promise<ReportingApiEnvelope[]>,
+        'Failed to parse CSP report body',
+        { component: 'SecurityCSPReportRoute', operation: 'POST' }
+      );
       reports = Array.isArray(body)
         ? body
             .filter(r => r && (r.type === 'csp-violation' || r.type === 'csp'))
@@ -55,7 +66,11 @@ export async function POST(request: NextRequest) {
         : [];
     } else {
       // Legacy application/csp-report or generic JSON
-      const body = (await request.json()) as LegacyCspReport | Record<string, unknown>;
+      const body = await withAsyncErrorHandler(
+        () => request.json() as Promise<LegacyCspReport | Record<string, unknown>>,
+        'Failed to parse CSP report body',
+        { component: 'SecurityCSPReportRoute', operation: 'POST' }
+      );
       const legacy = (body as LegacyCspReport)['csp-report'];
       if (legacy) {
         reports = [legacy as unknown as Record<string, unknown>];
@@ -87,7 +102,11 @@ export async function POST(request: NextRequest) {
 
       // Store with TTL (7 days) using cache layer (Redis in prod, memory in dev)
       const id = crypto.randomUUID();
-      await setCache(`csp:${id}`, normalized, 7 * 24 * 60 * 60);
+      await withAsyncErrorHandler(
+        () => setCache(`csp:${id}`, normalized, 7 * 24 * 60 * 60),
+        'Failed to cache CSP violation report',
+        { component: 'SecurityCSPReportRoute', operation: 'POST' }
+      );
 
       // Audit log entry for security monitoring
       auditLogger.log({
@@ -106,9 +125,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Acknowledge report with 200 OK and minimal body
-    return NextResponse.json({ status: 'ok' }, { status: 200 });
+    const responseData = { status: 'ok' };
+    return errorHandler.createSuccessResponse(
+      responseData,
+      'CSP violation report received successfully'
+    );
   } catch (error) {
-    // Return 200 to avoid noisy client errors; log handled above
-    return NextResponse.json({ status: 'error' }, { status: 200 });
+    // For security routes, return 200 to avoid noisy client errors
+    // but still log the error internally for monitoring
+    const securityError = new Error('CSP violation report processing failed');
+    const errorResponse = errorHandler.createErrorResponse(
+      securityError,
+      'CSP report processing failed',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      200 // Return 200 to avoid client errors
+    );
+    return errorResponse;
   }
 }

@@ -10,6 +10,8 @@ import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { ProductBulkDeleteSchema } from '@/features/products/schemas';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes } from '@/lib/errors';
 
 // ====================
 // Validation Schema
@@ -27,6 +29,11 @@ export const POST = createRoute(
     body: BulkDeleteSchema,
   },
   async ({ body, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'BULK_DELETE',
+    });
+
     try {
       logInfo('Bulk deleting products', {
         component: 'ProductAPI',
@@ -37,26 +44,31 @@ export const POST = createRoute(
       });
 
       // Use transaction to ensure data consistency
-      const result = await prisma.$transaction(async (tx: any) => {
-        // Delete product relationships first
-        const deletedRelationships = await tx.productRelationship.deleteMany({
-          where: {
-            OR: [{ sourceProductId: { in: body!.ids } }, { targetProductId: { in: body!.ids } }],
-          },
-        });
+      const result = await withAsyncErrorHandler(
+        () =>
+          prisma.$transaction(async (tx: any) => {
+            // Delete product relationships first
+            const deletedRelationships = await tx.productRelationship.deleteMany({
+              where: {
+                OR: [{ sourceProductId: { in: body!.ids } }, { targetProductId: { in: body!.ids } }],
+              },
+            });
 
-        // Delete products
-        const deletedProducts = await tx.product.deleteMany({
-          where: {
-            id: { in: body!.ids },
-          },
-        });
+            // Delete products
+            const deletedProducts = await tx.product.deleteMany({
+              where: {
+                id: { in: body!.ids },
+              },
+            });
 
-        return {
-          deletedProducts: deletedProducts.count,
-          deletedRelationships: deletedRelationships.count,
-        };
-      });
+            return {
+              deletedProducts: deletedProducts.count,
+              deletedRelationships: deletedRelationships.count,
+            };
+          }),
+        'Failed to perform bulk product deletion transaction',
+        { component: 'ProductAPI', operation: 'BULK_DELETE' }
+      );
 
       logInfo('Products bulk deleted successfully', {
         component: 'ProductAPI',
@@ -65,12 +77,15 @@ export const POST = createRoute(
         deletedRelationships: result.deletedRelationships,
       });
 
-      return Response.json(
-        ok({
-          deleted: result.deletedProducts,
-          deletedRelationships: result.deletedRelationships,
-          message: `Successfully deleted ${result.deletedProducts} products`,
-        })
+      const responseData = {
+        deleted: result.deletedProducts,
+        deletedRelationships: result.deletedRelationships,
+        message: `Successfully deleted ${result.deletedProducts} products`,
+      };
+
+      return errorHandler.createSuccessResponse(
+        responseData,
+        'Products bulk deleted successfully'
       );
     } catch (error) {
       logError('Failed to bulk delete products', {
@@ -78,7 +93,7 @@ export const POST = createRoute(
         operation: 'BULK_DELETE',
         error: error instanceof Error ? error.message : String(error),
       });
-      throw error;
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );

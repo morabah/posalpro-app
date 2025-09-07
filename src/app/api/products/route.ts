@@ -1,16 +1,17 @@
 /**
  * Product API Routes - Modern Architecture
  * User Story: US-4.1 (Product Management)
- * Hypimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-othesis: H5 (Modern data fetching improves performance and user experience)
+ * Hypothesis: H5 (Modern data fetching improves performance and user experience)
  *
  * ✅ SCHEMA CONSOLIDATION: All schemas imported from src/features/products/schemas.ts
  * ✅ REMOVED DUPLICATION: No inline schema definitions
+ * ✅ ERROR HANDLING: Uses centralized error handler for consistent, sanitized responses
  */
 
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 // Import consolidated schemas from feature folder
 import {
@@ -43,6 +44,11 @@ export const GET = createRoute(
     query: ProductQuerySchema,
   },
   async ({ query, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'GET',
+    });
+
     try {
       logInfo('Fetching products', {
         component: 'ProductAPI',
@@ -79,26 +85,31 @@ export const GET = createRoute(
       }
 
       // Execute query with cursor pagination
-      const rows = await prisma.product.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          price: true,
-          currency: true,
-          sku: true,
-          category: true,
-          tags: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy,
-        take: query!.limit + 1,
-        cursor: query!.cursor ? { id: query!.cursor } : undefined,
-        skip: query!.cursor ? 1 : 0,
-      });
+      const rows = await withAsyncErrorHandler(
+        () =>
+          prisma.product.findMany({
+            where,
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              price: true,
+              currency: true,
+              sku: true,
+              category: true,
+              tags: true,
+              isActive: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+            orderBy,
+            take: query!.limit + 1,
+            cursor: query!.cursor ? { id: query!.cursor } : undefined,
+            skip: query!.cursor ? 1 : 0,
+          }),
+        'Failed to fetch products from database',
+        { component: 'ProductAPI', operation: 'GET' }
+      );
 
       const hasMore = rows.length > query!.limit;
       const items = hasMore ? rows.slice(0, -1) : rows;
@@ -122,21 +133,19 @@ export const GET = createRoute(
         nextCursor,
       });
 
-      // Create the response data
-      const responsePayload = { ok: true, data: validatedResponse };
-
-      return new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorHandler.createSuccessResponse(
+        validatedResponse,
+        'Products retrieved successfully'
+      );
     } catch (error) {
+      // Error will be handled by the createRoute wrapper, but we log it here for additional context
       logError('Failed to fetch products', {
         component: 'ProductAPI',
         operation: 'GET',
         userId: user.id,
         error: error instanceof Error ? error.message : String(error),
       });
-      throw error;
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );
@@ -149,6 +158,11 @@ export const POST = createRoute(
     entitlements: ['feature.products.create'],
   },
   async ({ body, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'POST',
+    });
+
     try {
       logInfo('Creating product', {
         component: 'ProductAPI',
@@ -158,55 +172,69 @@ export const POST = createRoute(
       });
 
       // Check for duplicate SKU within tenant (tenant filter auto-injected by Prisma middleware)
-      const existingProduct = await prisma.product.findFirst({
-        where: { sku: body!.sku },
-        select: { id: true },
-      });
+      const existingProduct = await withAsyncErrorHandler(
+        () =>
+          prisma.product.findFirst({
+            where: { sku: body!.sku },
+            select: { id: true },
+          }),
+        'Failed to check for duplicate SKU',
+        { component: 'ProductAPI', operation: 'POST' }
+      );
 
       if (existingProduct) {
-        throw new Error(`Product with SKU ${body!.sku} already exists`);
+        const error = new Error(`Product with SKU ${body!.sku} already exists`);
+        (error as any).code = 'BUSINESS.DUPLICATE_ENTITY';
+        throw error;
       }
 
       // Create product
-      const product = await prisma.product.create({
-        data: {
-          name: body!.name,
-          description: body!.description,
-          price: body!.price,
-          currency: body!.currency,
-          sku: body!.sku,
-          category: body!.category,
-          tags: body!.tags,
-          attributes: body!.attributes ? JSON.parse(JSON.stringify(body!.attributes)) : undefined,
-          images: body!.images,
-          isActive: body!.isActive,
-          stockQuantity: body!.stockQuantity,
-          status: body!.status,
-          version: body!.version,
-          usageAnalytics: body!.usageAnalytics
-            ? JSON.parse(JSON.stringify(body!.usageAnalytics))
-            : undefined,
-          userStoryMappings: body!.userStoryMappings,
-          tenant: {
-            connect: {
-              id: (user as any).tenantId,
+      const product = await withAsyncErrorHandler(
+        () =>
+          prisma.product.create({
+            data: {
+              name: body!.name,
+              description: body!.description,
+              price: body!.price,
+              currency: body!.currency,
+              sku: body!.sku,
+              category: body!.category,
+              tags: body!.tags,
+              attributes: body!.attributes
+                ? JSON.parse(JSON.stringify(body!.attributes))
+                : undefined,
+              images: body!.images,
+              isActive: body!.isActive,
+              stockQuantity: body!.stockQuantity,
+              status: body!.status,
+              version: body!.version,
+              usageAnalytics: body!.usageAnalytics
+                ? JSON.parse(JSON.stringify(body!.usageAnalytics))
+                : undefined,
+              userStoryMappings: body!.userStoryMappings,
+              tenant: {
+                connect: {
+                  id: (user as any).tenantId,
+                },
+              },
             },
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          price: true,
-          currency: true,
-          sku: true,
-          category: true,
-          tags: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              price: true,
+              currency: true,
+              sku: true,
+              category: true,
+              tags: true,
+              isActive: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          }),
+        'Failed to create product in database',
+        { component: 'ProductAPI', operation: 'POST' }
+      );
 
       // Transform null values to appropriate defaults before validation
       const transformedProduct = {
@@ -228,27 +256,27 @@ export const POST = createRoute(
           operation: 'POST',
           productId: product.id,
         });
-        // Return the transformed product data anyway for now, but log the validation error
-        const responsePayload = { ok: true, data: transformedProduct };
-        return new Response(JSON.stringify(responsePayload), {
-          status: 201,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        // Still return success but with a warning - schema validation should not fail in production
+        return errorHandler.createSuccessResponse(
+          transformedProduct,
+          'Product created successfully (with schema warnings)'
+        );
       }
 
-      const responsePayload = { ok: true, data: validationResult.data };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorHandler.createSuccessResponse(
+        validationResult.data,
+        'Product created successfully',
+        201
+      );
     } catch (error) {
+      // Error will be handled by the createRoute wrapper, but we log it here for additional context
       logError('Failed to create product', {
         component: 'ProductAPI',
         operation: 'POST',
         userId: user.id,
         error: error instanceof Error ? error.message : String(error),
       });
-      throw error;
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );

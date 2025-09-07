@@ -16,6 +16,7 @@ import { ExecutionStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -53,6 +54,11 @@ const ApprovalQueueQuerySchema = z.object({
  * GET /api/approval-queue - Fetch approval queue items
  */
 export async function GET(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'ApprovalQueueAPI',
+    operation: 'GET',
+  });
+
   // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
   // Build-time or no-DB fallback to allow static build to complete
   const IS_BUILD_OR_NO_DB =
@@ -63,14 +69,14 @@ export async function GET(request: NextRequest) {
 
   // Always return early if no database URL (covers most build scenarios)
   if (!process.env.DATABASE_URL) {
-    return NextResponse.json({
-      data: {
+    return errorHandler.createSuccessResponse(
+      {
         items: [],
         totalCount: 0,
         hasMore: false,
       },
-      message: 'Approval queue data not available during build process',
-    });
+      'Approval queue data not available during build process'
+    );
   }
 
   try {
@@ -81,7 +87,21 @@ export async function GET(request: NextRequest) {
     await validateApiPermission(request, { resource: 'workflows', action: 'read' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const authError = new StandardError({
+        message: 'Unauthorized access attempt',
+        code: ErrorCodes.AUTH.UNAUTHORIZED,
+        metadata: {
+          component: 'ApprovalQueueAPI',
+          operation: 'GET',
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        authError,
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401
+      );
+      return errorResponse;
     }
 
     const { searchParams } = new URL(request.url);
@@ -104,7 +124,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Get executions with related data
-    const executions = await prisma.approvalExecution.findMany({
+    const executions = await withAsyncErrorHandler(
+      () =>
+        prisma.approvalExecution.findMany({
       where,
       include: {
         workflow: {
@@ -135,7 +157,10 @@ export async function GET(request: NextRequest) {
         decisions: true,
       },
       orderBy: { startedAt: 'desc' },
-    });
+    }),
+    'Failed to fetch approval executions from database',
+    { component: 'ApprovalQueueAPI', operation: 'GET' }
+  );
 
     // Transform executions into approval queue items
     const queueItems = executions.map((execution: any) => {
@@ -329,40 +354,33 @@ export async function GET(request: NextRequest) {
     const skip = (validatedQuery.page - 1) * validatedQuery.limit;
     const paginatedItems = filteredItems.slice(skip, skip + validatedQuery.limit);
 
-    const response = NextResponse.json({
-      success: true,
-      data: {
-        items: paginatedItems,
-        pagination: {
-          page: validatedQuery.page,
-          limit: validatedQuery.limit,
-          total: filteredItems.length,
-          totalPages: Math.ceil(filteredItems.length / validatedQuery.limit),
-        },
-        filters: {
-          assignee: validatedQuery.assignee,
-          priority: validatedQuery.priority,
-          stageType: validatedQuery.stageType,
-          status: validatedQuery.status,
-          riskLevel: validatedQuery.riskLevel,
-          urgency: validatedQuery.urgency,
-          showOverdueOnly: validatedQuery.showOverdueOnly,
-          showCriticalPathOnly: validatedQuery.showCriticalPathOnly,
-          showMyTasksOnly: validatedQuery.showMyTasksOnly,
-        },
+    const responseData = {
+      items: paginatedItems,
+      pagination: {
+        page: validatedQuery.page,
+        limit: validatedQuery.limit,
+        total: filteredItems.length,
+        totalPages: Math.ceil(filteredItems.length / validatedQuery.limit),
       },
-      message: 'Approval queue retrieved successfully',
-    });
+      filters: {
+        assignee: validatedQuery.assignee,
+        priority: validatedQuery.priority,
+        stageType: validatedQuery.stageType,
+        status: validatedQuery.status,
+        riskLevel: validatedQuery.riskLevel,
+        urgency: validatedQuery.urgency,
+        showOverdueOnly: validatedQuery.showOverdueOnly,
+        showCriticalPathOnly: validatedQuery.showCriticalPathOnly,
+        showMyTasksOnly: validatedQuery.showMyTasksOnly,
+      },
+    };
 
-    if (process.env.NODE_ENV === 'production') {
-      response.headers.set('Cache-Control', 'public, max-age=30, s-maxage=60');
-    } else {
-      response.headers.set('Cache-Control', 'no-store');
-    }
-
-    return response;
+    return errorHandler.createSuccessResponse(
+      responseData,
+      'Approval queue retrieved successfully'
+    );
   } catch (error) {
-    errorHandlingService.processError(
+    const processedError = errorHandlingService.processError(
       error,
       'Approval queue fetch failed',
       ErrorCodes.DATA.QUERY_FAILED,
@@ -374,18 +392,35 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    if (error instanceof StandardError) {
-      return createApiErrorResponse(error);
-    }
-
+    // Handle specialized ZodError with detailed validation feedback
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid query parameters', details: error.errors },
-        { status: 400 }
+      const validationError = new StandardError({
+        message: 'Invalid query parameters',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        cause: error,
+        metadata: {
+          component: 'ApprovalQueueAPI',
+          operation: 'GET',
+          validationErrors: error.errors,
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
       );
+      return errorResponse;
     }
 
-    return NextResponse.json({ error: 'Failed to fetch approval queue' }, { status: 500 });
+    // Handle all other errors with the generic error handler
+    const errorResponse = errorHandler.createErrorResponse(
+      processedError,
+      'Failed to fetch approval queue',
+      ErrorCodes.DATA.QUERY_FAILED,
+      500
+    );
+    return errorResponse;
   }
 }
 
@@ -393,6 +428,11 @@ export async function GET(request: NextRequest) {
  * POST /api/approval-queue/bulk-action - Bulk actions on approval queue items
  */
 export async function POST(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'ApprovalQueueAPI',
+    operation: 'POST',
+  });
+
   try {
     // Dynamic imports to avoid build-time database connections
     const { validateApiPermission } = await import('@/lib/auth/apiAuthorization');
@@ -401,26 +441,69 @@ export async function POST(request: NextRequest) {
     await validateApiPermission(request, { resource: 'workflows', action: 'update' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const authError = new StandardError({
+        message: 'Unauthorized access attempt',
+        code: ErrorCodes.AUTH.UNAUTHORIZED,
+        metadata: {
+          component: 'ApprovalQueueAPI',
+          operation: 'POST',
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        authError,
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401
+      );
+      return errorResponse;
     }
 
-    const body = await request.json();
+    const body = await withAsyncErrorHandler(
+      () => request.json(),
+      'Failed to parse request body',
+      { component: 'ApprovalQueueAPI', operation: 'POST' }
+    );
     const { action, itemIds } = body;
 
     if (!action || !itemIds || !Array.isArray(itemIds)) {
-      return NextResponse.json(
-        { error: 'Invalid request: action and itemIds array required' },
-        { status: 400 }
+      const validationError = new StandardError({
+        message: 'Invalid request: action and itemIds array required',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        metadata: {
+          component: 'ApprovalQueueAPI',
+          operation: 'POST',
+          body,
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
       );
+      return errorResponse;
     }
 
     // Validate action type
     const validActions = ['approve', 'reject', 'escalate', 'reassign'];
     if (!validActions.includes(action)) {
-      return NextResponse.json(
-        { error: `Invalid action. Must be one of: ${validActions.join(', ')}` },
-        { status: 400 }
+      const validationError = new StandardError({
+        message: `Invalid action. Must be one of: ${validActions.join(', ')}`,
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        metadata: {
+          component: 'ApprovalQueueAPI',
+          operation: 'POST',
+          action,
+          validActions,
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Invalid action type',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
       );
+      return errorResponse;
     }
 
     // Process bulk action based on type
@@ -432,47 +515,53 @@ export async function POST(request: NextRequest) {
 
     for (const itemId of itemIds) {
       try {
-        switch (action) {
-          case 'approve':
-            await prisma.approvalExecution.update({
-              where: { id: itemId },
-              data: {
-                status: 'COMPLETED',
-                completedAt: new Date(),
-              },
-            });
-            break;
+        await withAsyncErrorHandler(
+          async () => {
+            switch (action) {
+              case 'approve':
+                await prisma.approvalExecution.update({
+                  where: { id: itemId },
+                  data: {
+                    status: 'COMPLETED',
+                    completedAt: new Date(),
+                  },
+                });
+                break;
 
-          case 'reject':
-            await prisma.approvalExecution.update({
-              where: { id: itemId },
-              data: {
-                status: 'REJECTED',
-                completedAt: new Date(),
-              },
-            });
-            break;
+              case 'reject':
+                await prisma.approvalExecution.update({
+                  where: { id: itemId },
+                  data: {
+                    status: 'REJECTED',
+                    completedAt: new Date(),
+                  },
+                });
+                break;
 
-          case 'escalate':
-            // For now, just update the execution status to indicate escalation
-            // In a more complete implementation, this would involve stage-specific escalation
-            await prisma.approvalExecution.update({
-              where: { id: itemId },
-              data: {
-                // Could add an escalation flag or status here
-                // For now, we'll just update the timestamp
-              },
-            });
-            break;
+              case 'escalate':
+                // For now, just update the execution status to indicate escalation
+                // In a more complete implementation, this would involve stage-specific escalation
+                await prisma.approvalExecution.update({
+                  where: { id: itemId },
+                  data: {
+                    // Could add an escalation flag or status here
+                    // For now, we'll just update the timestamp
+                  },
+                });
+                break;
 
-          case 'reassign':
-            // This would require additional logic for reassignment
-            // For now, just update the execution (no-op since we don't have fields to update)
-            await prisma.approvalExecution.findUnique({
-              where: { id: itemId },
-            });
-            break;
-        }
+              case 'reassign':
+                // This would require additional logic for reassignment
+                // For now, just update the execution (no-op since we don't have fields to update)
+                await prisma.approvalExecution.findUnique({
+                  where: { id: itemId },
+                });
+                break;
+            }
+          },
+          `Failed to ${action} approval execution ${itemId}`,
+          { component: 'ApprovalQueueAPI', operation: 'POST' }
+        );
         updatedCount++;
       } catch (error) {
         errors.push(
@@ -481,28 +570,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        action,
-        updatedCount,
-        totalRequested: itemIds.length,
-        errors: errors.length > 0 ? errors : undefined,
-      },
-      message: `Bulk ${action} completed: ${updatedCount}/${itemIds.length} items processed`,
-    });
+    const responseData = {
+      action,
+      updatedCount,
+      totalRequested: itemIds.length,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+
+    return errorHandler.createSuccessResponse(
+      responseData,
+      `Bulk ${action} completed: ${updatedCount}/${itemIds.length} items processed`
+    );
   } catch (error) {
-    errorHandlingService.processError(error, 'Bulk action failed', ErrorCodes.DATA.UPDATE_FAILED, {
-      component: 'ApprovalQueueAPI',
-      operation: 'POST',
-      userStories: ['US-4.3'],
-      hypotheses: ['H7'],
-    });
+    const processedError = errorHandlingService.processError(
+      error,
+      'Bulk action failed',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      {
+        component: 'ApprovalQueueAPI',
+        operation: 'POST',
+        userStories: ['US-4.3'],
+        hypotheses: ['H7'],
+      }
+    );
 
-    if (error instanceof StandardError) {
-      return createApiErrorResponse(error);
-    }
-
-    return NextResponse.json({ error: 'Failed to process bulk action' }, { status: 500 });
+    // Handle all other errors with the generic error handler
+    const errorResponse = errorHandler.createErrorResponse(
+      processedError,
+      'Failed to process bulk action',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      500
+    );
+    return errorResponse;
   }
 }

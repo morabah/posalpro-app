@@ -11,6 +11,8 @@
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes } from '@/lib/errors';
 
 // Import consolidated schemas from feature folder
 import {
@@ -47,6 +49,11 @@ export const GET = createRoute(
     query: ProductQuerySchema,
   },
   async ({ query, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'GET',
+    });
+
     try {
       logInfo('Fetching products', {
         component: 'ProductAPI',
@@ -82,29 +89,34 @@ export const GET = createRoute(
       }
 
       // Execute query with cursor pagination
-      const rows = await prisma.product.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          price: true,
-          currency: true,
-          category: true,
-          tags: true,
-          attributes: true,
-          images: true,
-          isActive: true,
-          version: true,
-          usageAnalytics: true,
-          userStoryMappings: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy,
-        take: query!.limit + 1, // Take one extra to check if there are more
-        ...(query!.cursor ? { cursor: { id: query!.cursor }, skip: 1 } : {}),
-      });
+      const rows = await withAsyncErrorHandler(
+        () =>
+          prisma.product.findMany({
+            where,
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              price: true,
+              currency: true,
+              category: true,
+              tags: true,
+              attributes: true,
+              images: true,
+              isActive: true,
+              version: true,
+              usageAnalytics: true,
+              userStoryMappings: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+            orderBy,
+            take: query!.limit + 1, // Take one extra to check if there are more
+            ...(query!.cursor ? { cursor: { id: query!.cursor }, skip: 1 } : {}),
+          }),
+        'Failed to fetch products from database',
+        { component: 'ProductAPI', operation: 'GET' }
+      );
 
       // Determine if there are more pages
       const hasNextPage = rows.length > query!.limit;
@@ -133,18 +145,17 @@ export const GET = createRoute(
         nextCursor,
       });
 
-      const responsePayload = { ok: true, data: validatedResponse };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorHandler.createSuccessResponse(
+        validatedResponse,
+        `Successfully retrieved ${items.length} products`
+      );
     } catch (error) {
       logError('Failed to fetch products', {
         component: 'ProductAPI',
         operation: 'GET',
         error: error instanceof Error ? error.message : String(error),
       });
-      throw error;
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );
@@ -156,6 +167,11 @@ export const POST = createRoute(
     body: ProductCreateSchema,
   },
   async ({ body, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'POST',
+    });
+
     try {
       logInfo('Creating product', {
         component: 'ProductAPI',
@@ -164,43 +180,48 @@ export const POST = createRoute(
         productName: body!.name,
       });
 
-      const product = await prisma.product.create({
-        data: {
-          tenantId: 'tenant_default',
-          name: body!.name,
-          description: body!.description,
-          price: body!.price,
-          currency: body!.currency,
-          sku: body!.sku,
-          category: body!.category,
-          tags: body!.tags,
-          attributes: body!.attributes ? JSON.parse(JSON.stringify(body!.attributes)) : undefined,
-          images: body!.images,
-          isActive: body!.isActive,
-          version: body!.version,
-          usageAnalytics: body!.usageAnalytics
-            ? JSON.parse(JSON.stringify(body!.usageAnalytics))
-            : undefined,
-          userStoryMappings: body!.userStoryMappings,
-        },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          price: true,
-          currency: true,
-          category: true,
-          tags: true,
-          attributes: true,
-          images: true,
-          isActive: true,
-          version: true,
-          usageAnalytics: true,
-          userStoryMappings: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
+      const product = await withAsyncErrorHandler(
+        () =>
+          prisma.product.create({
+            data: {
+              tenantId: 'tenant_default',
+              name: body!.name,
+              description: body!.description,
+              price: body!.price,
+              currency: body!.currency,
+              sku: body!.sku,
+              category: body!.category,
+              tags: body!.tags,
+              attributes: body!.attributes ? JSON.parse(JSON.stringify(body!.attributes)) : undefined,
+              images: body!.images,
+              isActive: body!.isActive,
+              version: body!.version,
+              usageAnalytics: body!.usageAnalytics
+                ? JSON.parse(JSON.stringify(body!.usageAnalytics))
+                : undefined,
+              userStoryMappings: body!.userStoryMappings,
+            },
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              price: true,
+              currency: true,
+              category: true,
+              tags: true,
+              attributes: true,
+              images: true,
+              isActive: true,
+              version: true,
+              usageAnalytics: true,
+              userStoryMappings: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          }),
+        'Failed to create product in database',
+        { component: 'ProductAPI', operation: 'POST' }
+      );
 
       logInfo('Product created successfully', {
         component: 'ProductAPI',
@@ -226,25 +247,17 @@ export const POST = createRoute(
           productId: product.id,
         });
         // Return the transformed product data anyway for now, but log the validation error
-        const responsePayload = { ok: true, data: transformedProduct };
-        return new Response(JSON.stringify(responsePayload), {
-          status: 201,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return errorHandler.createSuccessResponse(transformedProduct, 'Product created successfully');
       }
 
-      const responsePayload = { ok: true, data: validationResult.data };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorHandler.createSuccessResponse(validationResult.data, 'Product created successfully');
     } catch (error) {
       logError('Failed to create product', {
         component: 'ProductAPI',
         operation: 'POST',
         error: error instanceof Error ? error.message : String(error),
       });
-      throw error;
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );

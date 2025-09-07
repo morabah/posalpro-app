@@ -6,11 +6,11 @@
 
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
 // Database imports removed - using Prisma directly
 import { logError, logInfo } from '@/lib/logger';
 import { getCache, setCache } from '@/lib/redis';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import type { Prisma } from '@prisma/client';
 import { CustomerStatus, CustomerTier } from '@prisma/client';
 
@@ -41,6 +41,11 @@ export const GET = createRoute(
     query: CustomerQuerySchema,
   },
   async ({ query, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'CustomerAPI',
+      operation: 'GET',
+    });
+
     try {
       logInfo('Fetching customers', {
         component: 'CustomerAPI',
@@ -126,23 +131,28 @@ export const GET = createRoute(
       }
 
       // Execute query with cursor pagination
-      const rows = await prisma.customer.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          industry: true,
-          status: true,
-          tier: true,
-          tags: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy,
-        take: query!.limit + 1, // Take one extra to check if there are more
-        ...(query!.cursor ? { cursor: { id: query!.cursor }, skip: 1 } : {}),
-      });
+      const rows = await withAsyncErrorHandler(
+        () =>
+          prisma.customer.findMany({
+            where,
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              industry: true,
+              status: true,
+              tier: true,
+              tags: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+            orderBy,
+            take: query!.limit + 1, // Take one extra to check if there are more
+            ...(query!.cursor ? { cursor: { id: query!.cursor }, skip: 1 } : {}),
+          }),
+        'Failed to fetch customers from database',
+        { component: 'CustomerAPI', operation: 'GET' }
+      );
 
       // Determine if there are more pages
       const hasNextPage = rows.length > query!.limit;
@@ -170,26 +180,28 @@ export const GET = createRoute(
         nextCursor,
       });
 
-      // Create the response data
-      const responsePayload = { ok: true, data: validatedResponse };
-
       // Cache the response for future requests (only for non-cursor requests)
       if (!query!.cursor) {
-        await setCache(cacheKey, validatedResponse, CUSTOMERS_CACHE_TTL);
+        await withAsyncErrorHandler(
+          () => setCache(cacheKey, validatedResponse, CUSTOMERS_CACHE_TTL),
+          'Failed to cache customer data',
+          { component: 'CustomerAPI', operation: 'GET' }
+        );
       }
 
-      return new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorHandler.createSuccessResponse(
+        validatedResponse,
+        'Customers retrieved successfully'
+      );
     } catch (error) {
+      // Error will be handled by the createRoute wrapper, but we log it here for additional context
       logError('Failed to fetch customers', {
         component: 'CustomerAPI',
         operation: 'GET',
         userId: user.id,
         error: error instanceof Error ? error.message : String(error),
       });
-      throw error;
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );
@@ -207,6 +219,11 @@ export const POST = createRoute(
     apiVersion: '1',
   },
   async ({ body, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'CustomerAPI',
+      operation: 'POST',
+    });
+
     logInfo('Creating customer', {
       component: 'CustomerAPI',
       operation: 'POST',
@@ -227,19 +244,24 @@ export const POST = createRoute(
       },
     };
 
-    const customer = await prisma.customer.create({
-      data: customerData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        industry: true,
-        status: true,
-        tier: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const customer = await withAsyncErrorHandler(
+      () =>
+        prisma.customer.create({
+          data: customerData,
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            industry: true,
+            status: true,
+            tier: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        }),
+      'Failed to create customer in database',
+      { component: 'CustomerAPI', operation: 'POST' }
+    );
 
     logInfo('Customer created successfully', {
       component: 'CustomerAPI',
@@ -257,14 +279,18 @@ export const POST = createRoute(
         operation: 'POST',
         customerId: customer.id,
       });
+      // Still return success but with a warning
+      return errorHandler.createSuccessResponse(
+        customer,
+        'Customer created successfully (with schema warnings)',
+        201
+      );
     }
 
-    return NextResponse.json(
-      {
-        ok: true,
-        data: validationResult.success ? validationResult.data : customer,
-      },
-      { status: 201 }
+    return errorHandler.createSuccessResponse(
+      validationResult.data,
+      'Customer created successfully',
+      201
     );
   }
 );

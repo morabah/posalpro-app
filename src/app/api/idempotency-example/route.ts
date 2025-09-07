@@ -7,11 +7,17 @@ import { assertIdempotent } from '@/server/api/idempotency';
 import { NextRequest, NextResponse } from 'next/server';
 import { logError, logInfo } from '@/lib/logger';
 import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 // Simulate a database/storage for this example
 const processedRequests = new Map<string, any>();
 
 export async function POST(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'IdempotencyExampleAPI',
+    operation: 'POST',
+  });
+
   try {
     // Apply idempotency protection
     // This will prevent duplicate processing even if the client retries
@@ -21,7 +27,11 @@ export async function POST(request: NextRequest) {
     });
 
     // Parse request body
-    const body = await request.json();
+    const body = await withAsyncErrorHandler(
+      () => request.json(),
+      'Failed to parse request body',
+      { component: 'IdempotencyExampleAPI', operation: 'POST' }
+    );
     const { action, data } = body;
 
     // Simulate processing time
@@ -44,47 +54,58 @@ export async function POST(request: NextRequest) {
     logInfo('Processed idempotency request', {
       action: action,
       requestId: requestId,
-      component: 'IdempotencyExample'
+      component: 'IdempotencyExampleAPI'
     });
 
-    return NextResponse.json({
-      success: true,
-      data: processedData,
-      message: 'Request processed successfully',
-      note: 'This request is now protected against duplicates for 24 hours'
-    });
+    return errorHandler.createSuccessResponse(
+      processedData,
+      'Request processed successfully'
+    );
 
   } catch (error) {
-    // assertIdempotent throws Response objects with appropriate status codes
+    // Preserve specialized idempotency error handling
     if (error instanceof Response) {
       return error;
     }
 
-    // Handle unexpected errors
-    const processedError = ErrorHandlingService.getInstance().processError(error, 'Unexpected error in idempotency example', ErrorCodes.SYSTEM.UNKNOWN);
-    logError('Unexpected error in idempotency example', processedError, {
-      component: 'idempotency-example',
+    // Handle unexpected errors with the new error handler
+    logError('Unexpected error in idempotency example', {
+      component: 'IdempotencyExampleAPI',
       operation: 'POST',
+      error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Internal server error'
-      },
-      { status: 500 }
+
+    const systemError = ErrorHandlingService.getInstance().processError(
+      error,
+      'Unexpected error in idempotency example',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR
     );
+
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
+    );
+    return errorResponse;
   }
 }
 
 export async function GET() {
+  const errorHandler = getErrorHandler({
+    component: 'IdempotencyExampleAPI',
+    operation: 'GET',
+  });
+
   // Return list of processed requests for demonstration
   const requests = Array.from(processedRequests.values());
+  const requestsData = {
+    totalProcessed: requests.length,
+    requests: requests.slice(-10) // Last 10 requests
+  };
 
-  return NextResponse.json({
-    success: true,
-    data: {
-      totalProcessed: requests.length,
-      requests: requests.slice(-10) // Last 10 requests
-    }
-  });
+  return errorHandler.createSuccessResponse(
+    requestsData,
+    'Processed requests retrieved successfully'
+  );
 }

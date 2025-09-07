@@ -1,7 +1,14 @@
 import { logInfo } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
+import { getErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'ProductRelationshipsAPI',
+    operation: 'GET',
+  });
+
   try {
     logInfo('Product relationships API called', {
       component: 'ProductRelationshipsAPI',
@@ -11,18 +18,18 @@ export async function GET(request: NextRequest) {
     });
 
     // For now, return empty array - this can be expanded later
-    return NextResponse.json({
-      success: true,
-      data: [],
-      message: 'Product relationships retrieved successfully',
-    });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to retrieve product relationships',
-      },
-      { status: 500 }
+    const relationshipsData: unknown[] = [];
+    return errorHandler.createSuccessResponse(
+      relationshipsData,
+      'Product relationships retrieved successfully'
     );
+  } catch (error) {
+    const errorResponse = errorHandler.createErrorResponse(
+      error,
+      'Failed to retrieve product relationships',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
+    );
+    return errorResponse;
   }
 }

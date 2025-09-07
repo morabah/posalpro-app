@@ -10,8 +10,9 @@
 import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
-import { errorHandlingService } from '@/lib/errors';
+import { errorHandlingService, ErrorCodes, StandardError } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 // Import consolidated schemas from feature folder
 import { CustomerSchema, CustomerUpdateSchema } from '@/features/customers/schemas';
@@ -61,22 +62,45 @@ export const GET = createRoute(
     roles: ['admin', 'sales', 'viewer', 'System Administrator', 'Administrator'],
   },
   async ({ req, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'CustomerAPI',
+      operation: 'GET_BY_ID',
+    });
+
+    let id: string | undefined;
+
     try {
-      const id = req.url.split('/').pop()?.split('?')[0];
+      id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json(fail('VALIDATION_ERROR', 'Customer ID is required'), { status: 400 });
+        const validationError = new StandardError({
+          message: 'Customer ID is required',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'CustomerAPI',
+            operation: 'GET_BY_ID',
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          validationError,
+          'Validation failed',
+          ErrorCodes.VALIDATION.INVALID_INPUT,
+          400
+        );
+        return errorResponse;
       }
 
       logInfo('Fetching customer by ID', {
         component: 'CustomerAPI',
         operation: 'GET_BY_ID',
         userId: user.id,
-        customerId: id,
+        customerId: id || 'unknown',
       });
 
       // Fetch customer with comprehensive relationships
-      const customer = await prisma.customer.findUnique({
+      const customer = await withAsyncErrorHandler(
+        () =>
+          prisma.customer.findUnique({
         where: { id },
         include: {
           proposals: {
@@ -131,13 +155,31 @@ export const GET = createRoute(
             },
           },
         },
+      }),
+      'Failed to fetch customer from database',
+      { component: 'CustomerAPI', operation: 'GET_BY_ID' }
+    );
+
+    if (!customer) {
+      const notFoundError = new StandardError({
+        message: 'Customer not found',
+        code: ErrorCodes.DATA.NOT_FOUND,
+        metadata: {
+          component: 'CustomerAPI',
+          operation: 'GET_BY_ID',
+          customerId: id || 'unknown',
+        },
       });
+      const errorResponse = errorHandler.createErrorResponse(
+        notFoundError,
+        'Customer not found',
+        ErrorCodes.DATA.NOT_FOUND,
+        404
+      );
+      return errorResponse;
+    }
 
-      if (!customer) {
-        return Response.json(fail('NOT_FOUND', 'Customer not found'), { status: 404 });
-      }
-
-      // Calculate customer analytics
+    // Calculate customer analytics
       const now = new Date();
       const proposalStatistics = {
         totalProposals: customer._count.proposals,
@@ -201,7 +243,7 @@ export const GET = createRoute(
         component: 'CustomerAPI',
         operation: 'GET_BY_ID',
         userId: user.id,
-        customerId: id,
+        customerId: id || 'unknown',
         customerName: customer.name,
       });
 
@@ -211,7 +253,7 @@ export const GET = createRoute(
         logError('Customer schema validation failed', validationResult.error, {
           component: 'CustomerAPI',
           operation: 'GET_BY_ID',
-          customerId: id,
+          customerId: id || 'unknown',
         });
         // Return the customer data anyway for now, but log the validation error
         const responsePayload = { ok: true, data: transformedCustomer };
@@ -221,23 +263,19 @@ export const GET = createRoute(
         });
       }
 
-      const responsePayload = { ok: true, data: validationResult.data };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch (error) {
-      const processedError = errorHandlingService.processError(
-        error,
-        'Failed to fetch customer by ID',
-        undefined,
-        {
-          component: 'CustomerAPI',
-          operation: 'GET_BY_ID',
-          userId: user.id,
-        }
+      return errorHandler.createSuccessResponse(
+        validationResult.data,
+        'Customer retrieved successfully'
       );
-      throw processedError;
+    } catch (error) {
+      logError('Failed to fetch customer by ID', {
+        component: 'CustomerAPI',
+        operation: 'GET_BY_ID',
+        error: error instanceof Error ? error.message : String(error),
+        userId: user.id,
+        customerId: id || 'unknown',
+      });
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );
@@ -252,94 +290,158 @@ export const PUT = createRoute(
     body: CustomerUpdateSchema,
   },
   async ({ body, req, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'CustomerAPI',
+      operation: 'PUT',
+    });
+
+    let id: string | undefined;
+
     try {
-      const id = req.url.split('/').pop()?.split('?')[0];
+      id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json(fail('VALIDATION_ERROR', 'Customer ID is required'), { status: 400 });
+        const validationError = new StandardError({
+          message: 'Customer ID is required',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'CustomerAPI',
+            operation: 'PUT',
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          validationError,
+          'Validation failed',
+          ErrorCodes.VALIDATION.INVALID_INPUT,
+          400
+        );
+        return errorResponse;
       }
 
       logInfo('Updating customer', {
         component: 'CustomerAPI',
         operation: 'PUT',
         userId: user.id,
-        customerId: id,
+        customerId: id || 'unknown',
         updatedFields: Object.keys(body!),
       });
 
       // Check if customer exists
-      const existingCustomer = await prisma.customer.findUnique({
-        where: { id },
-        select: { id: true, name: true, email: true },
-      });
+      const existingCustomer = await withAsyncErrorHandler(
+        () =>
+          prisma.customer.findUnique({
+            where: { id },
+            select: { id: true, name: true, email: true },
+          }),
+        'Failed to check if customer exists',
+        { component: 'CustomerAPI', operation: 'PUT' }
+      );
 
       if (!existingCustomer) {
-        return Response.json(fail('NOT_FOUND', 'Customer not found'), { status: 404 });
+        const notFoundError = new StandardError({
+          message: 'Customer not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'CustomerAPI',
+            operation: 'PUT',
+            customerId: id || 'unknown',
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          notFoundError,
+          'Customer not found',
+          ErrorCodes.DATA.NOT_FOUND,
+          404
+        );
+        return errorResponse;
       }
 
       // Check for email uniqueness if email is being updated
       if (body!.email && body!.email !== existingCustomer.email) {
-        const emailExists = await prisma.customer.findFirst({
-          where: {
-            email: body!.email,
-            id: { not: id },
-          },
-          select: { id: true },
-        });
+        const emailExists = await withAsyncErrorHandler(
+          () =>
+            prisma.customer.findFirst({
+              where: {
+                email: body!.email,
+                id: { not: id },
+              },
+              select: { id: true },
+            }),
+          'Failed to check email uniqueness',
+          { component: 'CustomerAPI', operation: 'PUT' }
+        );
 
         if (emailExists) {
-          return Response.json(
-            { error: 'A customer with this email already exists' },
-            { status: 400 }
+          const duplicateError = new StandardError({
+            message: 'A customer with this email already exists',
+            code: ErrorCodes.DATA.DUPLICATE_ENTRY,
+            metadata: {
+              component: 'CustomerAPI',
+              operation: 'PUT',
+              email: body!.email,
+              customerId: id || 'unknown',
+            },
+          });
+          const errorResponse = errorHandler.createErrorResponse(
+            duplicateError,
+            'Duplicate customer email',
+            ErrorCodes.DATA.DUPLICATE_ENTRY,
+            400
           );
+          return errorResponse;
         }
       }
 
       // Update customer with metadata tracking
-      const updatedCustomer = await prisma.customer.update({
-        where: { id },
-        data: {
-          ...body!,
-          metadata: {
-            lastUpdatedBy: user.id,
-            lastUpdatedAt: new Date().toISOString(),
-            updateHistory: {
-              timestamp: new Date().toISOString(),
-              updatedBy: user.id,
-              updatedFields: Object.keys(body!),
+      const updatedCustomer = await withAsyncErrorHandler(
+        () =>
+          prisma.customer.update({
+            where: { id },
+            data: {
+              ...body!,
+              metadata: {
+                lastUpdatedBy: user.id,
+                lastUpdatedAt: new Date().toISOString(),
+                updateHistory: {
+                  timestamp: new Date().toISOString(),
+                  updatedBy: user.id,
+                  updatedFields: Object.keys(body!),
+                },
+                hypothesis: ['H4', 'H6'],
+                userStories: ['US-4.1', 'US-4.2'],
+              },
+              lastContact: new Date(),
             },
-            hypothesis: ['H4', 'H6'],
-            userStories: ['US-4.1', 'US-4.2'],
-          },
-          lastContact: new Date(),
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-          website: true,
-          address: true,
-          industry: true,
-          companySize: true,
-          revenue: true,
-          tier: true,
-          status: true,
-          tags: true,
-          segmentation: true,
-          riskScore: true,
-          ltv: true,
-          createdAt: true,
-          updatedAt: true,
-          lastContact: true,
-        },
-      });
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              website: true,
+              address: true,
+              industry: true,
+              companySize: true,
+              revenue: true,
+              tier: true,
+              status: true,
+              tags: true,
+              segmentation: true,
+              riskScore: true,
+              ltv: true,
+              createdAt: true,
+              updatedAt: true,
+              lastContact: true,
+            },
+          }),
+        'Failed to update customer in database',
+        { component: 'CustomerAPI', operation: 'PUT' }
+      );
 
       logInfo('Customer updated successfully', {
         component: 'CustomerAPI',
         operation: 'PUT',
         userId: user.id,
-        customerId: id,
+        customerId: id || 'unknown',
         customerName: updatedCustomer.name,
       });
 
@@ -349,7 +451,7 @@ export const PUT = createRoute(
         logError('Customer schema validation failed after update', validationResult.error, {
           component: 'CustomerAPI',
           operation: 'PUT',
-          customerId: id,
+          customerId: id || 'unknown',
         });
         // Return the customer data anyway for now, but log the validation error
         const responsePayload = { ok: true, data: updatedCustomer };
@@ -359,23 +461,19 @@ export const PUT = createRoute(
         });
       }
 
-      const responsePayload = { ok: true, data: validationResult.data };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch (error) {
-      const processedError = errorHandlingService.processError(
-        error,
-        'Failed to update customer',
-        undefined,
-        {
-          component: 'CustomerAPI',
-          operation: 'PUT',
-          userId: user.id,
-        }
+      return errorHandler.createSuccessResponse(
+        validationResult.data,
+        'Customer updated successfully'
       );
-      throw processedError;
+    } catch (error) {
+      logError('Failed to update customer', {
+        component: 'CustomerAPI',
+        operation: 'PUT',
+        error: error instanceof Error ? error.message : String(error),
+        userId: user.id,
+        customerId: id || 'unknown',
+      });
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );
@@ -389,38 +487,79 @@ export const DELETE = createRoute(
     roles: ['admin', 'System Administrator', 'Administrator'],
   },
   async ({ req, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'CustomerAPI',
+      operation: 'DELETE',
+    });
+
+    let id: string | undefined;
+
     try {
-      const id = req.url.split('/').pop()?.split('?')[0];
+      id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json(fail('VALIDATION_ERROR', 'Customer ID is required'), { status: 400 });
+        const validationError = new StandardError({
+          message: 'Customer ID is required',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'CustomerAPI',
+            operation: 'DELETE',
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          validationError,
+          'Validation failed',
+          ErrorCodes.VALIDATION.INVALID_INPUT,
+          400
+        );
+        return errorResponse;
       }
 
       logInfo('Deleting customer', {
         component: 'CustomerAPI',
         operation: 'DELETE',
         userId: user.id,
-        customerId: id,
+        customerId: id || 'unknown',
       });
 
       // Check if customer exists and get usage information
-      const customer = await prisma.customer.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          _count: {
+      const customer = await withAsyncErrorHandler(
+        () =>
+          prisma.customer.findUnique({
+            where: { id },
             select: {
-              proposals: true,
-              contacts: true,
+              id: true,
+              name: true,
+              status: true,
+              _count: {
+                select: {
+                  proposals: true,
+                  contacts: true,
+                },
+              },
             },
-          },
-        },
-      });
+          }),
+        'Failed to check customer existence for deletion',
+        { component: 'CustomerAPI', operation: 'DELETE' }
+      );
 
       if (!customer) {
-        return Response.json(fail('NOT_FOUND', 'Customer not found'), { status: 404 });
+        const notFoundError = new StandardError({
+          message: 'Customer not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'CustomerAPI',
+            operation: 'DELETE',
+            customerId: id || 'unknown',
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          notFoundError,
+          'Customer not found',
+          ErrorCodes.DATA.NOT_FOUND,
+          404
+        );
+        return errorResponse;
       }
 
       // Check if customer has proposals (always soft delete customers with data)
@@ -428,71 +567,73 @@ export const DELETE = createRoute(
 
       if (hasProposals || customer._count.contacts > 0) {
         // Soft delete by marking as inactive
-        const archivedCustomer = await prisma.customer.update({
-          where: { id },
-          data: {
-            status: 'INACTIVE',
-            metadata: {
-              archivedBy: user.id,
-              archivedAt: new Date().toISOString(),
-              archivedReason: 'Customer archived due to existing proposals/contacts',
-            },
-          },
-          select: {
-            id: true,
-            name: true,
-            status: true,
-            updatedAt: true,
-          },
-        });
+        const archivedCustomer = await withAsyncErrorHandler(
+          () =>
+            prisma.customer.update({
+              where: { id },
+              data: {
+                status: 'INACTIVE',
+                metadata: {
+                  archivedBy: user.id,
+                  archivedAt: new Date().toISOString(),
+                  archivedReason: 'Customer archived due to existing proposals/contacts',
+                },
+              },
+              select: {
+                id: true,
+                name: true,
+                status: true,
+                updatedAt: true,
+              },
+            }),
+          'Failed to archive customer',
+          { component: 'CustomerAPI', operation: 'DELETE' }
+        );
 
         logInfo('Customer archived successfully', {
           component: 'CustomerAPI',
           operation: 'DELETE',
           userId: user.id,
-          customerId: id,
+          customerId: id || 'unknown',
           customerName: customer.name,
           action: 'archived',
         });
 
-        const responsePayload = { ok: true, data: archivedCustomer };
-        return new Response(JSON.stringify(responsePayload), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return errorHandler.createSuccessResponse(
+          archivedCustomer,
+          'Customer archived successfully'
+        );
       } else {
         // Hard delete if no proposals or contacts
-        await prisma.customer.delete({
-          where: { id },
-        });
+        await withAsyncErrorHandler(
+          () => prisma.customer.delete({ where: { id } }),
+          'Failed to delete customer',
+          { component: 'CustomerAPI', operation: 'DELETE' }
+        );
 
         logInfo('Customer deleted successfully', {
           component: 'CustomerAPI',
           operation: 'DELETE',
           userId: user.id,
-          customerId: id,
+          customerId: id || 'unknown',
           customerName: customer.name,
           action: 'deleted',
         });
 
-        const responsePayload = { ok: true, data: { id, deleted: true } };
-        return new Response(JSON.stringify(responsePayload), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return errorHandler.createSuccessResponse(
+          { id, deleted: true },
+          'Customer deleted successfully'
+        );
       }
     } catch (error) {
-      const processedError = errorHandlingService.processError(
-        error,
-        'Failed to delete customer',
-        undefined,
-        {
-          component: 'CustomerAPI',
-          operation: 'DELETE',
-          userId: user.id,
-        }
-      );
-      throw processedError;
+      logError('Failed to delete customer', {
+        component: 'CustomerAPI',
+        operation: 'DELETE',
+        error: error instanceof Error ? error.message : String(error),
+        userId: user.id,
+        customerId: id || 'unknown',
+      });
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );

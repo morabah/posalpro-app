@@ -1,6 +1,7 @@
 import { createRoute } from '@/lib/api/route';
 import { getStripe, isStripeReady } from '@/lib/billing/stripe';
 import { prisma } from '@/lib/db/prisma';
+import { getErrorHandler } from '@/server/api/errorHandler';
 import { z } from 'zod';
 
 const Body = z.object({
@@ -12,12 +13,34 @@ const Body = z.object({
 export const POST = createRoute(
   { requireAuth: true, body: Body, apiVersion: '1' },
   async ({ body, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'BillingCheckoutAPI',
+      operation: 'POST',
+    });
+
     const userWithTenant = user as typeof user & { tenantId: string };
+
+    // Check if Stripe is configured
     if (!isStripeReady()) {
-      return new Response('Billing not configured', { status: 501 });
+      const error = new Error('Billing service is not configured');
+      (error as any).code = 'API.SERVICE_UNAVAILABLE';
+      throw error;
     }
-    const stripe = getStripe();
-    const tenant = await prisma.tenant.findUnique({ where: { id: userWithTenant.tenantId } });
+
+    const stripe = await getStripe();
+
+    // Fetch tenant information
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: userWithTenant.tenantId },
+    });
+
+    if (!tenant) {
+      const error = new Error('Tenant not found');
+      (error as any).code = 'DATA.NOT_FOUND';
+      throw error;
+    }
+
+    // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: body!.priceId, quantity: 1 }],
@@ -29,11 +52,12 @@ export const POST = createRoute(
         `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/billing/cancel`,
       client_reference_id: `${userWithTenant.tenantId}`,
       metadata: { tenantId: userWithTenant.tenantId, userId: user.id },
-      ...(tenant?.stripeCustomerId ? { customer: tenant.stripeCustomerId } : {}),
+      ...((tenant as any).stripeCustomerId ? { customer: (tenant as any).stripeCustomerId } : {}),
     });
-    return new Response(JSON.stringify({ url: session.url }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+
+    return errorHandler.createSuccessResponse(
+      { url: session.url },
+      'Checkout session created successfully'
+    );
   }
 );

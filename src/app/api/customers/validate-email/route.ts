@@ -21,6 +21,7 @@ import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 /**
  * Component Traceability Matrix:
@@ -33,7 +34,12 @@ import { z } from 'zod';
  * GET /api/customers/validate-email - Validate email uniqueness
  */
 export async function GET(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'CustomersEmailValidationRoute',
+    operation: 'GET',
+  });
   const start = Date.now();
+
   try {
     // Handle authentication and permission validation
     let authContext;
@@ -49,20 +55,21 @@ export async function GET(request: NextRequest) {
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Unauthorized access attempt',
-          code: ErrorCodes.AUTH.UNAUTHORIZED,
-          metadata: {
-            component: 'CustomersEmailValidationRoute',
-            operation: 'validateEmail',
-          },
-        }),
+      const authError = new StandardError({
+        message: 'Unauthorized access attempt',
+        code: ErrorCodes.AUTH.UNAUTHORIZED,
+        metadata: {
+          component: 'CustomersEmailValidationRoute',
+          operation: 'validateEmail',
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        authError,
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
-        401,
-        { userFriendlyMessage: 'You must be logged in to validate emails' }
+        401
       );
+      return errorResponse;
     }
 
     // Parse and validate query parameters
@@ -91,15 +98,20 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if email exists
-    const existingCustomer = await prisma.customer.findFirst({
-      where,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        status: true,
-      },
-    });
+    const existingCustomer = await withAsyncErrorHandler(
+      () =>
+        prisma.customer.findFirst({
+          where,
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            status: true,
+          },
+        }),
+      'Failed to check email existence in database',
+      { component: 'CustomersEmailValidationRoute', operation: 'GET' }
+    );
 
     const exists = Boolean(existingCustomer);
 
@@ -113,109 +125,97 @@ export async function GET(request: NextRequest) {
       hypothesis: 'H1',
     });
 
-    const res = NextResponse.json({
-      success: true,
-      data: {
-        exists,
-        conflictingCustomer: existingCustomer || undefined,
-      },
-      message: exists ? 'Email already exists' : 'Email is available',
-    });
+    const validationResult = {
+      exists,
+      conflictingCustomer: existingCustomer || undefined,
+    };
 
-    if (process.env.NODE_ENV === 'production') {
-      res.headers.set('Cache-Control', 'public, max-age=30, s-maxage=60');
-    } else {
-      res.headers.set('Cache-Control', 'no-store');
-    }
-
-    return res;
-  } catch (error) {
-    const ehs = errorHandlingService;
-    const standardError = ehs.processError(
-      error,
-      'Failed to validate email',
-      ErrorCodes.VALIDATION.OPERATION_FAILED,
-      {
-        component: 'CustomersEmailValidationRoute',
-        operation: 'validateEmail',
-        queryParams: Object.fromEntries(new URL(request.url).searchParams),
-      }
+    return errorHandler.createSuccessResponse(
+      validationResult,
+      exists ? 'Email already exists' : 'Email is available'
     );
-
+  } catch (error) {
     logError('Customers Email Validation: Validation failed', {
       component: 'CustomersEmailValidationRoute',
       operation: 'validateEmail',
-      error: standardError.message,
+      error: error instanceof Error ? error.message : String(error),
       loadTime: Date.now() - start,
       userStory: 'US-1.1',
       hypothesis: 'H1',
     });
 
+    // Handle specialized ZodError with detailed validation feedback
     if (error instanceof z.ZodError) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Invalid email validation parameters',
-          code: ErrorCodes.VALIDATION.INVALID_INPUT,
-          cause: error,
-          metadata: {
-            component: 'CustomersEmailValidationRoute',
-            operation: 'validateEmail',
-            queryParameters: Object.fromEntries(new URL(request.url).searchParams),
-          },
-        }),
-        'Validation failed',
-        ErrorCodes.VALIDATION.INVALID_INPUT,
-        400,
-        {
-          userFriendlyMessage: 'Please provide a valid email for validation.',
-          details: error.errors,
-        }
-      );
-    }
-
-    if (isPrismaError(error)) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: `Database error during email validation: ${getPrismaErrorMessage(error.code)}`,
-          code: ErrorCodes.DATA.DATABASE_ERROR,
-          cause: error,
-          metadata: {
-            component: 'CustomersEmailValidationRoute',
-            operation: 'validateEmail',
-            prismaErrorCode: error.code,
-          },
-        }),
-        'Database error',
-        ErrorCodes.DATA.DATABASE_ERROR,
-        500,
-        {
-          userFriendlyMessage:
-            'An error occurred while validating the email. Please try again later.',
-        }
-      );
-    }
-
-    if (error instanceof StandardError) {
-      return createApiErrorResponse(error);
-    }
-
-    return createApiErrorResponse(
-      new StandardError({
-        message: 'Failed to validate email',
-        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
-        cause: error instanceof Error ? error : undefined,
+      const validationError = new StandardError({
+        message: 'Invalid email validation parameters',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        cause: error,
         metadata: {
           component: 'CustomersEmailValidationRoute',
           operation: 'validateEmail',
+          queryParameters: Object.fromEntries(new URL(request.url).searchParams),
         },
-      }),
+      });
+
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
+      );
+      return errorResponse;
+    }
+
+    // Handle specialized PrismaError with database-specific messaging
+    if (isPrismaError(error)) {
+      const dbError = new StandardError({
+        message: `Database error during email validation: ${getPrismaErrorMessage(error.code)}`,
+        code: ErrorCodes.DATA.DATABASE_ERROR,
+        cause: error,
+        metadata: {
+          component: 'CustomersEmailValidationRoute',
+          operation: 'validateEmail',
+          prismaErrorCode: error.code,
+        },
+      });
+
+      const errorResponse = errorHandler.createErrorResponse(
+        dbError,
+        'Database error',
+        ErrorCodes.DATA.DATABASE_ERROR,
+        500
+      );
+      return errorResponse;
+    }
+
+    // Handle existing StandardError instances
+    if (error instanceof StandardError) {
+      const errorResponse = errorHandler.createErrorResponse(
+        error,
+        'Email validation failed',
+        error.code
+      );
+      return errorResponse;
+    }
+
+    // Handle all other errors with generic error handler
+    const systemError = new StandardError({
+      message: 'Failed to validate email',
+      code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      cause: error instanceof Error ? error : undefined,
+      metadata: {
+        component: 'CustomersEmailValidationRoute',
+        operation: 'validateEmail',
+        queryParams: Object.fromEntries(new URL(request.url).searchParams),
+      },
+    });
+
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
       'Internal error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
-      500,
-      {
-        userFriendlyMessage:
-          'An unexpected error occurred while validating the email. Please try again later.',
-      }
+      500
     );
+    return errorResponse;
   }
 }

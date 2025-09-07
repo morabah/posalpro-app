@@ -8,6 +8,8 @@ import { logger } from '@/lib/logger';
 import { CustomerProposalsQuerySchema } from '@/features/customers/schemas';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 
 import {
   customerQueries,
@@ -41,6 +43,11 @@ import { z } from 'zod';
  * GET /api/customers/[id]/proposals - Get customer proposal history
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const errorHandler = getErrorHandler({
+    component: 'CustomerProposalsAPI',
+    operation: 'GET',
+  });
+
   try {
     await validateApiPermission(request, 'customers:read');
     const { id } = await params;
@@ -48,7 +55,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const authError = new StandardError({
+        message: 'Unauthorized access attempt',
+        code: ErrorCodes.AUTH.UNAUTHORIZED,
+        metadata: {
+          component: 'CustomerProposalsAPI',
+          operation: 'GET',
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        authError,
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401
+      );
+      return errorResponse;
     }
 
     // Parse and validate query parameters
@@ -57,13 +78,33 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const validatedQuery = CustomerProposalsQuerySchema.parse(queryParams);
 
     // Check if customer exists
-    const customer = await prisma.customer.findUnique({
-      where: { id },
-      select: { id: true, name: true, status: true },
-    });
+    const customer = await withAsyncErrorHandler(
+      () =>
+        prisma.customer.findUnique({
+          where: { id },
+          select: { id: true, name: true, status: true },
+        }),
+      'Failed to check customer existence',
+      { component: 'CustomerProposalsAPI', operation: 'GET' }
+    );
 
     if (!customer) {
-      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+      const notFoundError = new StandardError({
+        message: 'Customer not found',
+        code: ErrorCodes.DATA.NOT_FOUND,
+        metadata: {
+          component: 'CustomerProposalsAPI',
+          operation: 'GET',
+          customerId: id,
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        notFoundError,
+        'Customer not found',
+        ErrorCodes.DATA.NOT_FOUND,
+        404
+      );
+      return errorResponse;
     }
 
     // Build where clause for filtering proposals
@@ -160,35 +201,45 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       : baseSelect;
 
     // Optimized transaction for proposals data and count
-    const [proposals, total] = await prisma.$transaction([
-      prisma.proposal.findMany({
-        where,
-        select: proposalSelect,
-        orderBy: {
-          [validatedQuery.sortBy]: validatedQuery.sortOrder,
-        },
-        skip,
-        take: validatedQuery.limit,
-      }),
-      prisma.proposal.count({ where }),
-    ]);
+    const [proposals, total] = await withAsyncErrorHandler(
+      () =>
+        prisma.$transaction([
+          prisma.proposal.findMany({
+            where,
+            select: proposalSelect,
+            orderBy: {
+              [validatedQuery.sortBy]: validatedQuery.sortOrder,
+            },
+            skip,
+            take: validatedQuery.limit,
+          }),
+          prisma.proposal.count({ where }),
+        ]),
+      'Failed to fetch customer proposals',
+      { component: 'CustomerProposalsAPI', operation: 'GET' }
+    );
 
     // Calculate statistics if requested
     let statistics = null;
     if (validatedQuery.includeStatistics) {
-      const allProposals = await prisma.proposal.findMany({
-        where: { customerId: id },
-        select: {
-          status: true,
-          priority: true,
-          value: true,
-          currency: true,
-          createdAt: true,
-          approvedAt: true,
-          updatedAt: true,
-          dueDate: true,
-        },
-      });
+      const allProposals = await withAsyncErrorHandler(
+        () =>
+          prisma.proposal.findMany({
+            where: { customerId: id },
+            select: {
+              status: true,
+              priority: true,
+              value: true,
+              currency: true,
+              createdAt: true,
+              approvedAt: true,
+              updatedAt: true,
+              dueDate: true,
+            },
+          }),
+        'Failed to fetch customer proposals for statistics',
+        { component: 'CustomerProposalsAPI', operation: 'GET' }
+      );
 
       statistics = {
         totalProposals: allProposals.length,
@@ -245,42 +296,75 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Track customer proposals access for analytics
     await trackCustomerProposalsAccessEvent(session.user.id, id, customer.name, total);
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        customer: {
-          id: customer.id,
-          name: customer.name,
-          status: customer.status,
-        },
-        proposals: transformedProposals,
-        statistics,
-        pagination: {
-          page: validatedQuery.page,
-          limit: validatedQuery.limit,
-          total,
-          totalPages: Math.ceil(total / validatedQuery.limit),
-        },
-        filters: {
-          status: validatedQuery.status,
-          priority: validatedQuery.priority,
-          startDate: validatedQuery.startDate,
-          endDate: validatedQuery.endDate,
-        },
+    const responseData = {
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        status: customer.status,
       },
-      message: 'Customer proposals retrieved successfully',
-    });
+      proposals: transformedProposals,
+      statistics,
+      pagination: {
+        page: validatedQuery.page,
+        limit: validatedQuery.limit,
+        total,
+        totalPages: Math.ceil(total / validatedQuery.limit),
+      },
+      filters: {
+        status: validatedQuery.status,
+        priority: validatedQuery.priority,
+        startDate: validatedQuery.startDate,
+        endDate: validatedQuery.endDate,
+      },
+    };
+
+    return errorHandler.createSuccessResponse(
+      responseData,
+      'Customer proposals retrieved successfully'
+    );
   } catch (error) {
     logger.error(`Failed to fetch proposals for customer`, error);
 
+    // Handle specialized ZodError with detailed validation feedback
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid query parameters', details: error.errors },
-        { status: 400 }
+      const validationError = new StandardError({
+        message: 'Invalid query parameters',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        cause: error,
+        metadata: {
+          component: 'CustomerProposalsAPI',
+          operation: 'GET',
+          validationErrors: error.errors,
+        },
+      });
+
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
       );
+      return errorResponse;
     }
 
-    return NextResponse.json({ error: 'Failed to fetch customer proposals' }, { status: 500 });
+    // Handle all other errors with the generic error handler
+    const systemError = new StandardError({
+      message: 'Failed to fetch customer proposals',
+      code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      cause: error instanceof Error ? error : undefined,
+      metadata: {
+        component: 'CustomerProposalsAPI',
+        operation: 'GET',
+      },
+    });
+
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Failed to fetch customer proposals',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
+    );
+    return errorResponse;
   }
 }
 
@@ -331,26 +415,34 @@ async function trackCustomerProposalsAccessEvent(
   proposalsCount: number
 ) {
   try {
-    await prisma.hypothesisValidationEvent.create({
-      data: {
-        userId,
-        hypothesis: 'H6', // Requirement Extraction
-        userStoryId: 'US-4.2',
-        componentId: 'CustomerProposals',
-        action: 'customer_proposals_accessed',
-        measurementData: {
-          customerId,
-          customerName,
-          proposalsCount,
-          timestamp: new Date(),
-        },
-        targetValue: 2.0, // Target: proposals list load in <2 seconds
-        actualValue: 1.5, // Actual load time
-        performanceImprovement: 0.5, // 25% improvement
-        userRole: 'user',
-        sessionId: `customer_proposals_${Date.now()}`,
-      },
-    });
+    await withAsyncErrorHandler(
+      () =>
+        prisma.hypothesisValidationEvent.create({
+          data: {
+            userId,
+            hypothesis: 'H6', // Requirement Extraction
+            userStoryId: 'US-4.2',
+            componentId: 'CustomerProposals',
+            action: 'customer_proposals_accessed',
+            measurementData: {
+              customerId,
+              customerName,
+              proposalsCount,
+              timestamp: new Date(),
+            },
+            targetValue: 2.0, // Target: proposals list load in <2 seconds
+            actualValue: 1.5, // Actual load time
+            performanceImprovement: 0.5, // 25% improvement
+            userRole: 'user',
+            sessionId: `customer_proposals_${Date.now()}`,
+          },
+        }),
+      'Failed to track customer proposals analytics',
+      {
+        component: 'CustomerProposalsAPI',
+        operation: 'trackCustomerProposalsAccessEvent'
+      }
+    );
   } catch (error) {
     logger.warn('Failed to track customer proposals access event:', error);
     // Don't fail the main operation if analytics tracking fails

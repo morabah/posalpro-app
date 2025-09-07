@@ -11,6 +11,8 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import prisma from '@/lib/db/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
 import { NextResponse } from 'next/server';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 
 /**
  * Component Traceability Matrix:
@@ -37,9 +39,15 @@ type ProductWithCategory = {
  * GET /api/products/categories - Get all product categories with statistics
  */
 export const GET = createRoute({}, async ({ req, user }) => {
+  const errorHandler = getErrorHandler({
+    component: 'ProductCategoriesAPI',
+    operation: 'GET',
+  });
+
   await validateApiPermission(req, 'products:read');
   const start = Date.now();
   const { requestId } = getRequestMeta(new Headers(req.headers));
+
   try {
     // Parse query parameters
     const { searchParams } = new URL(req.url);
@@ -47,21 +55,26 @@ export const GET = createRoute({}, async ({ req, user }) => {
     const activeOnly = searchParams.get('activeOnly') !== 'false'; // Default to true
 
     // Get all products to extract categories
-    const products = await prisma.product.findMany({
-      where: activeOnly ? { isActive: true } : undefined,
-      select: {
-        id: true,
-        category: true,
-        price: true,
-        currency: true,
-        isActive: true,
-        _count: {
+    const products = await withAsyncErrorHandler(
+      () =>
+        prisma.product.findMany({
+          where: activeOnly ? { isActive: true } : undefined,
           select: {
-            proposalProducts: true,
+            id: true,
+            category: true,
+            price: true,
+            currency: true,
+            isActive: true,
+            _count: {
+              select: {
+                proposalProducts: true,
+              },
+            },
           },
-        },
-      },
-    });
+        }),
+      'Failed to fetch products for category extraction',
+      { component: 'ProductCategoriesAPI', operation: 'GET' }
+    );
 
     // Extract unique categories and build statistics
     const categoryMap = new Map<
@@ -131,10 +144,8 @@ export const GET = createRoute({}, async ({ req, user }) => {
     });
     recordLatency(duration);
 
-    if (includeStats) {
-      const res = NextResponse.json({
-        success: true,
-        data: {
+    const responseData = includeStats
+      ? {
           categories,
           statistics: {
             totalCategories: categories.length,
@@ -146,57 +157,41 @@ export const GET = createRoute({}, async ({ req, user }) => {
                 ? categories.reduce((sum, cat) => sum + cat.count, 0) / categories.length
                 : 0,
           },
-        },
-        message: 'Product categories retrieved successfully',
-      });
-      res.headers.set('Server-Timing', `app;dur=${duration}`);
-      if (requestId) res.headers.set('x-request-id', String(requestId));
-      if (process.env.NODE_ENV === 'production') {
-        res.headers.set('Cache-Control', 'public, max-age=120, s-maxage=240');
-      } else {
-        res.headers.set('Cache-Control', 'no-store');
-      }
-      return res;
-    }
+        }
+      : {
+          categories: categories.map(cat => ({
+            name: cat.name,
+            count: cat.count,
+            avgPrice: cat.avgPrice,
+            totalUsage: cat.totalUsage,
+          })),
+        };
 
-    // Return simplified category list
-    const simplifiedCategories = categories.map(cat => ({
-      name: cat.name,
-      count: cat.count,
-      avgPrice: cat.avgPrice,
-      totalUsage: cat.totalUsage,
-    }));
-
-    const res = NextResponse.json({
-      success: true,
-      data: {
-        categories: simplifiedCategories,
-      },
-      message: 'Product categories retrieved successfully',
-    });
-    res.headers.set('Server-Timing', `app;dur=${duration}`);
-    if (requestId) res.headers.set('x-request-id', String(requestId));
-    if (process.env.NODE_ENV === 'production') {
-      res.headers.set('Cache-Control', 'public, max-age=120, s-maxage=240');
-    } else {
-      res.headers.set('Cache-Control', 'no-store');
-    }
-    return res;
+    return errorHandler.createSuccessResponse(
+      responseData,
+      'Product categories retrieved successfully'
+    );
   } catch (error) {
     const duration = Date.now() - start;
     logger.error('ProductCategories GET error', {
       requestId,
       duration,
-      code: 'CATEGORIES_FETCH_FAILED',
+      code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
       route: '/api/products/categories',
       method: 'GET',
       message: 'Failed to fetch product categories',
+      error: error instanceof Error ? error.message : String(error),
     });
     recordError('CATEGORIES_FETCH_FAILED');
-    const res = NextResponse.json({ error: 'Failed to fetch product categories' }, { status: 500 });
-    res.headers.set('Server-Timing', `app;dur=${duration}`);
-    if (requestId) res.headers.set('x-request-id', String(requestId));
-    return res;
+
+    const systemError = new Error('Failed to fetch product categories');
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Failed to fetch product categories',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
+    );
+    return errorResponse;
   }
 });
 
@@ -205,24 +200,32 @@ export const GET = createRoute({}, async ({ req, user }) => {
  */
 async function trackCategoryAccessEvent(userId: string, categoriesCount: number) {
   try {
-    await prisma.hypothesisValidationEvent.create({
-      data: {
-        userId,
-        hypothesis: 'H3', // SME Contribution Efficiency
-        userStoryId: 'US-3.1',
-        componentId: 'ProductCategories',
-        action: 'categories_accessed',
-        measurementData: {
-          categoriesCount,
-          timestamp: new Date(),
-        },
-        targetValue: 1.0, // Target: categories load in <1 second
-        actualValue: 0.6, // Actual load time
-        performanceImprovement: 0.4, // 40% improvement
-        userRole: 'user',
-        sessionId: `categories_access_${Date.now()}`,
-      },
-    });
+    await withAsyncErrorHandler(
+      () =>
+        prisma.hypothesisValidationEvent.create({
+          data: {
+            userId,
+            hypothesis: 'H3', // SME Contribution Efficiency
+            userStoryId: 'US-3.1',
+            componentId: 'ProductCategories',
+            action: 'categories_accessed',
+            measurementData: {
+              categoriesCount,
+              timestamp: new Date(),
+            },
+            targetValue: 1.0, // Target: categories load in <1 second
+            actualValue: 0.6, // Actual load time
+            performanceImprovement: 0.4, // 40% improvement
+            userRole: 'user',
+            sessionId: `categories_access_${Date.now()}`,
+          },
+        }),
+      'Failed to track category access analytics',
+      {
+        component: 'ProductCategoriesAPI',
+        operation: 'trackCategoryAccessEvent'
+      }
+    );
   } catch (error) {
     logger.warn('Failed to track category access event', {
       error: error instanceof Error ? error.message : String(error),

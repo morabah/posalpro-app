@@ -13,15 +13,36 @@ import { getCache, setCache } from '@/lib/redis';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { StandardError } from '@/lib/errors';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'ProductRelationshipVersionsAPI',
+    operation: 'GET',
+  });
+
   try {
     await validateApiPermission(request, { resource: 'proposals', action: 'read' });
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      const authError = new StandardError({
+        message: 'Unauthorized access attempt',
+        code: ErrorCodes.AUTH.UNAUTHORIZED,
+        metadata: {
+          component: 'ProductRelationshipVersionsAPI',
+          operation: 'GET',
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        authError,
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401
+      );
+      return errorResponse;
     }
 
     const url = new URL(request.url);
@@ -40,32 +61,57 @@ export async function GET(request: NextRequest) {
       `products:relationships:versions:${productIdParam || 'unknown'}:` +
       `${cursorCreatedAt ? cursorCreatedAt.getTime() : 'start'}:${cursorId ?? 'none'}:${limit}`;
     try {
-      const cached = await getCache(cacheKey);
+      const cached = await withAsyncErrorHandler(
+        () => getCache(cacheKey),
+        'Failed to retrieve cached data',
+        { component: 'ProductRelationshipVersionsAPI', operation: 'CACHE_CHECK' }
+      );
       if (cached && typeof cached === 'object') {
-        const res = NextResponse.json(cached as Record<string, unknown>);
-        res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=180');
-        return res;
+        return errorHandler.createSuccessResponse(
+          cached as Record<string, unknown>,
+          'Product relationship versions retrieved from cache'
+        );
       }
     } catch {
       // ignore cache errors
     }
+
     if (!productIdParam) {
-      return NextResponse.json({ success: false, error: 'productId is required' }, { status: 400 });
+      const validationError = new StandardError({
+        message: 'productId is required',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        metadata: {
+          component: 'ProductRelationshipVersionsAPI',
+          operation: 'GET',
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
+      );
+      return errorResponse;
     }
 
     // Accept either Product.id (cuid) or Product.sku
     let resolvedProductId = productIdParam as string;
     if (!/^[a-z0-9]{25,}$/i.test(productIdParam)) {
       // Likely SKU; try lookup
-      const prod = await prisma.product.findUnique({
-        where: {
-          tenantId_sku: {
-            tenantId: 'tenant_default',
-            sku: productIdParam,
-          },
-        },
-        select: { id: true },
-      });
+      const prod = await withAsyncErrorHandler(
+        () =>
+          prisma.product.findUnique({
+            where: {
+              tenantId_sku: {
+                tenantId: 'tenant_default',
+                sku: productIdParam,
+              },
+            },
+            select: { id: true },
+          }),
+        'Failed to lookup product by SKU',
+        { component: 'ProductRelationshipVersionsAPI', operation: 'PRODUCT_LOOKUP' }
+      );
       if (prod?.id) resolvedProductId = prod.id;
     }
 
@@ -79,40 +125,47 @@ export async function GET(request: NextRequest) {
         ? PrismaLocal.sql`AND (pv."createdAt" < ${cursorCreatedAt} OR (pv."createdAt" = ${cursorCreatedAt} AND pv.id < ${cursorId}))`
         : PrismaLocal.empty;
 
-    const rows = (await prisma.$queryRaw(
-      PrismaLocal.sql`
-        SELECT pv.id,
-               pv."proposalId",
-               pv.version,
-               pv."createdAt",
-               pv."createdBy",
-               u.name as "createdByName",
-               pv."changeType",
-               pv."changesSummary",
-               (
-                 SELECT COALESCE(SUM((COALESCE((p->>'quantity')::numeric,0)) *
-                                    (COALESCE((p->>'unitPrice')::numeric,0)) *
-                                    (1 - COALESCE((p->>'discount')::numeric,0)/100)), 0)
-                 FROM jsonb_array_elements(pv.snapshot->'products') AS p
-               ) AS "totalValue"
-        FROM proposal_versions pv
-        LEFT JOIN users u ON u.id = pv."createdBy"
-        WHERE ${resolvedProductId} = ANY (pv."productIds")
-        ${cursorCondition}
-        ORDER BY pv."createdAt" DESC, pv.id DESC
-        LIMIT ${limit + 1}
-      `
-    )) as Array<{
-      id: string;
-      proposalId: string;
-      version: number;
-      createdAt: Date;
-      createdBy: string | null;
-      createdByName: string | null;
-      changeType: string;
-      changesSummary: string | null;
-      totalValue: any;
-    }>;
+    const rows = await withAsyncErrorHandler(
+      () =>
+        prisma.$queryRaw(
+          PrismaLocal.sql`
+            SELECT pv.id,
+                   pv."proposalId",
+                   pv.version,
+                   pv."createdAt",
+                   pv."createdBy",
+                   u.name as "createdByName",
+                   pv."changeType",
+                   pv."changesSummary",
+                   (
+                     SELECT COALESCE(SUM((COALESCE((p->>'quantity')::numeric,0)) *
+                                        (COALESCE((p->>'unitPrice')::numeric,0)) *
+                                        (1 - COALESCE((p->>'discount')::numeric,0)/100)), 0)
+                     FROM jsonb_array_elements(pv.snapshot->'products') AS p
+                   ) AS "totalValue"
+            FROM proposal_versions pv
+            LEFT JOIN users u ON u.id = pv."createdBy"
+            WHERE ${resolvedProductId} = ANY (pv."productIds")
+            ${cursorCondition}
+            ORDER BY pv."createdAt" DESC, pv.id DESC
+            LIMIT ${limit + 1}
+          `
+        ) as Promise<
+          Array<{
+            id: string;
+            proposalId: string;
+            version: number;
+            createdAt: Date;
+            createdBy: string | null;
+            createdByName: string | null;
+            changeType: string;
+            changesSummary: string | null;
+            totalValue: any;
+          }>
+        >,
+      'Failed to execute raw SQL query for version history',
+      { component: 'ProductRelationshipVersionsAPI', operation: 'RAW_SQL_QUERY' }
+    );
 
     const hasMore = rows.length > limit;
     const pageRows = hasMore ? rows.slice(0, -1) : rows;
@@ -167,28 +220,33 @@ export async function GET(request: NextRequest) {
 
     try {
       // 120s Redis TTL inside setCache implementation
-      await setCache(cacheKey, payload, 120);
+      await withAsyncErrorHandler(
+        () => setCache(cacheKey, payload, 120),
+        'Failed to cache version history data',
+        { component: 'ProductRelationshipVersionsAPI', operation: 'CACHE_SET' }
+      );
     } catch {
       // ignore cache errors
     }
 
-    const response = NextResponse.json(payload);
-    if (process.env.NODE_ENV === 'production') {
-      response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=180');
-    } else {
-      response.headers.set('Cache-Control', 'no-store');
-    }
-    return response;
+    return errorHandler.createSuccessResponse(
+      payload,
+      'Product relationship version history retrieved successfully'
+    );
   } catch (error) {
-    errorHandlingService.processError(
+    const systemError = errorHandlingService.processError(
       error,
       'Failed to fetch product relationship version history',
       ErrorCodes.DATA.FETCH_FAILED,
       { component: 'ProductRelationshipVersionsAPI', operation: 'GET' }
     );
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch product relationship version history' },
-      { status: 500 }
+
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Failed to fetch product relationship version history',
+      ErrorCodes.DATA.FETCH_FAILED,
+      500
     );
+    return errorResponse;
   }
 }

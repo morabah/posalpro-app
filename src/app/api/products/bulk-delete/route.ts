@@ -11,6 +11,7 @@ import prisma from '@/lib/db/prisma';
 import { logInfo } from '@/lib/logger';
 import { ProductBulkDeleteSchema } from '@/features/products/schemas';
 import type { Prisma } from '@prisma/client';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 // Define proper types for bulk delete operations
 type ProductForDeletion = {
@@ -34,11 +35,16 @@ export const POST = createRoute(
     requireAuth: true,
   },
   async ({ user, body, requestId }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductBulkDeleteAPI',
+      operation: 'POST',
+    });
+
     const { ids } = body;
 
     // Log bulk delete attempt
     logInfo('Bulk deleting products', {
-      component: 'ProductBulkDeleteRoute',
+      component: 'ProductBulkDeleteAPI',
       operation: 'POST',
       productIds: ids,
       userId: user.id,
@@ -46,35 +52,40 @@ export const POST = createRoute(
     });
 
     // Perform bulk delete in transaction
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // First, get the products to be deleted (for logging)
-      const productsToDelete = await tx.product.findMany({
-        where: {
-          id: {
-            in: ids,
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          sku: true,
-        },
-      });
+    const result = await withAsyncErrorHandler(
+      () =>
+        prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+          // First, get the products to be deleted (for logging)
+          const productsToDelete = await tx.product.findMany({
+            where: {
+              id: {
+                in: ids,
+              },
+            },
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+            },
+          });
 
-      // Delete the products
-      const deleteResult = await tx.product.deleteMany({
-        where: {
-          id: {
-            in: ids,
-          },
-        },
-      });
+          // Delete the products
+          const deleteResult = await tx.product.deleteMany({
+            where: {
+              id: {
+                in: ids,
+              },
+            },
+          });
 
-      return {
-        deleted: deleteResult.count,
-        products: productsToDelete,
-      };
-    });
+          return {
+            deleted: deleteResult.count,
+            products: productsToDelete,
+          };
+        }),
+      'Failed to perform bulk product deletion',
+      { component: 'ProductBulkDeleteAPI', operation: 'POST' }
+    );
 
     // Log successful deletion
     logInfo('Products bulk deleted successfully', {
@@ -90,15 +101,18 @@ export const POST = createRoute(
       requestId,
     });
 
-    return Response.json(
-      ok({
-        deleted: result.deleted,
-        products: result.products.map((p: ProductForDeletion) => ({
-          id: p.id,
-          name: p.name,
-          sku: p.sku,
-        })),
-      })
+    const responseData = {
+      deleted: result.deleted,
+      products: result.products.map((p: ProductForDeletion) => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+      })),
+    };
+
+    return errorHandler.createSuccessResponse(
+      responseData,
+      'Products bulk deleted successfully'
     );
   }
 );

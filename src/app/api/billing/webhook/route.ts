@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     let eventId: string | undefined;
 
     if (useSignature) {
-      const stripe = getStripe();
+      const stripe = await getStripe();
       const body = await req.text();
       const sig = req.headers.get('stripe-signature');
       if (!sig) return new Response('missing signature', { status: 400 });

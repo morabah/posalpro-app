@@ -11,6 +11,8 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { EntityType, Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { StandardError } from '@/lib/errors';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -74,6 +76,11 @@ export const GET = createRoute(
     apiVersion: '1',
   },
   async ({ req, query, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'WorkflowsRoute',
+      operation: 'GET',
+    });
+
     const validatedQuery = query!;
 
     const where: Prisma.ApprovalWorkflowWhereInput = {
@@ -118,54 +125,59 @@ export const GET = createRoute(
     let workflows: any[] = []; // Complex Prisma query result with nested includes
     if (useCursor) {
       const take = validatedQuery.limit + 1;
-      const list = await prisma.approvalWorkflow.findMany({
-        where,
-        include: workflowInclude,
-        orderBy: [{ id: 'desc' }],
-        take,
-        cursor: cursorId ? { id: cursorId } : undefined,
-        skip: cursorId ? 1 : 0,
-      });
+      const list = await withAsyncErrorHandler(
+        () =>
+          prisma.approvalWorkflow.findMany({
+            where,
+            include: workflowInclude,
+            orderBy: [{ id: 'desc' }],
+            take,
+            cursor: cursorId ? { id: cursorId } : undefined,
+            skip: cursorId ? 1 : 0,
+          }),
+        'Failed to fetch workflows with cursor pagination',
+        { component: 'WorkflowsRoute', operation: 'GET' }
+      );
       const hasMore = list.length > validatedQuery.limit;
       workflows = hasMore ? list.slice(0, -1) : list;
 
-      const response = NextResponse.json({
-        success: true,
-        data: {
-          workflows,
-          pagination: {
-            limit: validatedQuery.limit,
-            hasMore,
-            nextCursor: hasMore ? { cursorId: workflows[workflows.length - 1]?.id ?? null } : null,
-          },
-          filters: {
-            entityType: validatedQuery.entityType,
-            status: validatedQuery.status,
-            search: validatedQuery.search,
-          },
+      const responseData = {
+        workflows,
+        pagination: {
+          limit: validatedQuery.limit,
+          hasMore,
+          nextCursor: hasMore ? { cursorId: workflows[workflows.length - 1]?.id ?? null } : null,
         },
-        message: 'Workflows retrieved successfully',
-      });
-      if (process.env.NODE_ENV === 'production') {
-        response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
-      } else {
-        response.headers.set('Cache-Control', 'no-store');
-      }
-      return response;
+        filters: {
+          entityType: validatedQuery.entityType,
+          status: validatedQuery.status,
+          search: validatedQuery.search,
+        },
+      };
+
+      return errorHandler.createSuccessResponse(
+        responseData,
+        'Workflows retrieved successfully'
+      );
     }
 
-    const tx = await prisma.$transaction([
-      prisma.approvalWorkflow.count({ where }),
-      prisma.approvalWorkflow.findMany({
-        where,
-        include: workflowInclude,
-        orderBy: {
-          [validatedQuery.sortBy]: validatedQuery.sortOrder,
-        },
-        skip,
-        take: validatedQuery.limit,
-      }),
-    ]);
+    const tx = await withAsyncErrorHandler(
+      () =>
+        prisma.$transaction([
+          prisma.approvalWorkflow.count({ where }),
+          prisma.approvalWorkflow.findMany({
+            where,
+            include: workflowInclude,
+            orderBy: {
+              [validatedQuery.sortBy]: validatedQuery.sortOrder,
+            },
+            skip,
+            take: validatedQuery.limit,
+          }),
+        ]),
+      'Failed to fetch workflows with offset pagination',
+      { component: 'WorkflowsRoute', operation: 'GET' }
+    );
     total = tx[0] as number;
     workflows = tx[1] as any[];
 
@@ -189,33 +201,32 @@ export const GET = createRoute(
     });
 
     if (validatedQuery.search) {
-      await trackWorkflowSearchEvent(user.id, validatedQuery.search, total);
+      await withAsyncErrorHandler(
+        () => trackWorkflowSearchEvent(user.id, validatedQuery.search || '', total),
+        'Failed to track workflow search analytics',
+        { component: 'WorkflowsRoute', operation: 'GET' }
+      );
     }
 
-    const response = NextResponse.json({
-      success: true,
-      data: {
-        workflows: transformedWorkflows,
-        pagination: {
-          page: validatedQuery.page,
-          limit: validatedQuery.limit,
-          total,
-          totalPages: Math.ceil(total / validatedQuery.limit),
-        },
-        filters: {
-          entityType: validatedQuery.entityType,
-          status: validatedQuery.status,
-          search: validatedQuery.search,
-        },
+    const responseData = {
+      workflows: transformedWorkflows,
+      pagination: {
+        page: validatedQuery.page,
+        limit: validatedQuery.limit,
+        total,
+        totalPages: Math.ceil(total / validatedQuery.limit),
       },
-      message: 'Workflows retrieved successfully',
-    });
-    if (process.env.NODE_ENV === 'production') {
-      response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
-    } else {
-      response.headers.set('Cache-Control', 'no-store');
-    }
-    return response;
+      filters: {
+        entityType: validatedQuery.entityType,
+        status: validatedQuery.status,
+        search: validatedQuery.search,
+      },
+    };
+
+    return errorHandler.createSuccessResponse(
+      responseData,
+      'Workflows retrieved successfully'
+    );
   }
 );
 
@@ -228,44 +239,72 @@ export const POST = createRoute(
     apiVersion: '1',
   },
   async ({ body, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'WorkflowsRoute',
+      operation: 'POST',
+    });
+
     const validatedData = body!;
 
-    const existingWorkflow = await prisma.approvalWorkflow.findFirst({
-      where: {
-        name: validatedData.name,
-        entityType: validatedData.entityType,
-      },
-      select: { id: true },
-    });
+    const existingWorkflow = await withAsyncErrorHandler(
+      () =>
+        prisma.approvalWorkflow.findFirst({
+          where: {
+            name: validatedData.name,
+            entityType: validatedData.entityType,
+          },
+          select: { id: true },
+        }),
+      'Failed to check for existing workflow',
+      { component: 'WorkflowsRoute', operation: 'POST' }
+    );
 
     if (existingWorkflow) {
-      return NextResponse.json(
-        { error: 'A workflow with this name already exists for this entity type' },
-        { status: 400 }
+      const duplicateError = new StandardError({
+        message: 'A workflow with this name already exists for this entity type',
+        code: ErrorCodes.DATA.DUPLICATE_ENTRY,
+        metadata: {
+          component: 'WorkflowsRoute',
+          operation: 'POST',
+          entityType: validatedData.entityType,
+        },
+      });
+
+      const errorResponse = errorHandler.createErrorResponse(
+        duplicateError,
+        'Workflow with this name already exists',
+        ErrorCodes.DATA.DUPLICATE_ENTRY,
+        400
       );
+      return errorResponse;
     }
 
-    const newWorkflow = await prisma.approvalWorkflow.create({
-      data: {
-        name: validatedData.name,
-        description: validatedData.description,
-        entityType: validatedData.entityType,
-        createdBy: user.id,
-        stages: {
-          create: validatedData.stages,
-        },
-      },
-    });
+    const newWorkflow = await withAsyncErrorHandler(
+      () =>
+        prisma.approvalWorkflow.create({
+          data: {
+            name: validatedData.name,
+            description: validatedData.description,
+            entityType: validatedData.entityType,
+            createdBy: user.id,
+            stages: {
+              create: validatedData.stages,
+            },
+          },
+        }),
+      'Failed to create new workflow',
+      { component: 'WorkflowsRoute', operation: 'POST' }
+    );
 
-    await trackWorkflowCreationEvent(user.id, newWorkflow.id, newWorkflow.name);
+    await withAsyncErrorHandler(
+      () => trackWorkflowCreationEvent(user.id, newWorkflow.id, newWorkflow.name),
+      'Failed to track workflow creation analytics',
+      { component: 'WorkflowsRoute', operation: 'POST' }
+    );
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: newWorkflow,
-        message: 'Workflow created successfully',
-      },
-      { status: 201 }
+    return errorHandler.createSuccessResponse(
+      newWorkflow,
+      'Workflow created successfully'
     );
   }
 );
@@ -279,32 +318,46 @@ export const PUT = createRoute(
     apiVersion: '1',
   },
   async ({ body, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'WorkflowsRoute',
+      operation: 'PUT',
+    });
+
     const validatedData = body!;
     const { id, ...updateData } = validatedData;
 
-    const updatedWorkflow = await prisma.approvalWorkflow.update({
-      where: { id },
-      data: {
-        ...updateData,
-        stages: {
-          deleteMany: {},
-          create: updateData.stages,
-        },
-      },
-    });
-
-    await trackWorkflowUpdateEvent(
-      user.id,
-      updatedWorkflow.id,
-      updatedWorkflow.name,
-      Object.keys(updateData)
+    const updatedWorkflow = await withAsyncErrorHandler(
+      () =>
+        prisma.approvalWorkflow.update({
+          where: { id },
+          data: {
+            ...updateData,
+            stages: {
+              deleteMany: {},
+              create: updateData.stages,
+            },
+          },
+        }),
+      'Failed to update workflow',
+      { component: 'WorkflowsRoute', operation: 'PUT' }
     );
 
-    return NextResponse.json({
-      success: true,
-      data: updatedWorkflow,
-      message: 'Workflow updated successfully',
-    });
+    await withAsyncErrorHandler(
+      () =>
+        trackWorkflowUpdateEvent(
+          user.id,
+          updatedWorkflow.id,
+          updatedWorkflow.name,
+          Object.keys(updateData)
+        ),
+      'Failed to track workflow update analytics',
+      { component: 'WorkflowsRoute', operation: 'PUT' }
+    );
+
+    return errorHandler.createSuccessResponse(
+      updatedWorkflow,
+      'Workflow updated successfully'
+    );
   }
 );
 

@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
+import Link from 'next/link';
 import type { HybridProduct } from '@/hooks/useHybridProducts';
 import { useHybridProducts } from '@/hooks/useHybridProducts';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
@@ -738,21 +739,21 @@ export default function AdvancedProductList({ onAddProduct, hideBreadcrumbs }: A
         {/* Breadcrumb Navigation (optional if page already renders breadcrumbs) */}
         {!hideBreadcrumbs && (
           <nav className="flex items-center space-x-2 text-sm text-gray-600 mb-4" aria-label="Breadcrumb">
-            <a
+            <Link
               href="/"
               className="hover:text-emerald-600 transition-colors duration-200 flex items-center gap-1"
             >
               <span className="text-emerald-500">🏠</span>
               Home
-            </a>
+            </Link>
             <span className="text-gray-400">/</span>
-            <a
+            <Link
               href="/products"
               className="hover:text-emerald-600 transition-colors duration-200 flex items-center gap-1"
             >
               <span className="text-emerald-500">🛍️</span>
               Products
-            </a>
+            </Link>
             <span className="text-gray-400">/</span>
             <span className="text-gray-900 font-medium flex items-center gap-1">
               <span className="text-emerald-500">🌱</span>

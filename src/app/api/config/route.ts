@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/auth';
 import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 /**
  * Component Traceability Matrix:
@@ -106,13 +107,37 @@ const allowedFields = [
  * GET /api/config - Get application configuration
  */
 export async function GET(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'ConfigRoute',
+    operation: 'GET',
+  });
+
   const { searchParams } = new URL(request.url);
 
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
+    const session = await withAsyncErrorHandler(
+      () => getServerSession(authOptions),
+      'Failed to authenticate user session',
+      { component: 'ConfigRoute', operation: 'GET' }
+    );
+
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const authError = new StandardError({
+        message: 'Unauthorized access attempt',
+        code: ErrorCodes.AUTH.UNAUTHORIZED,
+        metadata: {
+          component: 'ConfigRoute',
+          operation: 'GET',
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        authError,
+        'Unauthorized',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401
+      );
+      return errorResponse;
     }
     const config = { ...defaultConfig };
 
@@ -127,29 +152,37 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({
-        success: true,
+      const responseData = {
         data: selectedData,
         meta: {
           fieldsRequested: requestedFieldsList,
           fieldsReturned: Object.keys(selectedData),
         },
-      });
+      };
+
+      return errorHandler.createSuccessResponse(
+        responseData,
+        'Configuration retrieved successfully with selective fields'
+      );
     }
 
     // Return full configuration
-    return NextResponse.json({
-      success: true,
+    const responseData = {
       data: config,
       meta: {
         timestamp: new Date().toISOString(),
         version: config.version,
         environment: config.environment,
       },
-    });
+    };
+
+    return errorHandler.createSuccessResponse(
+      responseData,
+      'Full configuration retrieved successfully'
+    );
   } catch (error) {
     // Use standardized error handling for configuration errors
-    errorHandlingService.processError(
+    const processedError = errorHandlingService.processError(
       error,
       'Config API error',
       ErrorCodes.SYSTEM.CONFIGURATION,
@@ -159,12 +192,13 @@ export async function GET(request: NextRequest) {
         requestedFields: searchParams.get('fields'),
       }
     );
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch configuration',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
+
+    const errorResponse = errorHandler.createErrorResponse(
+      processedError,
+      'Failed to fetch configuration',
+      ErrorCodes.SYSTEM.CONFIGURATION,
+      500
     );
+    return errorResponse;
   }
 }

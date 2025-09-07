@@ -3,8 +3,14 @@ import { prisma } from '@/lib/prisma';
 import { getUserByEmail } from '@/lib/services/userService';
 import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { logDebug } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 export async function GET(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'UserAuthTestRoute',
+    operation: 'GET',
+  });
+
   const startTime = Date.now();
   const testEmail = 'admin@posalpro.com';
 
@@ -17,69 +23,88 @@ export async function GET(request: NextRequest) {
     if (process.env.NODE_ENV === 'development') {
       await logDebug('Test 1: Simple user query');
     }
-    const simpleUser = await prisma.user.findUnique({
-      where: {
-        tenantId_email: {
-          tenantId: 'tenant_default',
-          email: testEmail,
-        },
-      },
-      select: { id: true, email: true, name: true }
-    });
+    const simpleUser = await withAsyncErrorHandler(
+      () =>
+        prisma.user.findUnique({
+          where: {
+            tenantId_email: {
+              tenantId: 'tenant_default',
+              email: testEmail,
+            },
+          },
+          select: { id: true, email: true, name: true }
+        }),
+      'Failed to execute simple user query test',
+      { component: 'UserAuthTestRoute', operation: 'GET' }
+    );
 
     // Test 2: User with roles (without transaction)
     if (process.env.NODE_ENV === 'development') {
       await logDebug('Test 2: User with roles (no transaction)');
     }
-    const userWithRoles = await prisma.user.findUnique({
-      where: {
-        tenantId_email: {
-          tenantId: 'tenant_default',
-          email: testEmail,
-        },
-      },
-      include: {
-        roles: {
-          where: { isActive: true },
-          include: {
-            role: true,
+    const userWithRoles = await withAsyncErrorHandler(
+      () =>
+        prisma.user.findUnique({
+          where: {
+            tenantId_email: {
+              tenantId: 'tenant_default',
+              email: testEmail,
+            },
           },
-        },
-      },
-    });
+          include: {
+            roles: {
+              where: { isActive: true },
+              include: {
+                role: true,
+              },
+            },
+          },
+        }),
+      'Failed to execute user with roles query test',
+      { component: 'UserAuthTestRoute', operation: 'GET' }
+    );
 
     // Test 3: Transaction with timeout
     if (process.env.NODE_ENV === 'development') {
       await logDebug('Test 3: Transaction with timeout');
     }
-    const transactionUser = await prisma.$transaction(async tx => {
-      return await tx.user.findUnique({
-        where: {
-          tenantId_email: {
-            tenantId: 'tenant_default',
-            email: testEmail,
-          },
-        },
-        include: {
-          roles: {
-            where: { isActive: true },
-            include: {
-              role: true,
+    const transactionUser = await withAsyncErrorHandler(
+      () =>
+        prisma.$transaction(async tx => {
+          return await tx.user.findUnique({
+            where: {
+              tenantId_email: {
+                tenantId: 'tenant_default',
+                email: testEmail,
+              },
             },
-          },
-        },
-      });
-    }, {
-      timeout: 15000 // 15 second timeout
-    });
+            include: {
+              roles: {
+                where: { isActive: true },
+                include: {
+                  role: true,
+                },
+              },
+            },
+          });
+        }, {
+          timeout: 15000 // 15 second timeout
+        }),
+      'Failed to execute transaction user query test',
+      { component: 'UserAuthTestRoute', operation: 'GET' }
+    );
 
     // Test 4: User service function
     if (process.env.NODE_ENV === 'development') {
       await logDebug('Test 4: User service function');
     }
-    const serviceUser = await getUserByEmail(testEmail);
+    const serviceUser = await withAsyncErrorHandler(
+      () => getUserByEmail(testEmail),
+      'Failed to execute user service function test',
+      { component: 'UserAuthTestRoute', operation: 'GET' }
+    );
 
-    const results = {
+    const responseData = {
       status: 'success',
       timestamp: new Date().toISOString(),
       responseTime: Date.now() - startTime,
@@ -112,16 +137,13 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    return new NextResponse(JSON.stringify(results, null, 2), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Response-Time': `${Date.now() - startTime}ms`
-      }
-    });
-    } catch (error) {
+    return errorHandler.createSuccessResponse(
+      responseData,
+      'User authentication tests completed successfully'
+    );
+  } catch (error) {
     // Use standardized error handling for test failures
-    errorHandlingService.processError(
+    const processedError = errorHandlingService.processError(
       error,
       'User authentication test failed',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
@@ -133,12 +155,12 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    return NextResponse.json({
-      status: 'error',
-      error: error instanceof Error ? error.message : 'User authentication test failed',
-      timestamp: new Date().toISOString(),
-      responseTime: Date.now() - startTime,
-      stack: error instanceof Error ? error.stack : undefined
-    }, { status: 500 });
+    const errorResponse = errorHandler.createErrorResponse(
+      processedError,
+      'User authentication test failed',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
+    );
+    return errorResponse;
   }
 }

@@ -9,6 +9,8 @@ import { ProductQuickSearchApiSchema } from '@/features/products/schemas';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes } from '@/lib/errors';
 
 // ====================
 // Validation Schema
@@ -26,6 +28,11 @@ export const GET = createRoute(
     query: ProductSearchSchema,
   },
   async ({ query, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'SEARCH',
+    });
+
     try {
       logInfo('Searching products', {
         component: 'ProductAPI',
@@ -53,24 +60,29 @@ export const GET = createRoute(
       }
 
       // Execute search query
-      const products = await prisma.product.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          price: true,
-          currency: true,
-          sku: true,
-          category: true,
-          tags: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy: [{ name: 'asc' }, { createdAt: 'desc' }],
-        take: query!.limit,
-      });
+      const products = await withAsyncErrorHandler(
+        () =>
+          prisma.product.findMany({
+            where,
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              price: true,
+              currency: true,
+              sku: true,
+              category: true,
+              tags: true,
+              isActive: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+            orderBy: [{ name: 'asc' }, { createdAt: 'desc' }],
+            take: query!.limit,
+          }),
+        'Failed to search products in database',
+        { component: 'ProductAPI', operation: 'SEARCH' }
+      );
 
       logInfo('Product search completed successfully', {
         component: 'ProductAPI',
@@ -79,18 +91,18 @@ export const GET = createRoute(
         query: query!.q,
       });
 
-      const responsePayload = { ok: true, data: { items: products } };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const responseData = { items: products };
+      return errorHandler.createSuccessResponse(
+        responseData,
+        `Found ${products.length} products matching "${query!.q}"`
+      );
     } catch (error) {
       logError('Failed to search products', {
         component: 'ProductAPI',
         operation: 'SEARCH',
         error: error instanceof Error ? error.message : String(error),
       });
-      throw error;
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );

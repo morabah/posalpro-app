@@ -12,6 +12,8 @@ import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { errorHandlingService } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 
 // Import consolidated schemas from feature folder
 import { ProductSchema, ProductUpdateSchema } from '@/features/products/schemas';
@@ -25,11 +27,30 @@ export const GET = createRoute(
     roles: ['admin', 'sales', 'viewer', 'System Administrator', 'Administrator'],
   },
   async ({ req, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'GET_BY_ID',
+    });
+
     try {
       const id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
+        const validationError = new StandardError({
+          message: 'Product ID is required',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProductAPI',
+            operation: 'GET_BY_ID',
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          validationError,
+          'Validation failed',
+          ErrorCodes.VALIDATION.INVALID_INPUT,
+          400
+        );
+        return errorResponse;
       }
 
       logInfo('Fetching product by ID', {
@@ -40,40 +61,60 @@ export const GET = createRoute(
       });
 
       // Fetch product with relationships
-      const product = await prisma.product.findUnique({
-        where: { id },
-        include: {
-          relationships: {
+      const product = await withAsyncErrorHandler(
+        () =>
+          prisma.product.findUnique({
+            where: { id },
             include: {
-              targetProduct: {
-                select: {
-                  id: true,
-                  name: true,
-                  price: true,
-                  currency: true,
-                  isActive: true,
+              relationships: {
+                include: {
+                  targetProduct: {
+                    select: {
+                      id: true,
+                      name: true,
+                      price: true,
+                      currency: true,
+                      isActive: true,
+                    },
+                  },
+                },
+              },
+              relatedFrom: {
+                include: {
+                  sourceProduct: {
+                    select: {
+                      id: true,
+                      name: true,
+                      price: true,
+                      currency: true,
+                      isActive: true,
+                    },
+                  },
                 },
               },
             },
-          },
-          relatedFrom: {
-            include: {
-              sourceProduct: {
-                select: {
-                  id: true,
-                  name: true,
-                  price: true,
-                  currency: true,
-                  isActive: true,
-                },
-              },
-            },
-          },
-        },
-      });
+          }),
+        'Failed to fetch product from database',
+        { component: 'ProductAPI', operation: 'GET_BY_ID' }
+      );
 
       if (!product) {
-        return Response.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
+        const notFoundError = new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProductAPI',
+            operation: 'GET_BY_ID',
+            productId: id,
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          notFoundError,
+          'Product not found',
+          ErrorCodes.DATA.NOT_FOUND,
+          404
+        );
+        return errorResponse;
       }
 
       logInfo('Product fetched successfully', {
@@ -99,18 +140,10 @@ export const GET = createRoute(
           operation: 'GET_BY_ID',
         });
         // Return the transformed product data anyway for now, but log the validation error
-        const responsePayload = { ok: true, data: transformedProduct };
-        return new Response(JSON.stringify(responsePayload), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return errorHandler.createSuccessResponse(transformedProduct, 'Product retrieved successfully');
       }
 
-      const responsePayload = { ok: true, data: validationResult.data };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorHandler.createSuccessResponse(validationResult.data, 'Product retrieved successfully');
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,
@@ -121,7 +154,7 @@ export const GET = createRoute(
           operation: 'GET_BY_ID',
         }
       );
-      throw processedError;
+      throw processedError; // Let the createRoute wrapper handle the response
     }
   }
 );
@@ -136,11 +169,30 @@ export const PUT = createRoute(
     body: ProductUpdateSchema,
   },
   async ({ req, body, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'PUT',
+    });
+
     try {
       const id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
+        const validationError = new StandardError({
+          message: 'Product ID is required',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProductAPI',
+            operation: 'PUT',
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          validationError,
+          'Validation failed',
+          ErrorCodes.VALIDATION.INVALID_INPUT,
+          400
+        );
+        return errorResponse;
       }
 
       logInfo('Updating product', {
@@ -153,13 +205,33 @@ export const PUT = createRoute(
       });
 
       // Check if product exists
-      const existingProduct = await prisma.product.findUnique({
-        where: { id },
-        select: { id: true },
-      });
+      const existingProduct = await withAsyncErrorHandler(
+        () =>
+          prisma.product.findUnique({
+            where: { id },
+            select: { id: true },
+          }),
+        'Failed to check if product exists',
+        { component: 'ProductAPI', operation: 'PUT' }
+      );
 
       if (!existingProduct) {
-        return Response.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
+        const notFoundError = new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProductAPI',
+            operation: 'PUT',
+            productId: id,
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          notFoundError,
+          'Product not found',
+          ErrorCodes.DATA.NOT_FOUND,
+          404
+        );
+        return errorResponse;
       }
 
       // Prepare update data
@@ -196,38 +268,43 @@ export const PUT = createRoute(
         updateData,
       });
 
-      const updatedProduct = await prisma.product.update({
-        where: { id },
-        data: updateData,
-        include: {
-          relationships: {
+      const updatedProduct = await withAsyncErrorHandler(
+        () =>
+          prisma.product.update({
+            where: { id },
+            data: updateData,
             include: {
-              targetProduct: {
-                select: {
-                  id: true,
-                  name: true,
-                  price: true,
-                  currency: true,
-                  isActive: true,
+              relationships: {
+                include: {
+                  targetProduct: {
+                    select: {
+                      id: true,
+                      name: true,
+                      price: true,
+                      currency: true,
+                      isActive: true,
+                    },
+                  },
+                },
+              },
+              relatedFrom: {
+                include: {
+                  sourceProduct: {
+                    select: {
+                      id: true,
+                      name: true,
+                      price: true,
+                      currency: true,
+                      isActive: true,
+                    },
+                  },
                 },
               },
             },
-          },
-          relatedFrom: {
-            include: {
-              sourceProduct: {
-                select: {
-                  id: true,
-                  name: true,
-                  price: true,
-                  currency: true,
-                  isActive: true,
-                },
-              },
-            },
-          },
-        },
-      });
+          }),
+        'Failed to update product in database',
+        { component: 'ProductAPI', operation: 'PUT' }
+      );
 
       // Transform null values to appropriate defaults before validation
       const transformedProduct = {
@@ -252,18 +329,10 @@ export const PUT = createRoute(
           operation: 'PUT',
         });
         // Return the transformed product data anyway for now, but log the validation error
-        const responsePayload = { ok: true, data: transformedProduct };
-        return new Response(JSON.stringify(responsePayload), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return errorHandler.createSuccessResponse(transformedProduct, 'Product updated successfully');
       }
 
-      const responsePayload = { ok: true, data: validationResult.data };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorHandler.createSuccessResponse(validationResult.data, 'Product updated successfully');
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,
@@ -274,7 +343,7 @@ export const PUT = createRoute(
           operation: 'PUT',
         }
       );
-      throw processedError;
+      throw processedError; // Let the createRoute wrapper handle the response
     }
   }
 );
@@ -288,11 +357,30 @@ export const DELETE = createRoute(
     roles: ['admin', 'System Administrator', 'Administrator'],
   },
   async ({ req, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'DELETE',
+    });
+
     try {
       const id = req.url.split('/').pop()?.split('?')[0];
 
       if (!id) {
-        return Response.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
+        const validationError = new StandardError({
+          message: 'Product ID is required',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProductAPI',
+            operation: 'DELETE',
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          validationError,
+          'Validation failed',
+          ErrorCodes.VALIDATION.INVALID_INPUT,
+          400
+        );
+        return errorResponse;
       }
 
       logInfo('Deleting product', {
@@ -303,26 +391,53 @@ export const DELETE = createRoute(
       });
 
       // Check if product exists
-      const existingProduct = await prisma.product.findUnique({
-        where: { id },
-        select: { id: true },
-      });
+      const existingProduct = await withAsyncErrorHandler(
+        () =>
+          prisma.product.findUnique({
+            where: { id },
+            select: { id: true },
+          }),
+        'Failed to check if product exists',
+        { component: 'ProductAPI', operation: 'DELETE' }
+      );
 
       if (!existingProduct) {
-        return Response.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
+        const notFoundError = new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProductAPI',
+            operation: 'DELETE',
+            productId: id,
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          notFoundError,
+          'Product not found',
+          ErrorCodes.DATA.NOT_FOUND,
+          404
+        );
+        return errorResponse;
       }
 
       // Delete product relationships first
-      await prisma.productRelationship.deleteMany({
-        where: {
-          OR: [{ sourceProductId: id }, { targetProductId: id }],
-        },
-      });
+      await withAsyncErrorHandler(
+        () =>
+          prisma.productRelationship.deleteMany({
+            where: {
+              OR: [{ sourceProductId: id }, { targetProductId: id }],
+            },
+          }),
+        'Failed to delete product relationships',
+        { component: 'ProductAPI', operation: 'DELETE' }
+      );
 
       // Delete product
-      await prisma.product.delete({
-        where: { id },
-      });
+      await withAsyncErrorHandler(
+        () => prisma.product.delete({ where: { id } }),
+        'Failed to delete product from database',
+        { component: 'ProductAPI', operation: 'DELETE' }
+      );
 
       logInfo('Product deleted successfully', {
         component: 'ProductAPI',
@@ -330,11 +445,10 @@ export const DELETE = createRoute(
         productId: id,
       });
 
-      const responsePayload = { ok: true, data: { message: 'Product deleted successfully' } };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorHandler.createSuccessResponse(
+        { message: 'Product deleted successfully' },
+        'Product deleted successfully'
+      );
     } catch (error) {
       const processedError = errorHandlingService.processError(
         error,
@@ -345,7 +459,7 @@ export const DELETE = createRoute(
           operation: 'DELETE',
         }
       );
-      throw processedError;
+      throw processedError; // Let the createRoute wrapper handle the response
     }
   }
 );

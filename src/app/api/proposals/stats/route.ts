@@ -8,6 +8,7 @@ import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { getCache, setCache } from '@/lib/redis';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 // ====================
 // GET /api/proposals/stats - Get proposal statistics
@@ -22,6 +23,11 @@ export const GET = createRoute(
     roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'],
   },
   async ({ req, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProposalStatsAPI',
+      operation: 'GET',
+    });
+
     try {
       logInfo('Fetching proposal stats', {
         component: 'ProposalStatsAPI',
@@ -34,7 +40,12 @@ export const GET = createRoute(
       // Check Redis cache first
       const forceFresh = new URL(req.url).searchParams.has('fresh');
       if (!forceFresh) {
-        const cachedStats = await getCache(PROPOSAL_STATS_CACHE_KEY);
+        const cachedStats = await withAsyncErrorHandler(
+          () => getCache(PROPOSAL_STATS_CACHE_KEY),
+          'Failed to retrieve cached proposal stats',
+          { component: 'ProposalStatsAPI', operation: 'CACHE_CHECK' }
+        );
+
         if (cachedStats) {
           logInfo('Proposal stats served from cache', {
             component: 'ProposalStatsAPI',
@@ -43,10 +54,7 @@ export const GET = createRoute(
             userStory: 'US-3.2',
             hypothesis: 'H4',
           });
-          return new Response(JSON.stringify({ ok: true, data: cachedStats }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return errorHandler.createSuccessResponse(cachedStats, 'Proposal stats retrieved from cache');
         }
       }
 
@@ -56,32 +64,56 @@ export const GET = createRoute(
 
       const [total, statusCounts, overdue, totalValueResult, recentActivity] = await Promise.all([
         // Total proposals
-        prisma.proposal.count(),
+        withAsyncErrorHandler(
+          () => prisma.proposal.count(),
+          'Failed to count total proposals',
+          { component: 'ProposalStatsAPI', operation: 'COUNT_TOTAL' }
+        ),
 
         // Status counts
-        prisma.proposal.groupBy({
-          by: ['status'],
-          _count: { status: true },
-        }),
+        withAsyncErrorHandler(
+          () =>
+            prisma.proposal.groupBy({
+              by: ['status'],
+              _count: { status: true },
+            }),
+          'Failed to get proposal status counts',
+          { component: 'ProposalStatsAPI', operation: 'STATUS_COUNTS' }
+        ),
 
         // Overdue count
-        prisma.proposal.count({
-          where: {
-            dueDate: { lt: new Date() },
-            status: { notIn: ['APPROVED', 'REJECTED', 'ACCEPTED', 'DECLINED'] },
-          },
-        }),
+        withAsyncErrorHandler(
+          () =>
+            prisma.proposal.count({
+              where: {
+                dueDate: { lt: new Date() },
+                status: { notIn: ['APPROVED', 'REJECTED', 'ACCEPTED', 'DECLINED'] },
+              },
+            }),
+          'Failed to count overdue proposals',
+          { component: 'ProposalStatsAPI', operation: 'OVERDUE_COUNT' }
+        ),
 
         // Total value
-        prisma.proposal.aggregate({
-          _sum: { value: true },
-          where: { value: { not: null } },
-        }),
+        withAsyncErrorHandler(
+          () =>
+            prisma.proposal.aggregate({
+              _sum: { value: true },
+              where: { value: { not: null } },
+            }),
+          'Failed to aggregate proposal values',
+          { component: 'ProposalStatsAPI', operation: 'VALUE_AGGREGATE' }
+        ),
 
         // Recent activity
-        prisma.proposal.count({
-          where: { updatedAt: { gte: thirtyDaysAgo } },
-        }),
+        withAsyncErrorHandler(
+          () =>
+            prisma.proposal.count({
+              where: { updatedAt: { gte: thirtyDaysAgo } },
+            }),
+          'Failed to count recent proposal activity',
+          { component: 'ProposalStatsAPI', operation: 'RECENT_ACTIVITY' }
+        ),
       ]);
 
       const totalValue = totalValueResult._sum.value || 0;
@@ -127,13 +159,13 @@ export const GET = createRoute(
       });
 
       // Cache the stats for future requests
-      await setCache(PROPOSAL_STATS_CACHE_KEY, stats, PROPOSAL_STATS_CACHE_TTL);
+      await withAsyncErrorHandler(
+        () => setCache(PROPOSAL_STATS_CACHE_KEY, stats, PROPOSAL_STATS_CACHE_TTL),
+        'Failed to cache proposal stats',
+        { component: 'ProposalStatsAPI', operation: 'CACHE_SET' }
+      );
 
-      const responsePayload = { ok: true, data: stats };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorHandler.createSuccessResponse(stats, 'Proposal stats retrieved successfully');
     } catch (error) {
       logError('Failed to fetch proposal stats', error, {
         component: 'ProposalStatsAPI',
@@ -142,7 +174,7 @@ export const GET = createRoute(
         userStory: 'US-3.2',
         hypothesis: 'H4',
       });
-      throw error; // createRoute handles errorToJson automatically
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );

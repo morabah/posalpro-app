@@ -5,6 +5,8 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 import { ProductRelationshipEngine } from '@/lib/services/productRelationshipEngine';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 
 const errorHandlingService = ErrorHandlingService.getInstance();
 
@@ -60,42 +62,82 @@ function mapEngineToSimulatorShape(
 }
 
 export async function POST(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'ProductRelationshipsSimulateAPI',
+    operation: 'POST',
+  });
+
   try {
     // Enforce permissions similar to rules API (read permission sufficient for simulation)
     await validateApiPermission(request, { resource: 'products', action: 'read' });
 
-    const json = await request.json();
+    const json = await withAsyncErrorHandler(
+      () => request.json(),
+      'Failed to parse request body',
+      { component: 'ProductRelationshipsSimulateAPI', operation: 'POST' }
+    );
     const { skus, mode, attributes } = BodySchema.parse(json);
 
     // Map simulator modes to engine modes
     const engineMode: 'strict' | 'advisory' | 'silent-auto' = mode === 'validate' ? 'strict' : 'advisory';
 
-    const engineResult = await ProductRelationshipEngine.evaluate(skus, {
-      selectedSkus: skus,
-      attributes: attributes || {},
-      mode: engineMode,
-    });
+    const engineResult = await withAsyncErrorHandler(
+      () =>
+        ProductRelationshipEngine.evaluate(skus, {
+          selectedSkus: skus,
+          attributes: attributes || {},
+          mode: engineMode,
+        }),
+      'Failed to evaluate product relationships',
+      { component: 'ProductRelationshipsSimulateAPI', operation: 'POST' }
+    );
 
     const mapped = mapEngineToSimulatorShape(engineResult, mode);
 
-    return NextResponse.json({ success: true, data: mapped });
+    return errorHandler.createSuccessResponse(
+      mapped,
+      'Product relationships simulated successfully'
+    );
   } catch (error) {
-    // Validation error handling
+    // Handle specialized ZodError with detailed validation feedback
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, error: 'Validation error', issues: error.issues },
-        { status: 400 }
+      const validationError = new StandardError({
+        message: 'Validation error',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        cause: error,
+        metadata: {
+          component: 'ProductRelationshipsSimulateAPI',
+          operation: 'POST',
+          validationErrors: error.issues,
+        },
+      });
+
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
       );
+      return errorResponse;
     }
 
-    errorHandlingService.processError(error, 'Failed to simulate product relationships', undefined, {
-      component: 'ProductRelationshipsSimulateAPI',
-      operation: 'POST',
-    });
-
-    return NextResponse.json(
-      { success: false, error: 'Failed to simulate product relationships' },
-      { status: 500 }
+    // Handle all other errors with the generic error handler
+    const systemError = errorHandlingService.processError(
+      error,
+      'Failed to simulate product relationships',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      {
+        component: 'ProductRelationshipsSimulateAPI',
+        operation: 'POST',
+      }
     );
+
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Failed to simulate product relationships',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
+    );
+    return errorResponse;
   }
 }

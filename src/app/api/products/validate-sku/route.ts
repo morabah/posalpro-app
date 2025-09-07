@@ -13,6 +13,7 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import {
   customerQueries,
   productQueries,
@@ -39,7 +40,12 @@ import { z } from 'zod';
  * GET /api/products/validate-sku - Validate SKU uniqueness
  */
 export const GET = createRoute({}, async ({ req }) => {
+  const errorHandler = getErrorHandler({
+    component: 'ProductsSKUValidationAPI',
+    operation: 'GET',
+  });
   const start = Date.now();
+
   try {
     // Handle authentication and permission validation
     let authContext;
@@ -78,15 +84,20 @@ export const GET = createRoute({}, async ({ req }) => {
     }
 
     // Check if SKU exists
-    const existingProduct = await prisma.product.findFirst({
-      where,
-      select: {
-        id: true,
-        name: true,
-        sku: true,
-        isActive: true,
-      },
-    });
+    const existingProduct = await withAsyncErrorHandler(
+      () =>
+        prisma.product.findFirst({
+          where,
+          select: {
+            id: true,
+            name: true,
+            sku: true,
+            isActive: true,
+          },
+        }),
+      'Failed to check SKU existence in database',
+      { component: 'ProductsSKUValidationAPI', operation: 'GET' }
+    );
 
     const exists = Boolean(existingProduct);
 
@@ -100,109 +111,97 @@ export const GET = createRoute({}, async ({ req }) => {
       hypothesis: 'H8',
     });
 
-    const res = NextResponse.json({
-      success: true,
-      data: {
-        exists,
-        conflictingProduct: existingProduct || undefined,
-      },
-      message: exists ? 'SKU already exists' : 'SKU is available',
-    });
+    const validationData = {
+      exists,
+      conflictingProduct: existingProduct || undefined,
+    };
 
-    if (process.env.NODE_ENV === 'production') {
-      res.headers.set('Cache-Control', 'public, max-age=30, s-maxage=60');
-    } else {
-      res.headers.set('Cache-Control', 'no-store');
-    }
-
-    return res;
-  } catch (error) {
-    const ehs = errorHandlingService;
-    const standardError = ehs.processError(
-      error,
-      'Failed to validate SKU',
-      ErrorCodes.VALIDATION.OPERATION_FAILED,
-      {
-        component: 'ProductsSKUValidationRoute',
-        operation: 'validateSKU',
-        queryParams: Object.fromEntries(new URL(req.url).searchParams),
-      }
+    return errorHandler.createSuccessResponse(
+      validationData,
+      exists ? 'SKU already exists' : 'SKU is available'
     );
-
+  } catch (error) {
     logError('Products SKU Validation: Validation failed', {
-      component: 'ProductsSKUValidationRoute',
-      operation: 'validateSKU',
-      error: standardError.message,
+      component: 'ProductsSKUValidationAPI',
+      operation: 'GET',
+      error: error instanceof Error ? error.message : String(error),
       loadTime: Date.now() - start,
       userStory: 'US-3.1',
       hypothesis: 'H8',
     });
 
+    // Handle specialized ZodError with detailed validation feedback
     if (error instanceof z.ZodError) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Invalid SKU validation parameters',
-          code: ErrorCodes.VALIDATION.INVALID_INPUT,
-          cause: error,
-          metadata: {
-            component: 'ProductsSKUValidationRoute',
-            operation: 'validateSKU',
-            queryParameters: Object.fromEntries(new URL(req.url).searchParams),
-          },
-        }),
+      const validationError = new StandardError({
+        message: 'Invalid SKU validation parameters',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        cause: error,
+        metadata: {
+          component: 'ProductsSKUValidationAPI',
+          operation: 'GET',
+          queryParameters: Object.fromEntries(new URL(req.url).searchParams),
+        },
+      });
+
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
         'Validation failed',
         ErrorCodes.VALIDATION.INVALID_INPUT,
-        400,
-        {
-          userFriendlyMessage: 'Please provide a valid SKU for validation.',
-          details: error.errors,
-        }
+        400
       );
+      return errorResponse;
     }
 
+    // Handle specialized PrismaError with database-specific messaging
     if (isPrismaError(error)) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: `Database error during SKU validation: ${getPrismaErrorMessage(error.code)}`,
-          code: ErrorCodes.DATA.DATABASE_ERROR,
-          cause: error,
-          metadata: {
-            component: 'ProductsSKUValidationRoute',
-            operation: 'validateSKU',
-            prismaErrorCode: error.code,
-          },
-        }),
+      const dbError = new StandardError({
+        message: `Database error during SKU validation: ${getPrismaErrorMessage(error.code)}`,
+        code: ErrorCodes.DATA.DATABASE_ERROR,
+        cause: error,
+        metadata: {
+          component: 'ProductsSKUValidationAPI',
+          operation: 'GET',
+          prismaErrorCode: error.code,
+        },
+      });
+
+      const errorResponse = errorHandler.createErrorResponse(
+        dbError,
         'Database error',
         ErrorCodes.DATA.DATABASE_ERROR,
-        500,
-        {
-          userFriendlyMessage:
-            'An error occurred while validating the SKU. Please try again later.',
-        }
+        500
       );
+      return errorResponse;
     }
 
+    // Handle existing StandardError instances
     if (error instanceof StandardError) {
-      return createApiErrorResponse(error);
+      const errorResponse = errorHandler.createErrorResponse(
+        error,
+        'SKU validation failed',
+        error.code
+      );
+      return errorResponse;
     }
 
-    return createApiErrorResponse(
-      new StandardError({
-        message: 'Failed to validate SKU',
-        code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
-        cause: error instanceof Error ? error : undefined,
-        metadata: {
-          component: 'ProductsSKUValidationRoute',
-          operation: 'validateSKU',
-        },
-      }),
+    // Handle all other errors with the generic error handler
+    const systemError = new StandardError({
+      message: 'Failed to validate SKU',
+      code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      cause: error instanceof Error ? error : undefined,
+      metadata: {
+        component: 'ProductsSKUValidationAPI',
+        operation: 'GET',
+        queryParams: Object.fromEntries(new URL(req.url).searchParams),
+      },
+    });
+
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
       'Internal error',
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
-      500,
-      {
-        userFriendlyMessage:
-          'An unexpected error occurred while validating the SKU. Please try again later.',
-      }
+      500
     );
+    return errorResponse;
   }
 });

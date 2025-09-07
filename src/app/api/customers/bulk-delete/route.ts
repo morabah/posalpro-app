@@ -9,6 +9,7 @@ import { CustomerBulkDeleteSchema } from '@/features/customers/schemas';
 import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 // ====================
 // Body Schema
@@ -26,6 +27,11 @@ export const POST = createRoute(
     body: BulkDeleteSchema,
   },
   async ({ body, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'CustomerAPI',
+      operation: 'BULK_DELETE',
+    });
+
     try {
       logInfo('Bulk deleting customers', {
         component: 'CustomerAPI',
@@ -36,9 +42,14 @@ export const POST = createRoute(
       });
 
       // Execute bulk delete
-      const result = await prisma.customer.deleteMany({
-        where: { id: { in: body!.ids } },
-      });
+      const result = await withAsyncErrorHandler(
+        () =>
+          prisma.customer.deleteMany({
+            where: { id: { in: body!.ids } },
+          }),
+        'Failed to bulk delete customers from database',
+        { component: 'CustomerAPI', operation: 'BULK_DELETE' }
+      );
 
       logInfo('Customers bulk deleted successfully', {
         component: 'CustomerAPI',
@@ -48,12 +59,12 @@ export const POST = createRoute(
         requestedCount: body!.ids.length,
       });
 
-      const responsePayload = { ok: true, data: { deleted: result.count } };
-      return new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return errorHandler.createSuccessResponse(
+        { deleted: result.count },
+        'Customers bulk deleted successfully'
+      );
     } catch (error) {
+      // Error will be handled by the createRoute wrapper, but we log it here for additional context
       logError('Failed to bulk delete customers', {
         component: 'CustomerAPI',
         operation: 'BULK_DELETE',
@@ -62,7 +73,7 @@ export const POST = createRoute(
         customerIds: body!.ids,
         error: error instanceof Error ? error.message : String(error),
       });
-      throw error;
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );

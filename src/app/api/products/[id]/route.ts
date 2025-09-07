@@ -16,6 +16,7 @@ import {
   StandardError,
 } from '@/lib/errors';
 import { logError, logInfo, logWarn } from '@/lib/logger';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { securityAuditManager } from '@/lib/security/audit';
 import { apiRateLimiter } from '@/lib/security/hardening';
 import type { Prisma } from '@prisma/client';
@@ -94,11 +95,34 @@ type ProductRelatedFrom = {
 export const GET = createRoute(
   { roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'] },
   async ({ req, user }) => {
-    const id = req.url.split('/').pop()?.split('?')[0];
-    if (!id)
-      return Response.json(fail('VALIDATION_ERROR', 'Product ID is required'), { status: 400 });
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'GET_BY_ID',
+    });
 
-    const product = await prisma.product.findUnique({
+    const id = req.url.split('/').pop()?.split('?')[0];
+    if (!id) {
+      const validationError = new StandardError({
+        message: 'Product ID is required',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        metadata: {
+          component: 'ProductAPI',
+          operation: 'GET_BY_ID',
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
+      );
+      return errorResponse;
+    }
+
+    try {
+      const product = await withAsyncErrorHandler(
+      () =>
+        prisma.product.findUnique({
       where: { id },
       include: {
         relationships: {
@@ -143,9 +167,29 @@ export const GET = createRoute(
           },
         },
       },
-    });
+    }),
+    'Failed to fetch product from database',
+    { component: 'ProductAPI', operation: 'GET_BY_ID' }
+  );
 
-    if (!product) return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
+  if (!product) {
+    const notFoundError = new StandardError({
+      message: 'Product not found',
+      code: ErrorCodes.DATA.NOT_FOUND,
+      metadata: {
+        component: 'ProductAPI',
+        operation: 'GET_BY_ID',
+        productId: id,
+      },
+    });
+    const errorResponse = errorHandler.createErrorResponse(
+      notFoundError,
+      'Product not found',
+      ErrorCodes.DATA.NOT_FOUND,
+      404
+    );
+    return errorResponse;
+  }
 
     // Transform the data for frontend consumption
     const transformedProduct = {
@@ -225,19 +269,21 @@ export const GET = createRoute(
       ? validationResult.data
       : transformedProduct;
 
-    return NextResponse.json(
-      { ok: true, data: validatedProductData },
-      {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          Pragma: 'no-cache',
-          Expires: '0',
-        },
-      }
+    return errorHandler.createSuccessResponse(
+      validatedProductData,
+      'Product retrieved successfully'
     );
+  } catch (error) {
+    logError('Failed to fetch product by ID', {
+      component: 'ProductAPI',
+      operation: 'GET_BY_ID',
+      error: error instanceof Error ? error.message : String(error),
+      productId: id,
+    });
+    throw error; // Let the createRoute wrapper handle the response
+  }
   }
 );
-
 /**
  * PUT /api/products/[id] - Update specific product (createRoute + entitlements)
  */
@@ -248,37 +294,97 @@ export const PUT = createRoute(
     entitlements: ['feature.products.advanced'],
   },
   async ({ req, user, body }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'PUT',
+    });
+
     try {
       const id = req.url.split('/').pop()?.split('?')[0];
-      if (!id)
-        return NextResponse.json(fail('VALIDATION_ERROR', 'Product ID is required'), {
-          status: 400,
+      if (!id) {
+        const validationError = new StandardError({
+          message: 'Product ID is required',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProductAPI',
+            operation: 'PUT',
+          },
         });
+        const errorResponse = errorHandler.createErrorResponse(
+          validationError,
+          'Validation failed',
+          ErrorCodes.VALIDATION.INVALID_INPUT,
+          400
+        );
+        return errorResponse;
+      }
 
       const validatedData = body!;
 
-      const existingProduct = await prisma.product.findUnique({
-        where: { id },
-        select: { id: true, name: true, sku: true, version: true },
-      });
+      const existingProduct = await withAsyncErrorHandler(
+        () =>
+          prisma.product.findUnique({
+            where: { id },
+            select: { id: true, name: true, sku: true, version: true },
+          }),
+        'Failed to check if product exists',
+        { component: 'ProductAPI', operation: 'PUT' }
+      );
+
       if (!existingProduct) {
-        return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
+        const notFoundError = new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProductAPI',
+            operation: 'PUT',
+            productId: id,
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          notFoundError,
+          'Product not found',
+          ErrorCodes.DATA.NOT_FOUND,
+          404
+        );
+        return errorResponse;
       }
 
       if (validatedData.sku && validatedData.sku !== existingProduct.sku) {
-        const skuExists = await prisma.product.findFirst({
-          where: { sku: validatedData.sku, id: { not: id } },
-          select: { id: true },
-        });
+        const skuExists = await withAsyncErrorHandler(
+          () =>
+            prisma.product.findFirst({
+              where: { sku: validatedData.sku, id: { not: id } },
+              select: { id: true },
+            }),
+          'Failed to check SKU uniqueness',
+          { component: 'ProductAPI', operation: 'PUT' }
+        );
+
         if (skuExists) {
-          return NextResponse.json(
-            { error: 'A product with this SKU already exists' },
-            { status: 400 }
+          const duplicateError = new StandardError({
+            message: 'A product with this SKU already exists',
+            code: ErrorCodes.DATA.DUPLICATE_ENTRY,
+            metadata: {
+              component: 'ProductAPI',
+              operation: 'PUT',
+              sku: validatedData.sku,
+              productId: id,
+            },
+          });
+          const errorResponse = errorHandler.createErrorResponse(
+            duplicateError,
+            'Duplicate product SKU',
+            ErrorCodes.DATA.DUPLICATE_ENTRY,
+            400
           );
+          return errorResponse;
         }
       }
 
-      const updatedProduct = await prisma.product.update({
+      const updatedProduct = await withAsyncErrorHandler(
+        () =>
+          prisma.product.update({
         where: { id },
         data: {
           ...validatedData,
@@ -313,59 +419,63 @@ export const PUT = createRoute(
           createdAt: true,
           updatedAt: true,
         },
-      } as any);
+      } as any),
+      'Failed to update product in database',
+      { component: 'ProductAPI', operation: 'PUT' }
+    );
 
-      await trackProductUpdateEvent(user.id, id, existingProduct.name, Object.keys(validatedData));
+    await trackProductUpdateEvent(user.id, id, existingProduct.name, Object.keys(validatedData));
 
-      const transformedProduct = {
-        ...updatedProduct,
-        description: updatedProduct.description || '',
-        price:
-          typeof updatedProduct.price === 'object' && updatedProduct.price !== null
-            ? Number(updatedProduct.price.toString())
-            : Number(updatedProduct.price ?? 0),
-        category: Array.isArray(updatedProduct.category)
-          ? updatedProduct.category
-          : updatedProduct.category
-            ? [updatedProduct.category]
-            : [],
-        stockQuantity: updatedProduct.stockQuantity || 0,
-        status: updatedProduct.status || 'ACTIVE',
-        attributes: updatedProduct.attributes || undefined,
-        usageAnalytics: (updatedProduct as any).usageAnalytics || undefined,
-      };
+    const transformedProduct = {
+      ...updatedProduct,
+      description: updatedProduct.description || '',
+      price:
+        typeof updatedProduct.price === 'object' && updatedProduct.price !== null
+          ? Number(updatedProduct.price.toString())
+          : Number(updatedProduct.price ?? 0),
+      category: Array.isArray(updatedProduct.category)
+        ? updatedProduct.category
+        : updatedProduct.category
+          ? [updatedProduct.category]
+          : [],
+      stockQuantity: updatedProduct.stockQuantity || 0,
+      status: updatedProduct.status || 'ACTIVE',
+      attributes: updatedProduct.attributes || undefined,
+      usageAnalytics: (updatedProduct as any).usageAnalytics || undefined,
+    };
 
-      const validationResult = ProductSchema.safeParse(transformedProduct);
-      if (!validationResult.success) {
-        logError('Product schema validation failed after update', validationResult.error, {
-          component: 'ProductAPI',
-          operation: 'PUT',
-        });
-      }
-
-      const validatedUpdatedData = validationResult.success
-        ? validationResult.data
-        : transformedProduct;
-      return NextResponse.json({ ok: true, data: validatedUpdatedData });
-    } catch (error) {
-      errorHandlingService.processError(
-        error,
-        'Failed to update product',
-        ErrorCodes.DATA.UPDATE_FAILED,
-        { component: 'ProductsIdRoute', operation: 'updateProduct' }
-      );
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Failed to update product',
-          code: ErrorCodes.DATA.UPDATE_FAILED,
-          cause: error instanceof Error ? error : undefined,
-          metadata: {
-            component: 'ProductsIdRoute',
-            operation: 'updateProduct',
-          },
-        })
-      );
+    const validationResult = ProductSchema.safeParse(transformedProduct);
+    if (!validationResult.success) {
+      logError('Product schema validation failed after update', validationResult.error, {
+        component: 'ProductAPI',
+        operation: 'PUT',
+      });
     }
+
+    const validatedUpdatedData = validationResult.success
+      ? validationResult.data
+      : transformedProduct;
+
+    return errorHandler.createSuccessResponse(
+      validatedUpdatedData,
+      'Product updated successfully'
+    );
+  } catch (error) {
+    const systemError = errorHandlingService.processError(
+      error,
+      'Failed to update product',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      { component: 'ProductAPI', operation: 'PUT' }
+    );
+
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Failed to update product',
+      ErrorCodes.DATA.UPDATE_FAILED,
+      500
+    );
+    return errorResponse;
+  }
   }
 );
 
@@ -378,24 +488,63 @@ export const DELETE = createRoute(
     entitlements: ['feature.products.advanced'],
   },
   async ({ req, user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'ProductAPI',
+      operation: 'DELETE',
+    });
+
     try {
       const id = req.url.split('/').pop()?.split('?')[0];
-      if (!id)
-        return NextResponse.json(fail('VALIDATION_ERROR', 'Product ID is required'), {
-          status: 400,
+      if (!id) {
+        const validationError = new StandardError({
+          message: 'Product ID is required',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProductAPI',
+            operation: 'DELETE',
+          },
         });
+        const errorResponse = errorHandler.createErrorResponse(
+          validationError,
+          'Validation failed',
+          ErrorCodes.VALIDATION.INVALID_INPUT,
+          400
+        );
+        return errorResponse;
+      }
 
-      const product = await prisma.product.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          name: true,
-          isActive: true,
-          _count: { select: { proposalProducts: true, relationships: true, relatedFrom: true } },
-        },
-      });
+      const product = await withAsyncErrorHandler(
+        () =>
+          prisma.product.findUnique({
+            where: { id },
+            select: {
+              id: true,
+              name: true,
+              isActive: true,
+              _count: { select: { proposalProducts: true, relationships: true, relatedFrom: true } },
+            },
+          }),
+        'Failed to check product existence for deletion',
+        { component: 'ProductAPI', operation: 'DELETE' }
+      );
+
       if (!product) {
-        return NextResponse.json(fail('NOT_FOUND', 'Product not found'), { status: 404 });
+        const notFoundError = new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProductAPI',
+            operation: 'DELETE',
+            productId: id,
+          },
+        });
+        const errorResponse = errorHandler.createErrorResponse(
+          notFoundError,
+          'Product not found',
+          ErrorCodes.DATA.NOT_FOUND,
+          404
+        );
+        return errorResponse;
       }
 
       const isInUse =
@@ -404,18 +553,23 @@ export const DELETE = createRoute(
         product._count.relatedFrom > 0;
 
       if (isInUse) {
-        const archivedProduct = await prisma.product.update({
-          where: { id },
-          data: {
-            isActive: false,
-            usageAnalytics: {
-              archivedBy: user.id,
-              archivedAt: new Date().toISOString(),
-              archivedReason: 'Product archived due to being in use',
-            },
-          },
-          select: { id: true, name: true, isActive: true, updatedAt: true },
-        });
+        const archivedProduct = await withAsyncErrorHandler(
+          () =>
+            prisma.product.update({
+              where: { id },
+              data: {
+                isActive: false,
+                usageAnalytics: {
+                  archivedBy: user.id,
+                  archivedAt: new Date().toISOString(),
+                  archivedReason: 'Product archived due to being in use',
+                },
+              },
+              select: { id: true, name: true, isActive: true, updatedAt: true },
+            }),
+          'Failed to archive product',
+          { component: 'ProductAPI', operation: 'DELETE' }
+        );
 
         await trackProductArchiveEvent(user.id, id, product.name, 'in_use');
 
@@ -442,34 +596,47 @@ export const DELETE = createRoute(
         if (!validationResult.success) {
           logError('Product schema validation failed after archive', validationResult.error, {
             component: 'ProductAPI',
-            operation: 'PUT_ARCHIVE',
+            operation: 'DELETE_ARCHIVE',
           });
         }
 
         const validatedArchivedData = validationResult.success
           ? validationResult.data
           : transformedProduct;
-        return NextResponse.json({ ok: true, data: validatedArchivedData });
+
+        return errorHandler.createSuccessResponse(
+          validatedArchivedData,
+          'Product archived successfully'
+        );
       } else {
-        await prisma.product.delete({ where: { id } });
+        await withAsyncErrorHandler(
+          () => prisma.product.delete({ where: { id } }),
+          'Failed to delete product',
+          { component: 'ProductAPI', operation: 'DELETE' }
+        );
+
         await trackProductArchiveEvent(user.id, id, product.name, 'deleted');
-        return NextResponse.json({ ok: true, data: { id, deleted: true } });
+
+        return errorHandler.createSuccessResponse(
+          { id, deleted: true },
+          'Product deleted successfully'
+        );
       }
     } catch (error) {
-      errorHandlingService.processError(
+      const systemError = errorHandlingService.processError(
         error,
         'Failed to delete product',
         ErrorCodes.DATA.DELETE_FAILED,
-        { component: 'ProductsIdRoute', operation: 'deleteProduct' }
+        { component: 'ProductAPI', operation: 'DELETE' }
       );
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Failed to delete product',
-          code: ErrorCodes.DATA.DELETE_FAILED,
-          cause: error instanceof Error ? error : undefined,
-          metadata: { component: 'ProductsIdRoute', operation: 'deleteProduct' },
-        })
+
+      const errorResponse = errorHandler.createErrorResponse(
+        systemError,
+        'Failed to delete product',
+        ErrorCodes.DATA.DELETE_FAILED,
+        500
       );
+      return errorResponse;
     }
   }
 );
@@ -577,14 +744,19 @@ async function trackProductArchiveEvent(
  * PATCH /api/products/[id] - Update specific product
  */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const errorHandler = getErrorHandler({
+    component: 'ProductAPI',
+    operation: 'PATCH',
+  });
+
   await validateApiPermission(request, { resource: 'products', action: 'update' });
 
   let productId = 'unknown';
 
   // Log that PATCH method is being called
   logInfo('PATCH method called for product update', {
-    component: 'ProductsIdRoute',
-    operation: 'updateProduct',
+    component: 'ProductAPI',
+    operation: 'PATCH',
     url: request.url,
     method: request.method,
   });
@@ -597,21 +769,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     // Authentication check
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Unauthorized access attempt',
-          code: ErrorCodes.AUTH.UNAUTHORIZED,
-          metadata: {
-            component: 'ProductsIdRoute',
-            operation: 'updateProduct',
-            productId: id,
-          },
-        }),
+      const authError = new StandardError({
+        message: 'Unauthorized access attempt',
+        code: ErrorCodes.AUTH.UNAUTHORIZED,
+        metadata: {
+          component: 'ProductAPI',
+          operation: 'PATCH',
+          productId: id,
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        authError,
         'Unauthorized',
         ErrorCodes.AUTH.UNAUTHORIZED,
-        401,
-        { userFriendlyMessage: 'You must be logged in to update products' }
+        401
       );
+      return errorResponse;
     }
 
     // ✅ SECURITY AUDIT: Log the update attempt
@@ -662,12 +835,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     // Parse and validate request body
-    const body = await request.json();
+    const body = await withAsyncErrorHandler(
+      () => request.json(),
+      'Failed to parse request body',
+      { component: 'ProductAPI', operation: 'PATCH' }
+    );
 
     // Debug logging
     logInfo('Product update request received', {
-      component: 'ProductsIdRoute',
-      operation: 'updateProduct',
+      component: 'ProductAPI',
+      operation: 'PATCH',
       productId: id,
       body: JSON.stringify(body),
     });
@@ -675,7 +852,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const validatedData = ProductUpdateSchema.parse(body);
 
     // Update product
-    const updatedProduct = await prisma.product.update({
+    const updatedProduct = await withAsyncErrorHandler(
+      () =>
+        prisma.product.update({
       where: { id },
       data: {
         ...validatedData,
@@ -717,102 +896,97 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           },
         },
       },
-    } as any);
+    } as any),
+    'Failed to update product in database',
+    { component: 'ProductAPI', operation: 'PATCH' }
+  );
 
-    // Track analytics event
-    await trackProductUpdateEvent(
-      session.user.id,
-      id,
-      updatedProduct.name,
-      Object.keys(validatedData)
-    );
+  // Track analytics event
+  await trackProductUpdateEvent(
+    session.user.id,
+    id,
+    updatedProduct.name,
+    Object.keys(validatedData)
+  );
 
-    logInfo('Product updated successfully', {
-      component: 'ProductsIdRoute',
-      operation: 'updateProduct',
-      productId: id,
-      updatedFields: Object.keys(validatedData),
-      userId: session.user.id,
-    });
+  logInfo('Product updated successfully', {
+    component: 'ProductAPI',
+    operation: 'PATCH',
+    productId: id,
+    updatedFields: Object.keys(validatedData),
+    userId: session.user.id,
+  });
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: updatedProduct,
-        message: 'Product updated successfully',
-      },
-      {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          Pragma: 'no-cache',
-          Expires: '0',
-        },
-      }
-    );
+  return errorHandler.createSuccessResponse(
+    updatedProduct,
+    'Product updated successfully'
+  );
   } catch (error) {
-    const ehs = errorHandlingService;
-
     // Log the full error for debugging
     logError('Product update error details', {
-      component: 'ProductsIdRoute',
-      operation: 'updateProduct',
+      component: 'ProductAPI',
+      operation: 'PATCH',
       productId: productId || 'unknown',
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       errorType: error?.constructor?.name,
     });
 
-    // Handle Zod validation errors specifically
+    // Handle specialized ZodError with detailed validation feedback
     if (error instanceof z.ZodError) {
       logError('Product update validation failed', {
-        component: 'ProductsIdRoute',
-        operation: 'updateProduct',
+        component: 'ProductAPI',
+        operation: 'PATCH',
         productId: productId || 'unknown',
         validationErrors: error.errors,
       });
 
-      return createApiErrorResponse(
-        new StandardError({
-          message: 'Invalid product data',
-          code: ErrorCodes.DATA.QUERY_FAILED,
-          metadata: {
-            component: 'ProductsIdRoute',
-            operation: 'updateProduct',
-            productId: productId || 'unknown',
-            validationErrors: error.errors,
-          },
-        }),
-        'Invalid product data',
-        ErrorCodes.DATA.QUERY_FAILED,
-        400,
-        { userFriendlyMessage: 'Please check your input and try again.' }
+      const validationError = new StandardError({
+        message: 'Invalid product data',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        cause: error,
+        metadata: {
+          component: 'ProductAPI',
+          operation: 'PATCH',
+          productId: productId || 'unknown',
+          validationErrors: error.errors,
+        },
+      });
+
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
       );
+      return errorResponse;
     }
 
-    const standardError = ehs.processError(
+    // Handle all other errors with the generic error handler
+    const systemError = errorHandlingService.processError(
       error,
       'Failed to update product',
       ErrorCodes.DATA.UPDATE_FAILED,
       {
-        component: 'ProductsIdRoute',
-        operation: 'updateProduct',
+        component: 'ProductAPI',
+        operation: 'PATCH',
         productId: productId || 'unknown',
       }
     );
 
     logError('Product update failed', {
-      component: 'ProductsIdRoute',
-      operation: 'updateProduct',
-      error: standardError.message,
+      component: 'ProductAPI',
+      operation: 'PATCH',
+      error: systemError.message,
       productId: productId || 'unknown',
     });
 
-    return createApiErrorResponse(
-      standardError,
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
       'Failed to update product',
       ErrorCodes.DATA.UPDATE_FAILED,
-      500,
-      { userFriendlyMessage: 'Failed to update product. Please try again.' }
+      500
     );
+    return errorResponse;
   }
 }

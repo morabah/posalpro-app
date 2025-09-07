@@ -250,6 +250,162 @@ const SkeletonNotifications = memo(() => (
 ));
 SkeletonNotifications.displayName = 'SkeletonNotifications';
 
+// Enhanced chart-specific skeleton components
+const SkeletonRevenueChart = memo(() => (
+  <div className="relative h-80 w-full p-6">
+    {/* Chart header skeleton */}
+    <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center gap-3">
+        <SkeletonPulse className="h-8 w-8 rounded-lg" />
+        <div>
+          <SkeletonPulse className="h-5 w-32 mb-1" />
+          <SkeletonPulse className="h-3 w-24" />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <SkeletonPulse className="h-8 w-20 rounded" />
+        <SkeletonPulse className="h-8 w-20 rounded" />
+      </div>
+    </div>
+
+    {/* Chart area with simulated data points */}
+    <div className="relative h-64 bg-gray-50 rounded-lg p-4">
+      {/* Y-axis labels */}
+      <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between py-2">
+        {Array.from({ length: 5 }, (_, i) => (
+          <SkeletonPulse key={i} className="h-3 w-8" />
+        ))}
+      </div>
+
+      {/* Chart bars simulation */}
+      <div className="absolute left-12 right-4 bottom-8 top-4 flex items-end space-x-8">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="flex flex-col items-center space-y-2 flex-1">
+            <SkeletonPulse
+              className="w-full rounded-t"
+              style={{ height: `${20 + Math.random() * 60}%` }}
+            />
+            <SkeletonPulse className="h-3 w-6" />
+          </div>
+        ))}
+      </div>
+
+      {/* X-axis labels */}
+      <div className="absolute bottom-0 left-12 right-4 flex justify-between">
+        {Array.from({ length: 6 }, (_, i) => (
+          <SkeletonPulse key={i} className="h-3 w-8" />
+        ))}
+      </div>
+    </div>
+
+    {/* Legend skeleton */}
+    <div className="flex items-center justify-center gap-6 mt-4">
+      <div className="flex items-center gap-2">
+        <SkeletonPulse className="h-3 w-3 rounded" />
+        <SkeletonPulse className="h-3 w-16" />
+      </div>
+      <div className="flex items-center gap-2">
+        <SkeletonPulse className="h-3 w-3 rounded" />
+        <SkeletonPulse className="h-3 w-12" />
+      </div>
+    </div>
+  </div>
+));
+SkeletonRevenueChart.displayName = 'SkeletonRevenueChart';
+
+const SkeletonPipelineChart = memo(() => (
+  <div className="relative h-80 w-full p-6">
+    {/* Header skeleton */}
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <SkeletonPulse className="h-6 w-48 mb-2" />
+        <SkeletonPulse className="h-4 w-64" />
+      </div>
+      <div className="text-right">
+        <SkeletonPulse className="h-8 w-24 mb-1" />
+        <SkeletonPulse className="h-3 w-20" />
+      </div>
+    </div>
+
+    {/* Funnel visualization skeleton */}
+    <div className="space-y-4">
+      {Array.from({ length: 5 }, (_, i) => (
+        <div key={i} className="flex items-center space-x-4">
+          <SkeletonPulse className="h-4 w-20" />
+          <div className="flex-1">
+            <div className="relative h-8 bg-gray-100 rounded">
+              <SkeletonPulse
+                className="absolute left-0 top-0 h-full rounded"
+                style={{ width: `${60 + Math.random() * 30}%` }}
+              />
+            </div>
+          </div>
+          <SkeletonPulse className="h-4 w-12" />
+          <SkeletonPulse className="h-4 w-16" />
+        </div>
+      ))}
+    </div>
+
+    {/* Summary metrics skeleton */}
+    <div className="grid grid-cols-3 gap-4 mt-6">
+      {Array.from({ length: 3 }, (_, i) => (
+        <div key={i} className="text-center">
+          <SkeletonPulse className="h-6 w-16 mx-auto mb-1" />
+          <SkeletonPulse className="h-3 w-12 mx-auto" />
+        </div>
+      ))}
+    </div>
+  </div>
+));
+SkeletonPipelineChart.displayName = 'SkeletonPipelineChart';
+
+const SkeletonHeatmap = memo(() => (
+  <div className="relative h-80 w-full p-6">
+    {/* Header skeleton */}
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <SkeletonPulse className="h-6 w-48 mb-2" />
+        <SkeletonPulse className="h-4 w-40" />
+      </div>
+      <SkeletonPulse className="h-8 w-24 rounded" />
+    </div>
+
+    {/* Heatmap grid skeleton */}
+    <div className="grid grid-cols-4 gap-2 mb-4">
+      {Array.from({ length: 16 }, (_, i) => (
+        <div key={i} className="aspect-square rounded">
+          <SkeletonPulse
+            className="w-full h-full rounded"
+            style={{
+              opacity: 0.3 + Math.random() * 0.7,
+              backgroundColor: `rgba(59, 130, 246, ${0.3 + Math.random() * 0.7})`,
+            }}
+          />
+        </div>
+      ))}
+    </div>
+
+    {/* Legend skeleton */}
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <SkeletonPulse className="h-3 w-8" />
+        <div className="flex items-center gap-1">
+          {Array.from({ length: 5 }, (_, i) => (
+            <SkeletonPulse
+              key={i}
+              className="h-4 w-4 rounded"
+              style={{ backgroundColor: `rgba(59, 130, 246, ${0.2 + i * 0.2})` }}
+            />
+          ))}
+        </div>
+        <SkeletonPulse className="h-3 w-8" />
+      </div>
+      <SkeletonPulse className="h-6 w-20 rounded" />
+    </div>
+  </div>
+));
+SkeletonHeatmap.displayName = 'SkeletonHeatmap';
+
 // Widget skeleton renderer
 const WidgetSkeleton = memo(({ type, className = '' }: { type: string; className?: string }) => {
   const config =
@@ -257,6 +413,12 @@ const WidgetSkeleton = memo(({ type, className = '' }: { type: string; className
 
   const renderContent = () => {
     switch (type) {
+      case 'revenue-chart':
+        return <SkeletonRevenueChart />;
+      case 'pipeline-chart':
+        return <SkeletonPipelineChart />;
+      case 'heatmap':
+        return <SkeletonHeatmap />;
       case 'chart':
         return (
           <>
@@ -463,3 +625,21 @@ export const LazyWidgetSkeleton = memo<{ height?: string; className?: string }>(
 LazyWidgetSkeleton.displayName = 'LazyWidgetSkeleton';
 
 export default DashboardSkeleton;
+
+// Export individual skeleton components for use in dynamic imports
+export {
+  SkeletonRevenueChart,
+  SkeletonPipelineChart,
+  SkeletonHeatmap,
+  SkeletonPulse,
+  SkeletonTitle,
+  SkeletonSubtitle,
+  SkeletonText,
+  SkeletonChart,
+  SkeletonListItems,
+  SkeletonActivityFeed,
+  SkeletonTeamMembers,
+  SkeletonMetrics,
+  SkeletonNotifications,
+  WidgetSkeleton,
+};

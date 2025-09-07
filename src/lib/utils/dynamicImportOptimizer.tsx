@@ -77,8 +77,12 @@ export function createMemoryOptimizedImport<T extends ComponentType<any>>(
       return { default: componentCache };
     }
 
-    const module = await importFn();
-    componentCache = module.default;
+    const importedModule = await importFn();
+    componentCache = (importedModule as any).default;
+
+    if (!componentCache) {
+      throw new Error('Failed to load component - no default export found');
+    }
 
     // Schedule unloading with shorter delay for memory optimization
     if (unloadTimer) {
@@ -88,7 +92,7 @@ export function createMemoryOptimizedImport<T extends ComponentType<any>>(
       componentCache = null;
     }, unloadDelay);
 
-    return module;
+    return { default: componentCache };
   });
 
   const LoadingFallback =
@@ -169,8 +173,12 @@ export function createMemoryAwareImport<T extends ComponentType<any>>(
       return { default: componentCache };
     }
 
-    const module = await importFn();
-    componentCache = module.default;
+    const importedModule = await importFn();
+    componentCache = (importedModule as any).default;
+
+    if (!componentCache) {
+      throw new Error('Failed to load component - no default export found');
+    }
 
     // Set up periodic cleanup
     if (cleanupTimer) {
@@ -180,7 +188,7 @@ export function createMemoryAwareImport<T extends ComponentType<any>>(
       checkMemoryUsage();
     }, cleanupInterval as number);
 
-    return module;
+    return { default: componentCache };
   });
 
   const LoadingFallback =

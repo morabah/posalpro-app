@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/prisma';
 
 export const POST = createRoute({ requireAuth: true, apiVersion: '1' }, async ({ user }) => {
   if (!isStripeReady()) return new Response('Billing not configured', { status: 501 });
-  const stripe = getStripe();
+  const stripe = await getStripe();
   // Look up Stripe customer from the current tenant
   const tenant = await prisma.tenant.findUnique({ where: { id: (user as any).tenantId } });
   if (!tenant?.stripeCustomerId) {

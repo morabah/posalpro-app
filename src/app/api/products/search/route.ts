@@ -15,6 +15,7 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { productService } from '@/lib/services';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 // Initialize error handling service
 const errorHandlingService = ErrorHandlingService.getInstance();
@@ -30,6 +31,11 @@ const searchSchema = ProductSearchApiSchema;
  * GET /api/products/search - Search products
  */
 export const GET = createRoute({ query: searchSchema }, async ({ req, query }) => {
+  const errorHandler = getErrorHandler({
+    component: 'ProductSearchAPI',
+    operation: 'GET',
+  });
+
   await validateApiPermission(req, 'products:read');
   try {
     const validated = query!;
@@ -38,7 +44,11 @@ export const GET = createRoute({ query: searchSchema }, async ({ req, query }) =
     const searchStartTime = Date.now();
 
     // Perform search using service
-    const results = await productService.searchProducts(validated.search, validated.limit);
+    const results = await withAsyncErrorHandler(
+      () => productService.searchProducts(validated.search, validated.limit),
+      'Failed to search products',
+      { component: 'ProductSearchAPI', operation: 'GET' }
+    );
 
     // Calculate search duration for analytics
     const searchDuration = Date.now() - searchStartTime;
@@ -59,31 +69,47 @@ export const GET = createRoute({ query: searchSchema }, async ({ req, query }) =
       },
     };
 
-    // Return response with cache headers for search results
-    const responsePayload = { ok: true, data: searchResponse };
-    const response = new Response(JSON.stringify(responsePayload), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (process.env.NODE_ENV === 'production') {
-      response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=120');
-    } else {
-      response.headers.set('Cache-Control', 'no-store');
-    }
-    return response;
+    return errorHandler.createSuccessResponse(searchResponse, 'Product search completed successfully');
   } catch (error) {
     logger.error('Product search failed:', error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        apiError('VALIDATION_ERROR', 'Invalid search parameters', error.errors),
-        { status: 400 }
+      const validationError = new StandardError({
+        message: 'Invalid search parameters',
+        code: ErrorCodes.VALIDATION.INVALID_INPUT,
+        cause: error,
+        metadata: {
+          component: 'ProductSearchAPI',
+          operation: 'GET',
+          validationErrors: error.errors,
+        },
+      });
+
+      const errorResponse = errorHandler.createErrorResponse(
+        validationError,
+        'Validation failed',
+        ErrorCodes.VALIDATION.INVALID_INPUT,
+        400
       );
+      return errorResponse;
     }
 
-    const errMessage = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json(apiError('SEARCH_FAILED', 'Product search failed', errMessage), {
-      status: 500,
+    const systemError = new StandardError({
+      message: 'Product search failed',
+      code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      cause: error instanceof Error ? error : undefined,
+      metadata: {
+        component: 'ProductSearchAPI',
+        operation: 'GET',
+      },
     });
+
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Search failed',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
+    );
+    return errorResponse;
   }
 });

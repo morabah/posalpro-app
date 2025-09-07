@@ -17,6 +17,7 @@ import {
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { NextResponse } from 'next/server';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 /**
  * Component Traceability Matrix:
@@ -31,6 +32,11 @@ import { NextResponse } from 'next/server';
  * GET /api/products/tags - Get all product tags with statistics
  */
 export const GET = createRoute({}, async ({ req, user }) => {
+  const errorHandler = getErrorHandler({
+    component: 'ProductTagsAPI',
+    operation: 'GET',
+  });
+
   await validateApiPermission(req, 'products:read');
   const start = Date.now();
 
@@ -43,21 +49,26 @@ export const GET = createRoute({}, async ({ req, user }) => {
     const limit = parseInt(searchParams.get('limit') || '50');
 
     // Get all products to extract tags
-    const products = await prisma.product.findMany({
-      where: activeOnly ? { isActive: true } : undefined,
-      select: {
-        id: true,
-        tags: true,
-        price: true,
-        currency: true,
-        isActive: true,
-        _count: {
+    const products = await withAsyncErrorHandler(
+      () =>
+        prisma.product.findMany({
+          where: activeOnly ? { isActive: true } : undefined,
           select: {
-            proposalProducts: true,
+            id: true,
+            tags: true,
+            price: true,
+            currency: true,
+            isActive: true,
+            _count: {
+              select: {
+                proposalProducts: true,
+              },
+            },
           },
-        },
-      },
-    });
+        }),
+      'Failed to fetch products for tag extraction',
+      { component: 'ProductTagsAPI', operation: 'GET' }
+    );
 
     // Extract unique tags and build statistics
     const tagMap = new Map<
@@ -123,10 +134,8 @@ export const GET = createRoute({}, async ({ req, user }) => {
       hypothesis: 'H3',
     });
 
-    if (includeStats) {
-      return NextResponse.json({
-        success: true,
-        data: {
+    const resultData = includeStats
+      ? {
           tags,
           statistics: {
             totalTags: tags.length,
@@ -136,26 +145,17 @@ export const GET = createRoute({}, async ({ req, user }) => {
             avgProductsPerTag:
               tags.length > 0 ? tags.reduce((sum, tag) => sum + tag.count, 0) / tags.length : 0,
           },
-        },
-        message: 'Product tags retrieved successfully',
-      });
-    }
+        }
+      : {
+          tags: tags.map(tag => ({
+            name: tag.name,
+            count: tag.count,
+            avgPrice: tag.avgPrice,
+            totalUsage: tag.totalUsage,
+          })),
+        };
 
-    // Return simplified tag list
-    const simplifiedTags = tags.map(tag => ({
-      name: tag.name,
-      count: tag.count,
-      avgPrice: tag.avgPrice,
-      totalUsage: tag.totalUsage,
-    }));
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        tags: simplifiedTags,
-      },
-      message: 'Product tags retrieved successfully',
-    });
+    return errorHandler.createSuccessResponse(resultData, 'Product tags retrieved successfully');
   } catch (error) {
     logError('Failed to fetch product tags', {
       component: 'ProductTagsAPI',
@@ -165,6 +165,13 @@ export const GET = createRoute({}, async ({ req, user }) => {
       hypothesis: 'H3',
     });
 
-    return NextResponse.json({ error: 'Failed to fetch product tags' }, { status: 500 });
+    // Create and return error response using the error handler
+    const errorResponse = errorHandler.createErrorResponse(
+      error,
+      'Failed to fetch product tags',
+      'SYS_1000',
+      500
+    );
+    return errorResponse;
   }
 });

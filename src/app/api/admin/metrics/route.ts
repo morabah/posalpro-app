@@ -4,10 +4,10 @@
  * Based on ADMIN_MIGRATION_ASSESSMENT.md and CORE_REQUIREMENTS.md
  */
 
-import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import prisma from '@/lib/prisma';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 /**
  * Component Traceability Matrix
@@ -27,6 +27,11 @@ export const GET = createRoute(
     apiVersion: '1',
   },
   async ({ user }) => {
+    const errorHandler = getErrorHandler({
+      component: 'AdminMetricsAPI',
+      operation: 'GET',
+    });
+
     const requestId = crypto.randomUUID();
     const startTime = Date.now();
 
@@ -43,7 +48,11 @@ export const GET = createRoute(
       const dbStartTime = Date.now();
 
       // Test database connectivity with a simple query instead of raw SQL
-      await prisma.user.findFirst();
+      await withAsyncErrorHandler(
+        () => prisma.user.findFirst(),
+        'Failed to test database connectivity',
+        { component: 'AdminMetricsAPI', operation: 'GET' }
+      );
       const dbResponseTime = Date.now() - dbStartTime;
 
       // Optimized transaction for admin metrics
@@ -54,33 +63,38 @@ export const GET = createRoute(
         totalProducts,
         totalContent,
         recentAuditLogs,
-      ] = await prisma.$transaction([
-        prisma.user.count(),
-        prisma.user.count({
-          where: {
-            status: 'ACTIVE',
-            lastLogin: {
-              gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
-            },
-          },
-        }),
-        prisma.proposal.count(),
-        prisma.product.count(),
-        prisma.content.count(),
-        prisma.auditLog.findMany({
-          take: 10,
-          orderBy: { at: 'desc' },
-          select: {
-            id: true,
-            actorId: true,
-            model: true,
-            action: true,
-            targetId: true,
-            ip: true,
-            at: true,
-          },
-        }),
-      ]);
+      ] = await withAsyncErrorHandler(
+        () =>
+          prisma.$transaction([
+            prisma.user.count(),
+            prisma.user.count({
+              where: {
+                status: 'ACTIVE',
+                lastLogin: {
+                  gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+                },
+              },
+            }),
+            prisma.proposal.count(),
+            prisma.product.count(),
+            prisma.content.count(),
+            prisma.auditLog.findMany({
+              take: 10,
+              orderBy: { at: 'desc' },
+              select: {
+                id: true,
+                actorId: true,
+                model: true,
+                action: true,
+                targetId: true,
+                ip: true,
+                at: true,
+              },
+            }),
+          ]),
+        'Failed to fetch admin metrics from database',
+        { component: 'AdminMetricsAPI', operation: 'GET' }
+      );
 
       // System health check (separate as it's not a database operation)
       const systemHealth = await checkSystemHealth(dbResponseTime);
@@ -146,10 +160,10 @@ export const GET = createRoute(
         requestId,
       });
 
-      return ok({
-        ...metrics,
-        timestamp: new Date().toISOString(),
-      });
+      return errorHandler.createSuccessResponse(
+        metrics,
+        'Admin system metrics retrieved successfully'
+      );
     } catch (error) {
       const duration = Date.now() - startTime;
 
@@ -161,8 +175,8 @@ export const GET = createRoute(
         requestId,
       });
 
-      // Re-throw to let Next.js handle the error response
-      throw error;
+      // Error will be handled by the createRoute wrapper, but we log it here for additional context
+      throw error; // Let the createRoute wrapper handle the response
     }
   }
 );

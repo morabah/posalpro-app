@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logDebug, logInfo, logError } from '@/lib/logger';
+import { getErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'HealthCheckRoute',
+    operation: 'GET',
+  });
+
   const startTime = Date.now();
 
   try {
@@ -14,21 +21,29 @@ export async function GET(request: NextRequest) {
       responseTime: Date.now() - startTime
     };
 
-    const response = new NextResponse(JSON.stringify(health), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=30, s-maxage=30',
-        'X-Response-Time': `${Date.now() - startTime}ms`
-      }
-    });
     await logInfo('[HealthAPI] GET success', { responseTime: health.responseTime });
-    return response;
+    return errorHandler.createSuccessResponse(
+      health,
+      'Health check completed successfully'
+    );
   } catch (error) {
     await logError('[HealthAPI] GET failed', error as unknown);
-    return NextResponse.json({
-      status: 'unhealthy',
-      error: 'Health check failed'
-    }, { status: 500 });
+
+    const systemError = new StandardError({
+      message: 'Health check failed',
+      code: ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      cause: error instanceof Error ? error : undefined,
+      metadata: {
+        component: 'HealthCheckRoute',
+        operation: 'GET',
+      },
+    });
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Health check failed',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
+    );
+    return errorResponse;
   }
 }

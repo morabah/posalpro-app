@@ -1,4 +1,5 @@
-import { logger } from '@/lib/logger';/**
+import { logger } from '@/lib/logger';
+/**
  * PosalPro MVP2 - Logout API Route
  * Session cleanup and security logging
  */
@@ -6,14 +7,39 @@ import { logger } from '@/lib/logger';/**
 import { authOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { ErrorCodes, StandardError } from '@/lib/errors';
 
 export async function POST(request: NextRequest) {
+  const errorHandler = getErrorHandler({
+    component: 'AuthLogoutRoute',
+    operation: 'POST',
+  });
+
   try {
     // Get current session
-    const session = await getServerSession(authOptions);
+    const session = await withAsyncErrorHandler(
+      () => getServerSession(authOptions),
+      'Failed to get user session for logout',
+      { component: 'AuthLogoutRoute', operation: 'POST' }
+    );
 
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'No active session found' }, { status: 401 });
+      const authError = new StandardError({
+        message: 'No active session found',
+        code: ErrorCodes.AUTH.UNAUTHORIZED,
+        metadata: {
+          component: 'AuthLogoutRoute',
+          operation: 'POST',
+        },
+      });
+      const errorResponse = errorHandler.createErrorResponse(
+        authError,
+        'No active session found',
+        ErrorCodes.AUTH.UNAUTHORIZED,
+        401
+      );
+      return errorResponse;
     }
 
     // In a real implementation, you would:
@@ -22,16 +48,25 @@ export async function POST(request: NextRequest) {
     // 3. Track logout analytics
     // 4. Clear session cookies
 
-    return NextResponse.json(
-      {
-        message: 'Logged out successfully',
-        success: true,
-      },
-      { status: 200 }
+    const responseData = {
+      message: 'Logged out successfully',
+      success: true,
+    };
+
+    return errorHandler.createSuccessResponse(
+      responseData,
+      'User logged out successfully'
     );
   } catch (error) {
     logger.error('Logout error:', error);
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const systemError = new Error('Internal server error during logout');
+    const errorResponse = errorHandler.createErrorResponse(
+      systemError,
+      'Internal server error',
+      ErrorCodes.SYSTEM.INTERNAL_ERROR,
+      500
+    );
+    return errorResponse;
   }
 }

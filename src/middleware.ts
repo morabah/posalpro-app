@@ -110,7 +110,9 @@ async function resolveTenantId(req: NextRequest): Promise<string | null> {
     const token = await getToken({ req, secret: getAuthSecret() });
     const jwtTenant = (token as any)?.tenantId as string | undefined;
     if (jwtTenant) return jwtTenant;
-  } catch {}
+  } catch {
+    // Ignore token parsing errors, fallback to subdomain extraction
+  }
   const sub = extractSubdomain(req.headers.get('host'));
   if (sub) return sub;
   if (process.env.NODE_ENV !== 'production') {
