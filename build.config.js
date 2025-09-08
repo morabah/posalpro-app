@@ -3,7 +3,6 @@
  * Controls TypeScript and Next.js build optimizations
  */
 
-/* eslint-env node */
 module.exports = {
   // TypeScript optimization settings
   typescript: {

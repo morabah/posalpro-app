@@ -170,11 +170,12 @@ export class CleanupMechanisms {
             }
           }
           return true;
-        case 'memory':
+        case 'memory': {
           // Help GC without assigning to `any`
           const memoryEntry = entry as { resource?: unknown };
           memoryEntry.resource = undefined;
           return true;
+        }
         default:
           return false;
       }
