@@ -3,6 +3,18 @@ import { prisma } from '@/lib/db/prisma';
 import { BillingSyncService } from '@/lib/services/BillingSyncService';
 import { NextRequest } from 'next/server';
 
+// Type definitions for Stripe webhook data
+interface StripeWebhookData {
+  id?: string;
+  subscription?: string;
+  [key: string]: unknown;
+}
+
+interface StripeEventData {
+  object?: StripeWebhookData;
+  [key: string]: unknown;
+}
+
 export async function POST(req: NextRequest) {
   // With secret configured: verify signature using raw body. Otherwise: dev scaffold allows JSON.
   const secret = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -10,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   try {
     let type: string | undefined;
-    let data: any;
+    let data: StripeWebhookData;
     let subscriptionId: string | undefined;
     let eventId: string | undefined;
 
@@ -21,8 +33,8 @@ export async function POST(req: NextRequest) {
       if (!sig) return new Response('missing signature', { status: 400 });
       const event = stripe.webhooks.constructEvent(body, sig, secret);
       type = event.type as string;
-      data = (event.data?.object ?? {}) as any;
-      subscriptionId = (data as any)?.id || (data as any)?.subscription || undefined;
+      data = (event.data?.object ?? {}) as StripeWebhookData;
+      subscriptionId = data?.id || data?.subscription || undefined;
       eventId = event.id as string | undefined;
     } else {
       // Fallback for local/dev without secret
@@ -42,9 +54,11 @@ export async function POST(req: NextRequest) {
         await prisma.idempotency.create({
           data: { key: dedupKey, route: 'stripe:webhook', userId: null, expiresAt },
         });
-      } catch (e: any) {
+      } catch (e: unknown) {
         // Unique constraint violation → duplicate delivery
-        const msg = (e?.code || '') + (e?.message || '');
+        const errorMessage = e instanceof Error ? e.message : '';
+        const errorCode = (e as { code?: string })?.code || '';
+        const msg = errorCode + errorMessage;
         if (msg.includes('P2002') || msg.toLowerCase().includes('unique')) {
           return new Response('duplicate', { status: 200 });
         }
@@ -52,18 +66,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Normalize plan nickname/name from payload
-    const planName = (data.plan?.nickname ||
-      data.plan?.name ||
-      data.items?.data?.[0]?.plan?.nickname ||
-      data.items?.data?.[0]?.plan?.name ||
+    const planName = ((data as any).plan?.nickname ||
+      (data as any).plan?.name ||
+      (data as any).items?.data?.[0]?.plan?.nickname ||
+      (data as any).items?.data?.[0]?.plan?.name ||
       'FREE') as string;
     const seats = Number(process.env.DEFAULT_PLAN_SEATS || 5);
 
     if (type === 'checkout.session.completed') {
-      const customerId: string | undefined = data.customer as string | undefined;
+      const customerId: string | undefined = (data as any).customer as string | undefined;
       const tenantId: string | undefined =
-        (data.client_reference_id as string | undefined) ||
-        (data.metadata?.tenantId as string | undefined);
+        ((data as any).client_reference_id as string | undefined) ||
+        ((data as any).metadata?.tenantId as string | undefined);
       if (customerId && tenantId) {
         await prisma.tenant
           .update({ where: { id: tenantId }, data: { stripeCustomerId: customerId } })
@@ -80,7 +94,7 @@ export async function POST(req: NextRequest) {
         tenantId = tenant?.id ?? undefined;
       }
       if (!tenantId) {
-        tenantId = (data.metadata?.tenantId as string | undefined) || undefined;
+        tenantId = ((data as any).metadata?.tenantId as string | undefined) || undefined;
       }
 
       if (tenantId) {
@@ -136,7 +150,7 @@ export async function POST(req: NextRequest) {
     }
 
     return new Response('ok', { status: 200 });
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (useSignature) {
       return new Response('invalid signature', { status: 400 });
     }

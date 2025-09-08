@@ -7,6 +7,15 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logDebug } from '@/lib/logger';
 
+// Type definitions for performance memory API
+interface PerformanceWithMemory extends Performance {
+  memory?: {
+    usedJSHeapSize: number;
+    totalJSHeapSize: number;
+    jsHeapSizeLimit: number;
+  };
+}
+
 interface PerformanceTestResult {
   testName: string;
   renderTime: number;
@@ -203,7 +212,7 @@ class PerformanceTester {
    */
   private getMemoryUsage(): number {
     if ('memory' in performance) {
-      return (performance as any).memory.usedJSHeapSize;
+      return (performance as PerformanceWithMemory).memory?.usedJSHeapSize || 0;
     }
     return 0;
   }

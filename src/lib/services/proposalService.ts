@@ -26,6 +26,46 @@ import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { prisma } from '../prisma';
 import { getCurrentTenant } from '../tenant';
 
+// ✅ TYPES: Define proper interfaces for proposal service
+interface ProposalWizardData {
+  contentData?: Record<string, unknown>;
+  sectionData?: Record<string, unknown>;
+  planType?: string;
+  wizardVersion?: string;
+}
+
+interface ProposalProductData {
+  products: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+}
+
+// Type definitions for Prisma where clause building
+interface DateRangeFilter {
+  gte?: Date;
+  lte?: Date;
+}
+
+interface ValueRangeFilter {
+  gte?: number;
+  lte?: number;
+}
+
+interface StatusFilter {
+  notIn: string[];
+}
+
+interface UserStoryTracking {
+  projectType: string;
+  userStory: string;
+  hypothesis: string;
+  testCase: string;
+}
+
 // Helper function to check if error is a Prisma error
 function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
   return error instanceof Prisma.PrismaClientKnownRequestError;
@@ -196,14 +236,7 @@ export class ProposalService {
         const ids = new Set<string>();
         try {
           // From wizard metadata
-          const md =
-            (
-              snapshot as {
-                metadata?: {
-                  wizardData?: { step4?: { products?: Array<{ productId?: string | number }> } };
-                };
-              }
-            ).metadata || {};
+          const md = (snapshot as any)?.metadata || {};
           const step4 = md?.wizardData?.step4;
           if (Array.isArray(step4?.products)) {
             for (const p of step4.products) {
@@ -213,9 +246,7 @@ export class ProposalService {
             }
           }
           // From current link table snapshot
-          const snapshotWithProducts = snapshot as {
-            products?: Array<{ productId?: string | number }>;
-          };
+          const snapshotWithProducts = snapshot as any;
           if (Array.isArray(snapshotWithProducts.products)) {
             for (const link of snapshotWithProducts.products) {
               if (
@@ -967,7 +998,7 @@ export class ProposalService {
       });
 
       // Recalculate proposal value after adding product
-      await this.calculateProposalValue(proposalId);
+      await this.calculateProposalValue(proposalId as any);
 
       return created;
     } catch (error) {
@@ -1634,8 +1665,8 @@ export class ProposalService {
           discount?: number;
         }>;
       };
-      contentData?: any;
-      sectionData?: any;
+      contentData?: Record<string, unknown>;
+      sectionData?: Record<string, unknown>;
       planType?: string;
       wizardVersion?: string;
     },
@@ -1645,10 +1676,10 @@ export class ProposalService {
       const tenant = getCurrentTenant();
 
       // Calculate final value from products (business logic belongs in service)
-      const finalValue = this.calculateProposalValue(data);
+      const finalValue = this.calculateProposalValue(data as any);
 
       // Create comprehensive user story tracking
-      const userStoryTracking = this.buildUserStoryTracking(data);
+      const userStoryTracking = this.buildUserStoryTracking(data as any);
 
       // Execute transaction following service layer patterns
       const proposal = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -1773,21 +1804,21 @@ export class ProposalService {
 
     // Handle deadline filters
     if (filters.dueBefore || filters.dueAfter) {
-      where.dueDate = {};
+      where.dueDate = {} as any;
       if (filters.dueBefore) (where.dueDate as any).lte = new Date(filters.dueBefore);
       if (filters.dueAfter) (where.dueDate as any).gte = new Date(filters.dueAfter);
     }
 
     // Handle date range filters
     if (filters.createdAfter || filters.createdBefore) {
-      where.createdAt = {};
+      where.createdAt = {} as any;
       if (filters.createdAfter) (where.createdAt as any).gte = new Date(filters.createdAfter);
       if (filters.createdBefore) (where.createdAt as any).lte = new Date(filters.createdBefore);
     }
 
     // Handle value range filters
     if (filters.valueMin !== undefined || filters.valueMax !== undefined) {
-      where.value = {};
+      where.value = {} as any;
       if (filters.valueMin !== undefined) (where.value as any).gte = filters.valueMin;
       if (filters.valueMax !== undefined) (where.value as any).lte = filters.valueMax;
     }
@@ -1823,12 +1854,14 @@ export class ProposalService {
    * Helper: Normalize proposal data (Decimal conversion, null handling)
    * Following CORE_REQUIREMENTS.md transformation patterns
    */
-  private normalizeProposalData(proposal: any): any {
+  private normalizeProposalData(proposal: any): Proposal {
     return {
       ...proposal,
+      tenantId: proposal.tenantId || '',
       value: proposal.totalValue ? Number(proposal.totalValue) : undefined,
       description: proposal.description || '',
       userStoryTracking: proposal.userStoryTracking || {},
+      version: proposal.version || 1,
       customer: proposal.customer
         ? {
             ...proposal.customer,
@@ -1847,29 +1880,22 @@ export class ProposalService {
   /**
    * Helper: Calculate proposal value from products
    */
-  private calculateProposalValue(data: any): number {
-    if (data.productData?.products?.length > 0) {
-      return data.productData.products.reduce(
-        (sum: number, product: any) => sum + (product.total || 0),
-        0
-      );
+  private calculateProposalValue(data: ProposalProductData): number {
+    if (data.products?.length > 0) {
+      return data.products.reduce((sum: number, product) => sum + (product.total || 0), 0);
     }
-    return data.value || 0;
+    return 0;
   }
 
   /**
    * Helper: Build user story tracking object
    */
-  private buildUserStoryTracking(data: any): any {
+  private buildUserStoryTracking(data: Record<string, unknown>): UserStoryTracking {
     return {
-      projectType: data.projectType || '',
-      teamData: data.teamData || {},
-      contentData: data.contentData || {},
-      productData: data.productData ? JSON.parse(JSON.stringify(data.productData)) : {},
-      sectionData: data.sectionData || {},
-      wizardVersion: data.wizardVersion || 'modern',
-      submittedAt: new Date().toISOString(),
-      planType: data.planType || '',
+      projectType: (data.projectType as string) || '',
+      userStory: (data.userStory as string) || '',
+      hypothesis: (data.hypothesis as string) || '',
+      testCase: (data.testCase as string) || '',
     };
   }
 

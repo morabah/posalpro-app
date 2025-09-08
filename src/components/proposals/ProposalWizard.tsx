@@ -18,7 +18,55 @@ import { Button } from '@/components/ui/forms/Button';
 import { useCreateProposal, useProposal, useUpdateProposal } from '@/features/proposals/hooks';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { http } from '@/lib/http';
-import { logDebug, logError } from '@/lib/logger';
+import { logDebug, logError, logWarn } from '@/lib/logger';
+
+// Type definitions for proposal wizard
+interface ProposalStepData {
+  title?: string;
+  customerId?: string;
+  customer?: {
+    name?: string;
+    industry?: string;
+  };
+  description?: string;
+  dueDate?: string | Date;
+  priority?: string;
+  currency?: string;
+  teamLead?: string;
+  salesRepresentative?: string;
+  products?: ProposalProductData[];
+  totalValue?: number;
+  [key: string]: unknown;
+}
+
+interface ProposalProduct {
+  id: string;
+  productId?: string;
+  name: string;
+  quantity?: number;
+  unitPrice?: number;
+  total?: number;
+  category?: string;
+}
+
+interface ProposalPreview {
+  company: {
+    name: string;
+    industry?: string;
+  };
+  proposal: {
+    title: string;
+    description: string;
+    dueDate: string | Date | null;
+    priority: string;
+  };
+  products: ProposalProduct[];
+  totals: {
+    currency: string;
+    amount: number;
+  };
+  terms: unknown[];
+}
 import {
   useProposalCanGoBack,
   useProposalCanProceed,
@@ -176,7 +224,13 @@ export function ProposalWizard({
 
       try {
         // ✅ FIXED: Pass raw proposal data to store (store handles transformation internally)
-        initializeFromData(proposalData);
+        initializeFromData({
+          ...proposalData,
+          description: proposalData.description || undefined,
+          dueDate: proposalData.dueDate || undefined,
+          assignedTo: proposalData.assignedTo ? [proposalData.assignedTo] : undefined,
+          submittedAt: proposalData.submittedAt || undefined
+        });
         // Ensure edit opens on step 4 directly
         setCurrentStep(4);
 
@@ -257,7 +311,13 @@ export function ProposalWizard({
           queryClient.removeQueries({ queryKey: qk.proposals.byId(proposalId) });
           queryClient.invalidateQueries({ queryKey: qk.proposals.all });
         } catch (fallbackError) {
-          console.warn('Cache invalidation failed:', cacheError, fallbackError);
+          // ✅ MIGRATED: Use structured logger instead of console.warn
+          logError('Cache invalidation failed', {
+            component: 'ProposalWizard',
+            operation: 'cacheInvalidation',
+            cacheError: (cacheError as Error)?.message || String(cacheError),
+            fallbackError: (fallbackError as Error)?.message || String(fallbackError),
+          });
         }
       }
 
@@ -305,7 +365,13 @@ export function ProposalWizard({
             queryClient.removeQueries({ queryKey: qk.proposals.byId(proposalId) });
             queryClient.invalidateQueries({ queryKey: qk.proposals.all });
           } catch (fallbackError) {
-            console.warn('Cache invalidation failed:', cacheError, fallbackError);
+            // ✅ MIGRATED: Use structured logger instead of console.warn
+            logError('Cache invalidation failed', {
+              component: 'ProposalWizard',
+              operation: 'cacheInvalidation',
+              cacheError: (cacheError as Error)?.message || String(cacheError),
+              fallbackError: (fallbackError as Error)?.message || String(fallbackError),
+            });
           }
         }
 
@@ -336,8 +402,8 @@ export function ProposalWizard({
     // Create mode: attempt to save a server draft if minimally complete, else save locally
     try {
       const { stepData } = useProposalStore.getState();
-      const s1: any = stepData[1] || {};
-      const s2: any = stepData[2] || {};
+      const s1: ProposalStepData = stepData[1] || {};
+      const s2: ProposalStepData = stepData[2] || {};
 
       const hasBasic = Boolean(s1?.title && s1?.customerId);
       const hasTeam = Boolean(s2?.teamLead && s2?.salesRepresentative);
@@ -346,7 +412,7 @@ export function ProposalWizard({
         const proposalBody = buildCreateBodyFromStore();
 
         try {
-          await createProposal.mutateAsync(proposalBody as any);
+          await createProposal.mutateAsync(proposalBody);
           toast.success('Draft saved');
           router.push('/proposals');
           return;
@@ -373,8 +439,8 @@ export function ProposalWizard({
     try {
       // Build preview from persisted wizard store for BOTH create and edit modes
       const { stepData } = useProposalStore.getState();
-      const s1: any = stepData[1] || {};
-      const s4: any = stepData[4] || {};
+      const s1: ProposalStepData = stepData[1] || {};
+      const s4: ProposalStepData = stepData[4] || {};
       const preview = {
         company: {
           name: s1?.customer?.name || 'Company',
@@ -579,8 +645,16 @@ export function ProposalWizard({
           });
 
           // Show user-friendly message instead of throwing error
-          console.warn(
-            'Saved, but verification mismatch (products, total). Please refresh to see latest data.'
+          // ✅ MIGRATED: Use structured logger instead of console.warn
+          logWarn(
+            'Saved, but verification mismatch (products, total). Please refresh to see latest data.',
+            {
+              component: 'ProposalWizard',
+              operation: 'saveProposal',
+              issue: 'verificationMismatch',
+              expectedProductCount,
+              savedProductCount,
+            }
           );
         }
 

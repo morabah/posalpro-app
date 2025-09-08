@@ -399,8 +399,14 @@ export function CommunicationCenter({
   type IncomingMessage = Partial<CommunicationMessage> & {
     timestamp?: string | Date;
     actionItems?: IncomingActionItem[];
+    type?: string; // Add type property for task filtering
   };
   type IncomingParticipant = Partial<CommunicationParticipant> & { lastActive?: string | Date };
+
+  // Type guard for task messages
+  const isTaskMessage = (message: CommunicationMessage): boolean => {
+    return message.type === 'task' || (message.tags || []).includes('task');
+  };
 
   const toDate = (v?: string | Date): Date => (v ? new Date(v) : new Date());
 
@@ -521,14 +527,14 @@ export function CommunicationCenter({
         break;
       case 'tasks':
         // If message type exists, prefer it; otherwise fallback to tag
-        list = list.filter(m => (m as any).type === 'task' || (m.tags || []).includes('task'));
+        list = list.filter(m => isTaskMessage(m));
         break;
       default:
         break;
     }
     // Apply tab-level filtering
     if (activeTab === 'tasks') {
-      list = list.filter(m => (m as any).type === 'task' || (m.tags || []).includes('task'));
+      list = list.filter(m => isTaskMessage(m));
     }
     // Apply search
     const q = searchTerm.trim().toLowerCase();
@@ -566,7 +572,7 @@ export function CommunicationCenter({
   const unreadCount = useMemo(() => messages.filter(m => !m.isRead).length, [messages]);
   const tasksCount = useMemo(
     () =>
-      messages.filter(m => (m as any).type === 'task' || (m.tags || []).includes('task')).length,
+      messages.filter(m => isTaskMessage(m)).length,
     [messages]
   );
   const filesCount = useMemo(() => filesFromMessages.length, [filesFromMessages]);
@@ -847,7 +853,7 @@ export function CommunicationCenter({
                 {(activeTab === 'messages'
                   ? computedFilteredMessages
                   : computedFilteredMessages.filter(
-                      m => (m as any).type === 'task' || (m.tags || []).includes('task')
+                      m => isTaskMessage(m)
                     )
                 )
                   .slice(0, 3)

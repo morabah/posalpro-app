@@ -29,7 +29,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // Types for rule builder
-interface WorkflowRule {
+export interface WorkflowRule {
   id: string;
   name: string;
   description: string;
@@ -106,7 +106,7 @@ interface RuleException {
   reason: string;
 }
 
-interface RuleTestResult {
+export interface RuleTestResult {
   id: string;
   testCase: string;
   // ✅ FIXED: Replace any with proper type
@@ -120,7 +120,7 @@ interface RuleTestResult {
   timestamp: Date;
 }
 
-interface RuleTemplate {
+export interface RuleTemplate {
   id: string;
   name: string;
   description: string;

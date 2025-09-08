@@ -9,6 +9,7 @@
 import { useUserProfileAnalytics } from '@/hooks/auth/useUserProfileAnalytics';
 import { useApiClient } from '@/hooks/useApiClient';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
+import { Modal } from '@/components/ui/feedback/Modal';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   AlertCircle,
@@ -92,6 +93,7 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showResetModal, setShowResetModal] = useState(false);
 
   const {
     register,
@@ -240,11 +242,20 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
 
   // Handle reset to defaults
   const handleReset = () => {
-    if (confirm('Reset all preferences to default values?')) {
-      reset();
-      setSuccessMessage('Preferences reset to defaults');
-      setTimeout(() => setSuccessMessage(null), 3000);
-    }
+    setShowResetModal(true);
+  };
+
+  // Handle confirm reset
+  const handleConfirmReset = () => {
+    reset();
+    setSuccessMessage('Preferences reset to defaults');
+    setTimeout(() => setSuccessMessage(null), 3000);
+    setShowResetModal(false);
+  };
+
+  // Handle cancel reset
+  const handleCancelReset = () => {
+    setShowResetModal(false);
   };
 
   return (
@@ -610,6 +621,61 @@ export function PreferencesTab({ analytics, user }: PreferencesTabProps) {
           </button>
         </div>
       </form>
+
+      {/* Reset Preferences Modal */}
+      <Modal
+        isOpen={showResetModal}
+        onClose={handleCancelReset}
+        title="Reset Preferences"
+        variant="warning"
+        footer={
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={handleCancelReset}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmReset}
+              className="px-4 py-2 text-sm font-medium text-white bg-orange-600 border border-transparent rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+            >
+              Reset to Defaults
+            </button>
+          </div>
+        }
+      >
+        <div className="py-4">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg
+                className="h-6 w-6 text-orange-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-gray-800">
+                Reset all preferences?
+              </h3>
+              <div className="mt-2">
+                <p className="text-sm text-gray-600">
+                  This will reset all your preferences to their default values. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

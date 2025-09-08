@@ -16,6 +16,22 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { StandardError } from '@/lib/errors/StandardError';
 import { logDebug, logWarn } from '@/lib/logger';
 
+// Type definitions for browser APIs
+interface WindowWithGC extends Window {
+  gc?: () => void;
+}
+
+interface PerformanceWithMemory extends Performance {
+  memory?: {
+    usedJSHeapSize: number;
+    jsHeapSizeLimit: number;
+  };
+}
+
+// Type definitions for analytics and error handling
+type AnalyticsEventData = Record<string, unknown>;
+type ErrorMetadata = Record<string, unknown>;
+
 // Phase 2 Performance Configuration
 export interface Phase2PerformanceConfig {
   // Optimized monitoring frequencies
@@ -321,7 +337,7 @@ export class PerformanceOptimizationService {
   /**
    * Analytics throttling (Phase 1 proven pattern)
    */
-  public trackAnalyticsEvent(eventName: string, data: any): void {
+  public trackAnalyticsEvent(eventName: string, data: AnalyticsEventData): void {
     const now = Date.now();
 
     // Throttle analytics events
@@ -398,8 +414,10 @@ export class PerformanceOptimizationService {
 
   private getCurrentMemoryUsage(): number {
     if ('memory' in performance) {
-      const memory = (performance as any).memory;
-      return memory.usedJSHeapSize / memory.jsHeapSizeLimit;
+      const memory = (performance as PerformanceWithMemory).memory;
+      if (memory) {
+        return memory.usedJSHeapSize / memory.jsHeapSizeLimit;
+      }
     }
     return 0;
   }
@@ -407,7 +425,7 @@ export class PerformanceOptimizationService {
   private async cleanupMemory(): Promise<void> {
     // Force garbage collection if available
     if ('gc' in window) {
-      (window as any).gc();
+      (window as WindowWithGC).gc?.();
       this.metrics.cleanup.memoryFreed++;
     }
   }
@@ -454,7 +472,7 @@ export class PerformanceOptimizationService {
     logDebug('[PerformanceOptimizationService] Component preloading initialized');
   }
 
-  private handleError(error: unknown, operation: string, metadata?: any): void {
+  private handleError(error: unknown, operation: string, metadata?: ErrorMetadata): void {
     this.errorHandlingService.processError(
       error instanceof Error ? error : new Error(String(error)),
       `Performance optimization failed in ${operation}`,

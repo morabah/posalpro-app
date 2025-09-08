@@ -18,6 +18,7 @@ import {
   ProposalCreateSchema,
   type ProposalCreateData,
   type ProposalQueryData,
+  type ProposalUpdateData,
 } from '@/features/proposals';
 
 // ====================
@@ -25,6 +26,18 @@ import {
 // ====================
 
 // Use consolidated types from features/proposals/schemas
+
+// Wizard payload interface for transformWizardPayloadForAPI
+interface WizardPayload {
+  teamData?: Record<string, unknown>;
+  contentData?: Record<string, unknown>;
+  productData?: Record<string, unknown>;
+  sectionData?: Record<string, unknown>;
+  reviewData?: Record<string, unknown>;
+  planType?: string;
+  value?: string | number;
+  [key: string]: unknown;
+}
 
 export interface ProposalSection {
   id: string;
@@ -83,7 +96,7 @@ export const ProposalPriority = {
 
 // Use the consolidated schemas from features/proposals/schemas
 export type ProposalCreate = ProposalCreateData;
-export type ProposalUpdate = Partial<ProposalCreateData>;
+export type ProposalUpdate = ProposalUpdateData;
 
 // ====================
 // Service Class
@@ -285,7 +298,7 @@ export class ProposalService {
   }
 
   // ✅ ADDED: Database-First Field Alignment - Transform wizard payload to API schema
-  private transformWizardPayloadForAPI(proposal: any): ProposalUpdate {
+  private transformWizardPayloadForAPI(proposal: WizardPayload): ProposalUpdate {
     // ✅ Handle wizard flat payload structure
     const {
       teamData,
@@ -317,7 +330,7 @@ export class ProposalService {
           reviewData: reviewData || undefined,
           submittedAt: new Date().toISOString(),
           wizardVersion: 'modern',
-          planType: planType || undefined,
+          planType: (planType as 'BASIC' | 'PROFESSIONAL' | 'ENTERPRISE') || undefined,
         },
       };
     }

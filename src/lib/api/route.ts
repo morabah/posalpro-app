@@ -26,6 +26,21 @@ export type Role =
   | 'System Administrator'
   | 'Administrator';
 
+// Extended user interface for API routes
+interface ExtendedUser {
+  id: string;
+  email: string;
+  roles?: string[];
+  permissions?: string[];
+  tenantId?: string;
+}
+
+// Extended route configuration interface
+interface ExtendedRouteConfig extends RouteConfig<z.ZodTypeAny | undefined, z.ZodTypeAny | undefined> {
+  requireAuth?: boolean;
+  requirePaid?: boolean;
+}
+
 // Route configuration interface
 export interface RouteConfig<
   Q extends z.ZodTypeAny | undefined,
@@ -208,7 +223,7 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         }
 
         // Minimal paid feature gating using feature flags (server-side guard rail)
-        if ((config as any).requireAuth !== false && (config as any).requirePaid) {
+        if ((config as ExtendedRouteConfig).requireAuth !== false && (config as ExtendedRouteConfig).requirePaid) {
           const flags = getFeatureFlags();
           const enforce = process.env.PAID_FEATURES_ENFORCE === 'true';
           const paidOn =
@@ -220,8 +235,12 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
 
         // Entitlement enforcement: require all listed entitlements for the tenant
         if (config.entitlements && config.entitlements.length > 0) {
+          const tenantId = (user as ExtendedUser).tenantId;
+          if (!tenantId) {
+            throw forbidden('User has no tenant ID');
+          }
           const ok = await EntitlementService.hasEntitlements(
-            (user as any).tenantId,
+            tenantId,
             config.entitlements
           );
           if (!ok) {
@@ -231,7 +250,7 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
 
         // User permissions enforcement: require all listed permissions for the user
         if (config.permissions && config.permissions.length > 0) {
-          const userPermissions = (user as any).permissions || [];
+          const userPermissions = (user as ExtendedUser).permissions || [];
           const hasAllPermissions = config.permissions.every(permission =>
             userPermissions.includes(permission) || userPermissions.includes('*:*')
           );
@@ -245,7 +264,7 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         if (config.query) {
           try {
             const queryParams = Object.fromEntries(url.searchParams);
-            query = config.query.parse(queryParams) as any;
+            query = config.query.parse(queryParams);
           } catch (error) {
             if (error instanceof z.ZodError) {
               throw badRequest('Invalid query parameters', error.errors);
@@ -253,7 +272,7 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
             throw error;
           }
         } else {
-          query = undefined as any;
+          query = undefined as Q extends z.ZodTypeAny ? z.infer<Q> : undefined;
         }
 
         // Parse request body
@@ -263,7 +282,7 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
             const contentType = req.headers.get('content-type');
             if (contentType?.includes('application/json')) {
               const jsonBody = await req.json();
-              body = config.body.parse(jsonBody) as any;
+              body = config.body.parse(jsonBody);
             } else {
               throw badRequest('Content-Type must be application/json');
             }
@@ -274,7 +293,7 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
             throw error;
           }
         } else {
-          body = undefined as any;
+          body = undefined as B extends z.ZodTypeAny ? z.infer<B> : undefined;
         }
 
         // Idempotency (auth path)
@@ -307,7 +326,11 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         }
 
         // Call the handler within tenant async context for Prisma middleware
-        const response = await runWithTenantContext({ tenantId: user.tenantId } as any, async () =>
+        const tenantId = (user as ExtendedUser).tenantId;
+        if (!tenantId) {
+          throw forbidden('User has no tenant ID');
+        }
+        const response = await runWithTenantContext({ tenantId }, async () =>
           handler({
             req,
             user,
@@ -394,8 +417,8 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         const response = await handler({
           req,
           user: { id: 'anonymous', email: 'anonymous', roles: undefined },
-          query: undefined as any,
-          body: undefined as any,
+          query: undefined as Q extends z.ZodTypeAny ? z.infer<Q> : undefined,
+          body: undefined as B extends z.ZodTypeAny ? z.infer<B> : undefined,
           requestId,
         });
 

@@ -23,6 +23,44 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { comparePassword } from './auth/passwordUtils';
 import { getUserByEmail, updateLastLogin } from './services/userService';
 
+// Type definitions for authentication
+interface AuthMetadata {
+  [key: string]: unknown;
+}
+
+interface UserWithRoles {
+  id: string;
+  email: string;
+  name: string;
+  department: string;
+  tenantId: string;
+  roles: string[];
+  permissions: string[];
+}
+
+interface TokenWithSession {
+  id: string;
+  email: string;
+  name: string;
+  department: string;
+  tenantId: string;
+  roles: string[];
+  permissions: string[];
+  sessionId?: string;
+}
+
+interface SessionWithUser {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    department: string;
+    tenantId: string;
+    roles: string[];
+    permissions: string[];
+  };
+}
+
 // Session cache for performance optimization
 const sessionCache = new Map<string, { session: Session; timestamp: number }>();
 const SESSION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -75,13 +113,13 @@ export const authOptions: NextAuthOptions = {
   // Route NextAuth internal logs through our structured logger
   logger: {
     error(code, metadata) {
-      logError(`[NEXTAUTH] ${code}`, metadata as any);
+      logError(`[NEXTAUTH] ${code}`, metadata as AuthMetadata);
     },
     warn(code, ...metadata) {
       logWarn(`[NEXTAUTH] ${code}`, metadata as any);
     },
     debug(code, metadata) {
-      if (AUTH_DEBUG_ENABLED) logDebug(`[NEXTAUTH] ${code}`, metadata as any);
+      if (AUTH_DEBUG_ENABLED) logDebug(`[NEXTAUTH] ${code}`, metadata as AuthMetadata);
     },
   },
 
@@ -275,9 +313,9 @@ export const authOptions: NextAuthOptions = {
         token.department = user.department;
         token.tenantId = user.tenantId;
         // roles/permissions from authorize() are already string arrays
-        token.roles = Array.isArray((user as any).roles) ? ((user as any).roles as string[]) : [];
-        token.permissions = Array.isArray((user as any).permissions)
-          ? ((user as any).permissions as string[])
+        token.roles = Array.isArray((user as UserWithRoles).roles) ? (user as UserWithRoles).roles : [];
+        token.permissions = Array.isArray((user as UserWithRoles).permissions)
+          ? (user as UserWithRoles).permissions
           : [];
 
         // Ensure enhanced RBAC sessionId for middleware validation
@@ -302,23 +340,18 @@ export const authOptions: NextAuthOptions = {
         // make sure roles/permissions are present. If missing, repopulate
         // from the secure session or database.
         try {
-          const rolesArr = Array.isArray((token as any).roles)
-            ? ((token as any).roles as string[])
-            : [];
-          const permsArr = Array.isArray((token as any).permissions)
-            ? ((token as any).permissions as string[])
-            : [];
+          const tokenWithSession = token as TokenWithSession;
+          const rolesArr = Array.isArray(tokenWithSession.roles) ? tokenWithSession.roles : [];
+          const permsArr = Array.isArray(tokenWithSession.permissions) ? tokenWithSession.permissions : [];
 
           let needRefresh = rolesArr.length === 0; // permissions derive from roles
 
-          if (needRefresh && (token as any).sessionId) {
-            const session = await secureSessionManager.validateSession(
-              (token as any).sessionId as string
-            );
+          if (needRefresh && tokenWithSession.sessionId) {
+            const session = await secureSessionManager.validateSession(tokenWithSession.sessionId);
             if (session) {
-              (token as any).roles = session.roles || [];
-              (token as any).permissions = session.permissions || [];
-              needRefresh = (token as any).roles.length === 0;
+              tokenWithSession.roles = session.roles || [];
+              tokenWithSession.permissions = session.permissions || [];
+              needRefresh = tokenWithSession.roles.length === 0;
             }
           }
 
@@ -326,8 +359,8 @@ export const authOptions: NextAuthOptions = {
             const freshUser = await getUserByEmail(token.email);
             if (freshUser) {
               const roles = freshUser.roles.map(r => r.role.name);
-              (token as any).roles = roles;
-              (token as any).permissions = generatePermissionsFromRoles(roles);
+              tokenWithSession.roles = roles;
+              tokenWithSession.permissions = generatePermissionsFromRoles(roles);
             }
           }
         } catch (err) {
@@ -340,11 +373,11 @@ export const authOptions: NextAuthOptions = {
         logDebug('[AUTH_DEBUG] jwt callback output token (sanitized)', {
           id: token.id,
           email: token.email,
-          rolesCount: Array.isArray((token as any).roles) ? (token as any).roles.length : 0,
-          permissionsCount: Array.isArray((token as any).permissions)
-            ? (token as any).permissions.length
+          rolesCount: Array.isArray(token.roles) ? token.roles.length : 0,
+          permissionsCount: Array.isArray(token.permissions)
+            ? token.permissions.length
             : 0,
-          hasSessionId: Boolean((token as any).sessionId),
+          hasSessionId: Boolean(token.sessionId),
         });
       }
       return token;
@@ -387,19 +420,29 @@ export const authOptions: NextAuthOptions = {
 
       // Send user data to client (token is always provided in NextAuth session callback)
       // Guard against transient undefined user object
-      (session as any).user = (session as any).user || ({} as any);
-      session.user.id = token.id as any;
-      session.user.email = token.email as any;
-      session.user.name = token.name as any;
-      session.user.department = token.department as any;
-      session.user.tenantId = token.tenantId as any;
-      session.user.roles = (token.roles as any) || [];
-      session.user.permissions = (token.permissions as any) || [];
+      const sessionWithUser = session as SessionWithUser;
+      sessionWithUser.user = sessionWithUser.user || {
+        id: '',
+        email: '',
+        name: '',
+        department: '',
+        tenantId: '',
+        roles: [],
+        permissions: [],
+      };
+      sessionWithUser.user.id = token.id;
+      sessionWithUser.user.email = token.email;
+      sessionWithUser.user.name = token.name;
+      sessionWithUser.user.department = token.department;
+      sessionWithUser.user.tenantId = token.tenantId;
+      sessionWithUser.user.roles = token.roles || [];
+      sessionWithUser.user.permissions = token.permissions || [];
       // Fallback: if roles are empty, try to repopulate using secure session or DB
       try {
         if (!Array.isArray(session.user.roles) || session.user.roles.length === 0) {
           // Try secure session first
-          const sid = (token as any).sessionId as string | undefined;
+          const tokenWithSession = token as TokenWithSession;
+          const sid = tokenWithSession.sessionId;
           if (sid) {
             const s = await secureSessionManager.validateSession(sid);
             if (s) {

@@ -12,6 +12,50 @@ import { ErrorCodes, errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
 
+// Type definitions for proposal data
+type ProposalProductWithRelations = {
+  id: string;
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  total: number;
+  product?: {
+    id: string;
+    name: string;
+    category: string[];
+    description: string | null;
+  } | null;
+  configuration?: Record<string, unknown>;
+};
+
+interface ProposalUpdateData {
+  title?: string;
+  description?: string;
+  value?: number;
+  dueDate?: Date;
+  status?: string;
+  priority?: string;
+  customer?: {
+    connect: { id: string };
+  };
+  userStoryTracking?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface ProposalRequestBody {
+  teamData?: unknown;
+  contentData?: unknown;
+  productData?: unknown;
+  sectionData?: unknown;
+  reviewData?: unknown;
+  planType?: string;
+  customer?: { id: string };
+  customerId?: string;
+  changesSummary?: string;
+  [key: string]: unknown;
+}
+
 // ====================
 // GET /api/proposals/[id] - Get individual proposal
 // ====================
@@ -113,8 +157,8 @@ export const GET = createRoute(
             : undefined,
         products: proposal.products
           ? proposal.products
-              .filter((pp: any) => pp.product) // Remove orphaned ProposalProduct records
-              .map((pp: any) => ({
+              .filter((pp) => pp.product) // Remove orphaned ProposalProduct records
+              .map((pp) => ({
                 ...pp,
                 // ✅ FIX: Convert numeric fields from strings to numbers
                 unitPrice:
@@ -219,7 +263,7 @@ export const PUT = createRoute(
         customerId,
         changesSummary,
         ...basicFields
-      } = body as any;
+      } = body as ProposalRequestBody;
 
       // Process basic fields with proper type conversion
       const processedBasicFields = {
@@ -227,7 +271,7 @@ export const PUT = createRoute(
         value: basicFields.value !== undefined ? Number(basicFields.value) : undefined,
       };
 
-      const updateData: any = {
+      const updateData: Prisma.ProposalUpdateInput = {
         ...processedBasicFields,
       };
 
@@ -239,20 +283,20 @@ export const PUT = createRoute(
       }
 
       // Convert dueDate string to Date if provided
-      if (basicFields.dueDate) {
+      if (basicFields.dueDate && typeof basicFields.dueDate === 'string') {
         updateData.dueDate = new Date(basicFields.dueDate);
       }
 
       // Save complex nested data to userStoryTracking field
       if (teamData || contentData || productData || sectionData || reviewData || planType) {
         updateData.userStoryTracking = {
-          teamData,
-          contentData,
-          productData,
-          sectionData,
-          reviewData,
-          planType,
-          changesSummary,
+          teamData: teamData as Prisma.InputJsonValue,
+          contentData: contentData as Prisma.InputJsonValue,
+          productData: productData as Prisma.InputJsonValue,
+          sectionData: sectionData as Prisma.InputJsonValue,
+          reviewData: reviewData as Prisma.InputJsonValue,
+          planType: planType as Prisma.InputJsonValue,
+          changesSummary: changesSummary as Prisma.InputJsonValue,
         };
       }
 
@@ -310,14 +354,14 @@ export const PUT = createRoute(
           });
 
           // 3. Handle product data updates
-          if (productData && productData.products && Array.isArray(productData.products)) {
+          if (productData && typeof productData === 'object' && 'products' in productData && Array.isArray((productData as any).products)) {
             // Delete existing proposal products
             await tx.proposalProduct.deleteMany({
               where: { proposalId: id },
             });
 
             // Create new proposal products
-            for (const product of productData.products) {
+            for (const product of (productData as any).products) {
               const productId = product.productId;
               const quantity = Number(product.quantity) || 1;
               const unitPrice = Number(product.unitPrice) || 0;
@@ -360,14 +404,14 @@ export const PUT = createRoute(
           }
 
           // 3. Handle section data updates
-          if (sectionData && sectionData.sections && Array.isArray(sectionData.sections)) {
+          if (sectionData && typeof sectionData === 'object' && 'sections' in sectionData && Array.isArray((sectionData as any).sections)) {
             // Delete existing proposal sections
             await tx.proposalSection.deleteMany({
               where: { proposalId: id },
             });
 
             // Create new proposal sections
-            for (const section of sectionData.sections) {
+            for (const section of (sectionData as any).sections) {
               if (section.title && section.content) {
                 await tx.proposalSection.create({
                   data: {
@@ -414,8 +458,8 @@ export const PUT = createRoute(
             : undefined,
         products: proposal.products
           ? proposal.products
-              .filter((pp: any) => pp.product)
-              .map((pp: any) => ({
+              .filter((pp) => pp.product)
+              .map((pp) => ({
                 ...pp,
                 // ✅ FIX: Convert numeric fields from strings to numbers
                 unitPrice:
@@ -492,12 +536,12 @@ export const PATCH = createRoute(
       });
 
       // Extract changesSummary for version creation
-      const { changesSummary, ...updateData } = body as any;
+      const { changesSummary, ...updateData } = body as ProposalRequestBody;
 
       // Process the update data
-      const processedUpdateData: any = {
+      const processedUpdateData: Prisma.ProposalUpdateInput = {
         ...updateData,
-      };
+      } as Prisma.ProposalUpdateInput;
 
       // Handle value conversion
       if (processedUpdateData.value !== undefined) {
@@ -505,14 +549,14 @@ export const PATCH = createRoute(
       }
 
       // Handle customer relationship
-      if (processedUpdateData.customer && processedUpdateData.customer.id) {
+      if (processedUpdateData.customer && typeof processedUpdateData.customer === 'object' && 'id' in processedUpdateData.customer) {
         processedUpdateData.customer = {
-          connect: { id: processedUpdateData.customer.id },
+          connect: { id: (processedUpdateData.customer as any).id },
         };
       }
 
       // Handle dueDate conversion
-      if (processedUpdateData.dueDate) {
+      if (processedUpdateData.dueDate && typeof processedUpdateData.dueDate === 'string') {
         processedUpdateData.dueDate = new Date(processedUpdateData.dueDate);
       }
 
@@ -580,7 +624,7 @@ export const PATCH = createRoute(
         dueDate: updatedProposal.dueDate,
         updatedAt: updatedProposal.updatedAt,
         customerId: updatedProposal.customerId,
-        products: updatedProposal.products?.map((p: any) => ({
+        products: updatedProposal.products?.map((p) => ({
           productId: p.productId,
           quantity: p.quantity,
           unitPrice: p.unitPrice,
@@ -595,7 +639,7 @@ export const PATCH = createRoute(
           changeType: 'UPDATE',
           changesSummary:
             changesSummary || `Proposal updated: ${Object.keys(updateData).join(', ')}`,
-          snapshot: snapshot as any,
+          snapshot: snapshot as Prisma.InputJsonValue,
         },
       });
 
@@ -619,8 +663,8 @@ export const PATCH = createRoute(
           : undefined,
         products: updatedProposal.products
           ? updatedProposal.products
-              .filter((pp: any) => pp.product)
-              .map((pp: any) => ({
+              .filter((pp) => pp.product)
+              .map((pp) => ({
                 ...pp,
                 // ✅ FIX: Convert numeric fields from strings to numbers
                 unitPrice:
@@ -695,7 +739,7 @@ export const DELETE = createRoute(
       });
 
       // Use transaction to ensure all related data is cleaned up
-      await prisma.$transaction(async (tx: any) => {
+      await prisma.$transaction(async (tx) => {
         // Delete related records first due to foreign key constraints
         await tx.proposalVersion.deleteMany({
           where: { proposalId: id },

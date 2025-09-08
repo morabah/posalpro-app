@@ -8,6 +8,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { useExecutiveDashboard } from '@/features/dashboard/hooks';
+import type { ExecutiveDashboardResponse } from '@/features/dashboard/schemas';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
 import {
@@ -135,8 +136,8 @@ export const UnifiedDashboardStats = memo(() => {
   const { data: dashboardData, isLoading, error } = useExecutiveDashboard('3M', false);
 
   // Extract metrics from the direct data structure
-  const responseData = dashboardData as any;
-  const stats = responseData?.metrics || null;
+  const responseData = dashboardData as ExecutiveDashboardResponse;
+  const stats = responseData?.data?.metrics || null;
 
   // SSR-safe last updated label to avoid hydration mismatch
   const [lastUpdated, setLastUpdated] = useState<string>('');

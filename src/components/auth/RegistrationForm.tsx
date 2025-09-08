@@ -14,8 +14,45 @@ import dynamic from 'next/dynamic';
 // Removed lucide-react icons from initial bundle to reduce /auth/register first-load size
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, UseFormRegister, UseFormSetValue, UseFormWatch, FieldErrors } from 'react-hook-form';
 import { z } from 'zod';
+
+// Type definitions for registration form components
+interface RegistrationResponse {
+  success: boolean;
+  userId?: string;
+  data?: {
+    userId?: string;
+    [key: string]: unknown;
+  };
+  error?: string;
+}
+
+interface StepUserInfoProps {
+  register: UseFormRegister<RegistrationFormData>;
+  errors: FieldErrors<RegistrationFormData>;
+  aiSuggestions: Record<string, string>;
+}
+
+interface StepRoleAccessProps {
+  register: UseFormRegister<RegistrationFormData>;
+  errors: FieldErrors<RegistrationFormData>;
+  setValue: UseFormSetValue<RegistrationFormData>;
+  watch: UseFormWatch<RegistrationFormData>;
+}
+
+interface StepNotificationsProps {
+  register: UseFormRegister<RegistrationFormData>;
+  errors: FieldErrors<RegistrationFormData>;
+  setValue: UseFormSetValue<RegistrationFormData>;
+  watch: UseFormWatch<RegistrationFormData>;
+}
+
+interface StepConfirmationProps {
+  data: RegistrationFormData;
+}
+
+type StepComponent = React.ComponentType<StepUserInfoProps | StepRoleAccessProps | StepNotificationsProps | StepConfirmationProps>;
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -227,12 +264,7 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
       });
 
       // Use centralized API client instead of direct fetch
-      const result = await apiClient.post<{
-        success: boolean;
-        userId?: string;
-        data?: any;
-        error?: string;
-      }>('/api/auth/register', {
+      const result = await apiClient.post<RegistrationResponse>('/api/auth/register', {
         ...data,
         roles: [data.primaryRole, ...(data.additionalRoles || [])],
         notificationChannels: ['EMAIL', 'PUSH', 'IN_APP'],
@@ -244,22 +276,25 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
       }
 
       // Track successful registration
-      analytics.trackOnboardingSuccess({
-        userId: result.userId || result.data?.userId,
-        completionRate: 100,
-        timeToFirstLogin: 0, // Will be updated on first login
-        stepsCompleted: REGISTRATION_STEPS.map(step => step.id),
-      });
+      const userId = result.userId || result.data?.userId;
+      if (userId) {
+        analytics.trackOnboardingSuccess({
+          userId,
+          completionRate: 100,
+          timeToFirstLogin: 0, // Will be updated on first login
+          stepsCompleted: REGISTRATION_STEPS.map(step => step.id),
+        });
 
-      analytics.trackRoleAssignment({
-        userId: result.userId || result.data?.userId,
-        roles: [data.primaryRole, ...(data.additionalRoles || [])],
-        teamCount: data.teamAssignments?.length || 0,
-        permissionOverrides: data.permissionOverrides || [],
-        aiRecommendationsAccepted: Object.keys(aiSuggestions).length,
-      });
+        analytics.trackRoleAssignment({
+          userId,
+          roles: [data.primaryRole, ...(data.additionalRoles || [])],
+          teamCount: data.teamAssignments?.length || 0,
+          permissionOverrides: data.permissionOverrides || [],
+          aiRecommendationsAccepted: Object.keys(aiSuggestions).length,
+        });
 
-      onSuccess?.(result.userId || result.data?.userId);
+        onSuccess?.(userId);
+      }
       router.push('/auth/login?registered=true');
     } catch (error) {
       // Use standardized error handling
@@ -295,19 +330,19 @@ export function RegistrationForm({ className = '', onSuccess }: RegistrationForm
   const renderStepContent = () => {
     switch (currentStep) {
       case 0: {
-        const Step = dynamic(() => import('./registration/StepUserInfo')) as any;
+        const Step = dynamic(() => import('./registration/StepUserInfo')) as React.ComponentType<any>;
         return <Step register={register} errors={errors} aiSuggestions={aiSuggestions} />;
       }
       case 1: {
-        const Step = dynamic(() => import('./registration/StepRoleAccess')) as any;
+        const Step = dynamic(() => import('./registration/StepRoleAccess')) as React.ComponentType<any>;
         return <Step register={register} errors={errors} setValue={setValue} watch={watch} />;
       }
       case 2: {
-        const Step = dynamic(() => import('./registration/StepNotifications')) as any;
+        const Step = dynamic(() => import('./registration/StepNotifications')) as React.ComponentType<any>;
         return <Step register={register} errors={errors} setValue={setValue} watch={watch} />;
       }
       case 3: {
-        const Step = dynamic(() => import('./registration/StepConfirmation')) as any;
+        const Step = dynamic(() => import('./registration/StepConfirmation')) as React.ComponentType<any>;
         return <Step data={getValues()} />;
       }
       default:
@@ -488,11 +523,7 @@ function UserInfoStep({
   register,
   errors,
   aiSuggestions,
-}: {
-  register: any;
-  errors: any;
-  aiSuggestions: Record<string, string>;
-}) {
+}: StepUserInfoProps) {
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-neutral-900">User Information</h3>
@@ -657,12 +688,7 @@ function RoleAccessStep({
   errors,
   setValue,
   watch,
-}: {
-  register: any;
-  errors: any;
-  setValue: any;
-  watch: any;
-}) {
+}: StepRoleAccessProps) {
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
 
@@ -784,12 +810,7 @@ function NotificationsStep({
   errors,
   setValue,
   watch,
-}: {
-  register: any;
-  errors: any;
-  setValue: any;
-  watch: any;
-}) {
+}: StepNotificationsProps) {
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-neutral-900">Default Notification Settings</h3>
@@ -952,7 +973,7 @@ function NotificationsStep({
 }
 
 // Confirmation Step Component
-function ConfirmationStep({ data }: { data: RegistrationFormData }) {
+function ConfirmationStep({ data }: StepConfirmationProps) {
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-neutral-900">Confirm New User Details</h3>

@@ -11,7 +11,7 @@ import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 import prisma from '@/lib/prisma';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 /**
@@ -47,8 +47,8 @@ interface SyncResult {
     table: string;
     recordId: string;
     field: string;
-    localValue: any;
-    cloudValue: any;
+    localValue: unknown;
+    cloudValue: unknown;
     timestamp: string;
   }>;
   errors: string[];
@@ -74,8 +74,8 @@ const detectConflicts = async (
     table: string;
     recordId: string;
     field: string;
-    localValue: any;
-    cloudValue: any;
+    localValue: unknown;
+    cloudValue: unknown;
     timestamp: string;
   }>
 > => {
@@ -625,13 +625,13 @@ const syncTableData = async (
                   sku: product.sku,
                   category: product.category,
                   tags: product.tags,
-                  attributes: product.attributes as any,
+                  attributes: product.attributes as Prisma.InputJsonValue,
                   images: product.images,
                   isActive: product.isActive,
                   stockQuantity: product.stockQuantity,
                   status: product.status,
                   version: product.version,
-                  usageAnalytics: product.usageAnalytics as any,
+                  usageAnalytics: product.usageAnalytics as Prisma.InputJsonValue,
                   userStoryMappings: product.userStoryMappings,
                   updatedAt: new Date(),
                 },
@@ -810,7 +810,7 @@ export async function POST(request: NextRequest) {
       id: string;
       name: string;
       email: string;
-      roles: string[] | string | Record<string, any> | null;
+      roles: string[] | string | Record<string, unknown> | null;
       permissions?: number | string | string[] | null;
       department?: string | null;
       image?: string;
@@ -821,7 +821,7 @@ export async function POST(request: NextRequest) {
      * for audit logging, handling various data formats.
      */
     function getUserRoleString(
-      roles: string[] | string | Record<string, any> | null | undefined
+      roles: string[] | string | Record<string, unknown> | null | undefined
     ): string {
       if (!roles) return '';
 
@@ -941,7 +941,7 @@ export async function POST(request: NextRequest) {
 
     if (!isAuthorized) {
       const userDisplay = session?.user
-        ? `${session.user.email} (roles: ${getUserRoleString((session.user as any).roles)})`
+        ? `${session.user.email} (roles: ${getUserRoleString((session.user as SessionUser).roles)})`
         : 'unknown';
       logger.error(`[DB-SYNC] Authorization failed for user: ${userDisplay}`);
       return NextResponse.json(
@@ -949,7 +949,7 @@ export async function POST(request: NextRequest) {
           error: 'Forbidden',
           message: 'Admin role required for database sync operations',
           userInfo: isDevelopment
-            ? { email: session?.user?.email, roles: (session?.user as any)?.roles }
+            ? { email: session?.user?.email, roles: (session?.user as SessionUser)?.roles }
             : undefined,
         },
         { status: 403 }

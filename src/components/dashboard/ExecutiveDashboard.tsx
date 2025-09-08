@@ -9,6 +9,7 @@
 
 import { useExecutiveDashboard } from '@/features/dashboard/hooks';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { logDebug } from '@/lib/logger';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -25,6 +26,59 @@ import {
 
 // Import all types
 import { ExecutiveMetrics, PipelineStage, RevenueChart, TeamPerformance } from '@/types/dashboard';
+
+// Type definitions for API response data
+interface DashboardApiResponse {
+  data?: {
+    data?: DashboardData;
+  };
+  metrics?: DashboardMetrics;
+  revenueChart?: RevenueChartItem[];
+  teamPerformance?: TeamPerformanceItem[];
+  pipelineStages?: PipelineStageItem[];
+}
+
+interface DashboardData {
+  metrics?: DashboardMetrics;
+  revenueChart?: RevenueChartItem[];
+  teamPerformance?: TeamPerformanceItem[];
+  pipelineStages?: PipelineStageItem[];
+}
+
+interface DashboardMetrics {
+  totalRevenue?: number | string;
+  totalProposals?: number | string;
+  conversionRate?: number | string;
+  averageDealSize?: number | string;
+  activeCustomers?: number | string;
+}
+
+interface RevenueChartItem {
+  period?: string;
+  month?: string;
+  revenue?: number | string;
+  actual?: number | string;
+  target?: number | string;
+  forecast?: number | string;
+}
+
+interface TeamPerformanceItem {
+  name?: string;
+  revenue?: number | string;
+  deals?: number | string;
+  winRate?: number | string;
+  target?: number | string;
+  performance?: number | string;
+}
+
+interface PipelineStageItem {
+  stage?: string;
+  count?: number | string;
+  value?: number | string;
+  velocity?: number | string;
+  conversionRate?: number | string;
+  avgTime?: number | string;
+}
 
 // Enhanced color palette with semantic meanings
 const colorSchemes = {
@@ -103,18 +157,32 @@ const ExecutiveDashboard = memo(() => {
   const [liveUpdatesEnabled, setLiveUpdatesEnabled] = useState(false);
 
   const { data, isLoading } = useExecutiveDashboard(timeframe, includeForecasts);
-  console.log('ExecutiveDashboard render - isLoading:', isLoading, 'data:', data);
+  logDebug('[ExecutiveDashboard] Render state', {
+    isLoading,
+    hasData: !!data,
+    timeframe,
+    includeForecasts,
+  });
   useEffect(() => {
     // Handle API response format with success/data wrapper
-    console.log('ExecutiveDashboard useEffect triggered with data:', data);
-    const dashboardData = data as any;
+    logDebug('[ExecutiveDashboard] Processing dashboard data', {
+      hasData: !!data,
+      timeframe,
+      includeForecasts,
+    });
+    const dashboardData = data as DashboardApiResponse;
     if (dashboardData) {
       // Extract data from API response structure (double-wrapped)
-      console.log('dashboardData:', dashboardData);
-      console.log('dashboardData.data:', dashboardData.data);
-      const responseData = dashboardData.data?.data || dashboardData.data;
-      console.log('responseData:', responseData);
-      console.log('responseData.metrics:', responseData?.metrics);
+      logDebug('[ExecutiveDashboard] Dashboard data structure', {
+        hasDashboardData: !!dashboardData,
+        hasNestedData: !!dashboardData.data,
+      });
+      const responseData = (dashboardData.data?.data || dashboardData.data) as DashboardData;
+      logDebug('[ExecutiveDashboard] Extracted response data', {
+        hasResponseData: !!responseData,
+        hasMetrics: !!responseData?.metrics,
+        metricsCount: Object.keys(responseData?.metrics || {}).length,
+      });
 
       // Convert optional properties to required ones with defaults
       const metrics = responseData.metrics
@@ -152,14 +220,14 @@ const ExecutiveDashboard = memo(() => {
           }
         : null;
 
-      const revenueData = (responseData.revenueChart || []).map((item: any) => ({
+      const revenueData = (responseData.revenueChart || []).map((item: RevenueChartItem) => ({
         period: item.period || item.month || '',
         actual: Number(item.revenue || item.actual || 0),
-        target: Number(item.target || item.revenue * 1.1 || 0),
+        target: Number(item.target || Number(item.revenue || 0) * 1.1 || 0),
         forecast: item.forecast ? Number(item.forecast) : undefined,
       }));
 
-      const teamData = (responseData.teamPerformance || []).map((item: any) => ({
+      const teamData = (responseData.teamPerformance || []).map((item: TeamPerformanceItem) => ({
         name: item.name || '',
         revenue: Number(item.revenue || 0),
         deals: Number(item.deals || 0),
@@ -168,7 +236,7 @@ const ExecutiveDashboard = memo(() => {
         performance: Number(item.performance || 0),
       }));
 
-      const pipelineStages = (responseData.pipelineStages || []).map((item: any) => ({
+      const pipelineStages = (responseData.pipelineStages || []).map((item: PipelineStageItem) => ({
         stage: item.stage || '',
         count: Number(item.count || 0),
         value: Number(item.value || 0),
@@ -177,7 +245,12 @@ const ExecutiveDashboard = memo(() => {
         avgTime: Number(item.avgTime || 0),
       }));
 
-      console.log('Setting metrics to:', metrics);
+      logDebug('[ExecutiveDashboard] Metrics calculated', {
+        hasMetrics: !!metrics,
+        totalRevenue: metrics?.totalRevenue,
+        totalProposals: metrics?.totalProposals,
+        winRate: metrics?.winRate,
+      });
       setMetrics(metrics);
       setRevenueData(revenueData);
       setTeamData(teamData);
@@ -334,7 +407,10 @@ const ExecutiveDashboard = memo(() => {
         {/* Key Metrics Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
           {(() => {
-            console.log('Rendering metrics:', metrics);
+            logDebug('[ExecutiveDashboard] Rendering metrics cards', {
+              hasMetrics: !!metrics,
+              totalRevenue: metrics?.totalRevenue,
+            });
             return null;
           })()}
           {isLoading

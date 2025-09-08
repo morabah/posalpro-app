@@ -7,8 +7,82 @@ import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { prisma } from '@/lib/prisma';
 import { dashboardService } from '@/lib/services/dashboardService';
 
+// ✅ TYPES: Define proper interfaces for enhanced dashboard stats
+interface ProposalStatusData {
+  status: string;
+  _count: { id: number };
+  _sum: { totalValue: any };
+}
+
+interface CustomerAggregateData {
+  _count: { id: number };
+}
+
+interface EnhancedStatsData {
+  // Primary Business Metrics
+  totalRevenue: number;
+  monthlyRevenue: number;
+  revenueGrowth: number;
+
+  // Proposal Performance
+  totalProposals: number;
+  activeProposals: number;
+  wonProposals: number;
+  winRate: number;
+  avgProposalValue: number;
+
+  // Operational Metrics
+  avgCycleTime: number;
+  overdueCount: number;
+  atRiskCount: number;
+  stalledCount: number;
+
+  // Customer Metrics
+  totalCustomers: number;
+  activeCustomers: number;
+  customerGrowth: number;
+  avgCustomerValue: number;
+
+  // Growth Metrics
+  proposalGrowth: number;
+
+  // Revenue Trends
+  revenueHistory: Array<{
+    month: string;
+    revenue: number;
+    proposals: number;
+    wins: number;
+    target: number;
+  }>;
+
+  // Risk Breakdown
+  riskByPriority: Array<{
+    priority: string;
+    count: number;
+    percentage: number;
+  }>;
+
+  // Conversion Funnel
+  conversionFunnel?: Array<{
+    stage: string;
+    count: number;
+    percentage: number;
+    conversionRate?: number;
+    value?: number;
+  }>;
+
+  // Metadata
+  generatedAt?: string;
+  cacheKey?: string;
+}
+
+interface CachedStatsData {
+  data: EnhancedStatsData;
+  ts: number;
+}
+
 // Enhanced cache for comprehensive dashboard data
-const enhancedStatsCache = new Map<string, { data: any; ts: number }>();
+const enhancedStatsCache = new Map<string, CachedStatsData>();
 const ENHANCED_STATS_TTL_MS = process.env.NODE_ENV === 'production' ? 300 * 1000 : 30 * 1000; // 5min prod, 30s dev
 
 // Performance optimization: Increase cache TTL to reduce database load
@@ -60,16 +134,17 @@ export const GET = createRoute(
       const baseStats = await dashboardService.getDashboardStats();
 
       // Get additional enhanced metrics using simple queries
-      const [proposalStatusData, customerData]: any[] = await Promise.all([
-        prisma.proposal.groupBy({
-          by: ['status'],
-          _count: { id: true },
-          _sum: { totalValue: true },
-        }),
-        prisma.customer.aggregate({
-          _count: { id: true },
-        }),
-      ]);
+      const [proposalStatusData, customerData]: [ProposalStatusData[], CustomerAggregateData] =
+        await Promise.all([
+          prisma.proposal.groupBy({
+            by: ['status'],
+            _count: { id: true },
+            _sum: { totalValue: true },
+          }),
+          prisma.customer.aggregate({
+            _count: { id: true },
+          }),
+        ]);
 
       // Calculate enhanced metrics
       const totalProposals = baseStats.totalProposals;
@@ -78,13 +153,16 @@ export const GET = createRoute(
 
       // Calculate won proposals from status data
       const wonProposals =
-        proposalStatusData.find((p: any) => p.status === 'ACCEPTED')?._count?.id || 0;
+        proposalStatusData.find((p: ProposalStatusData) => p.status === 'ACCEPTED')?._count?.id ||
+        0;
       const winRate = totalProposals > 0 ? Math.round((wonProposals / totalProposals) * 100) : 0;
 
       // Calculate active proposals
       const activeProposals = proposalStatusData
-        .filter((p: any) => ['IN_REVIEW', 'PENDING_APPROVAL', 'SUBMITTED'].includes(p.status))
-        .reduce((sum: number, p: any) => sum + p._count.id, 0);
+        .filter((p: ProposalStatusData) =>
+          ['IN_REVIEW', 'PENDING_APPROVAL', 'SUBMITTED'].includes(p.status)
+        )
+        .reduce((sum: number, p: ProposalStatusData) => sum + p._count.id, 0);
 
       // Calculate average proposal value
       const avgProposalValue = totalProposals > 0 ? Math.round(totalRevenue / totalProposals) : 0;
@@ -93,7 +171,7 @@ export const GET = createRoute(
       const avgCustomerValue = totalCustomers > 0 ? Math.round(totalRevenue / totalCustomers) : 0;
 
       // Structure enhanced KPIs
-      const enhancedStats = {
+      const enhancedStats: EnhancedStatsData = {
         // Primary Business Metrics
         totalRevenue,
         monthlyRevenue: Math.round(totalRevenue * 0.3), // Estimate 30% of total as monthly
@@ -148,9 +226,9 @@ export const GET = createRoute(
 
         // Risk Breakdown (simplified)
         riskByPriority: [
-          { priority: 'HIGH', count: Math.round(totalProposals * 0.2) },
-          { priority: 'MEDIUM', count: Math.round(totalProposals * 0.5) },
-          { priority: 'LOW', count: Math.round(totalProposals * 0.3) },
+          { priority: 'HIGH', count: Math.round(totalProposals * 0.2), percentage: 20 },
+          { priority: 'MEDIUM', count: Math.round(totalProposals * 0.5), percentage: 50 },
+          { priority: 'LOW', count: Math.round(totalProposals * 0.3), percentage: 30 },
         ],
 
         // Conversion Funnel
@@ -158,12 +236,14 @@ export const GET = createRoute(
           {
             stage: 'Submitted',
             count: totalProposals,
+            percentage: 100,
             conversionRate: 100,
             value: totalRevenue,
           },
           {
             stage: 'Won',
             count: wonProposals,
+            percentage: winRate,
             conversionRate: winRate,
             value: Math.round(totalRevenue * (wonProposals / totalProposals)),
           },

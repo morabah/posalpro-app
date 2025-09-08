@@ -3,7 +3,7 @@
 import { Card } from '@/components/ui/Card';
 import { FormActions, FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
-import { productValidationSchema } from '@/lib/validation/productValidation';
+import { ProductCreateSchema } from '@/features/products/schemas';
 import {
   CubeIcon,
   CurrencyDollarIcon,
@@ -25,7 +25,7 @@ export function ProductFormExample() {
     watch,
     setValue,
   } = useForm({
-    resolver: zodResolver(productValidationSchema as any),
+    resolver: zodResolver(ProductCreateSchema),
     mode: 'onChange',
     defaultValues: {
       name: '',

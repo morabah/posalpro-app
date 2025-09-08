@@ -802,7 +802,7 @@ export function useDashboardData(options: UseDashboardDataOptions = {}): UseDash
 
             return {
               ...oldData,
-              notifications: oldData.notifications.map((notification: any) =>
+              notifications: oldData.notifications.map((notification: Notification) =>
                 notification.id === notificationId ? { ...notification, read: true } : notification
               ),
             };
@@ -914,47 +914,45 @@ export function useDashboardData(options: UseDashboardDataOptions = {}): UseDash
 
   // Individual section data states
   const proposals: SectionDataState<DashboardData['proposals']> = {
-    data: dashboardData?.proposals || proposalsQuery.data || null,
-    loading: proposalsQuery.isLoading,
-    error: proposalsQuery.error?.message || null,
-    lastUpdated: proposalsQuery.dataUpdatedAt ? new Date(proposalsQuery.dataUpdatedAt) : null,
+    data: dashboardData?.proposals || null,
+    loading: isLoading,
+    error: error?.message || null,
+    lastUpdated: dashboardData ? new Date() : null,
   };
 
   const activities: SectionDataState<ActivityFeedItem[]> = {
-    data: dashboardData?.activities || activitiesQuery.data || null,
-    loading: activitiesQuery.isLoading,
-    error: activitiesQuery.error?.message || null,
-    lastUpdated: activitiesQuery.dataUpdatedAt ? new Date(activitiesQuery.dataUpdatedAt) : null,
+    data: dashboardData?.activities || null,
+    loading: isLoading,
+    error: error?.message || null,
+    lastUpdated: dashboardData ? new Date() : null,
   };
 
   const team: SectionDataState<TeamMember[]> = {
-    data: dashboardData?.team || teamQuery.data || null,
-    loading: teamQuery.isLoading,
-    error: teamQuery.error?.message || null,
-    lastUpdated: teamQuery.dataUpdatedAt ? new Date(teamQuery.dataUpdatedAt) : null,
+    data: dashboardData?.team || null,
+    loading: isLoading,
+    error: error?.message || null,
+    lastUpdated: dashboardData ? new Date() : null,
   };
 
   const deadlines: SectionDataState<Deadline[]> = {
-    data: dashboardData?.deadlines || deadlinesQuery.data || null,
-    loading: deadlinesQuery.isLoading,
-    error: deadlinesQuery.error?.message || null,
-    lastUpdated: deadlinesQuery.dataUpdatedAt ? new Date(deadlinesQuery.dataUpdatedAt) : null,
+    data: dashboardData?.deadlines || null,
+    loading: isLoading,
+    error: error?.message || null,
+    lastUpdated: dashboardData ? new Date() : null,
   };
 
   const performance: SectionDataState<PerformanceMetrics> = {
-    data: dashboardData?.performance || performanceQuery.data || null,
-    loading: performanceQuery.isLoading,
-    error: performanceQuery.error?.message || null,
-    lastUpdated: performanceQuery.dataUpdatedAt ? new Date(performanceQuery.dataUpdatedAt) : null,
+    data: dashboardData?.performance || null,
+    loading: isLoading,
+    error: error?.message || null,
+    lastUpdated: dashboardData ? new Date() : null,
   };
 
   const notifications: SectionDataState<Notification[]> = {
-    data: dashboardData?.notifications || notificationsQuery.data || null,
-    loading: notificationsQuery.isLoading,
-    error: notificationsQuery.error?.message || null,
-    lastUpdated: notificationsQuery.dataUpdatedAt
-      ? new Date(notificationsQuery.dataUpdatedAt)
-      : null,
+    data: dashboardData?.notifications || null,
+    loading: isLoading,
+    error: error?.message || null,
+    lastUpdated: dashboardData ? new Date() : null,
   };
 
   // Computed states

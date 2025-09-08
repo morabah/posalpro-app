@@ -8,6 +8,25 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { logWarn } from '@/lib/logger';
 
+// Type definitions for performance monitoring
+interface PerformanceEntryWithStartTime {
+  startTime: number;
+  processingStart?: number;
+}
+
+interface AlertCallback {
+  (alert: PerformanceAlert): void;
+}
+
+interface PerformanceMonitorWithCallbacks {
+  alertCallbacks?: AlertCallback[];
+}
+
+interface MethodDescriptor {
+  value: (...args: unknown[]) => unknown;
+  [key: string]: unknown;
+}
+
 interface PerformanceMetric {
   name: string;
   value: number;
@@ -41,6 +60,7 @@ export class PerformanceMonitor {
   private metrics: PerformanceMetric[] = [];
   private alerts: PerformanceAlert[] = [];
   private observers: PerformanceObserver[] = [];
+  private alertCallbacks: AlertCallback[] = [];
 
   // ✅ CRITICAL THRESHOLDS: Based on HTTP navigation test findings
   private thresholds: PerformanceThresholds = {
@@ -194,11 +214,11 @@ export class PerformanceMonitor {
     const alertHandler = (alert: PerformanceAlert) => callback(alert);
 
     // Store callback reference for cleanup
-    (this as any).alertCallbacks = (this as any).alertCallbacks || [];
-    (this as any).alertCallbacks.push(alertHandler);
+    this.alertCallbacks = this.alertCallbacks || [];
+    this.alertCallbacks.push(alertHandler);
 
     return () => {
-      const callbacks = (this as any).alertCallbacks;
+      const callbacks = this.alertCallbacks;
       const index = callbacks.indexOf(alertHandler);
       if (index > -1) {
         callbacks.splice(index, 1);
@@ -264,7 +284,7 @@ export class PerformanceMonitor {
       // Largest Contentful Paint
       const lcpObserver = new PerformanceObserver(list => {
         const entries = list.getEntries();
-        const lastEntry = entries[entries.length - 1] as any;
+        const lastEntry = entries[entries.length - 1] as PerformanceEntryWithStartTime;
 
         this.recordMetric({
           name: 'largest_contentful_paint',
@@ -293,7 +313,8 @@ export class PerformanceMonitor {
       const fidObserver = new PerformanceObserver(list => {
         const entries = list.getEntries();
         entries.forEach(entry => {
-          const fid = (entry as any).processingStart - entry.startTime;
+          const entryWithProcessing = entry as PerformanceEntryWithStartTime;
+          const fid = (entryWithProcessing.processingStart || 0) - entryWithProcessing.startTime;
 
           this.recordMetric({
             name: 'first_input_delay',
@@ -449,8 +470,8 @@ export class PerformanceMonitor {
     this.alerts.push(alert);
 
     // Notify subscribers
-    const callbacks = (this as any).alertCallbacks || [];
-    callbacks.forEach((callback: (alert: PerformanceAlert) => void) => {
+    const callbacks = this.alertCallbacks || [];
+    callbacks.forEach((callback: AlertCallback) => {
       try {
         callback(alert);
       } catch (error) {
@@ -509,10 +530,10 @@ export const performanceMonitor = PerformanceMonitor.getInstance();
 
 // ✅ HELPER: Performance monitoring decorators
 export function measurePerformance(componentName: string) {
-  return function (target: any, propertyName: string, descriptor: PropertyDescriptor) {
+  return function (target: unknown, propertyName: string, descriptor: MethodDescriptor) {
     const method = descriptor.value;
 
-    descriptor.value = function (...args: any[]) {
+    descriptor.value = function (...args: unknown[]) {
       const startTime = performance.now();
       const result = method.apply(this, args);
 

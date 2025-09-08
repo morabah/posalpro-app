@@ -10,6 +10,33 @@ import { ComponentTestResult } from './componentTester';
 import { PerformanceTestResult } from './performanceTester';
 import { SidebarTestResult } from './sidebarTester';
 
+// Type definitions for test results
+type TestResult = PerformanceTestResult | SidebarTestResult | ComponentTestResult;
+
+interface DetailedResult {
+  category: string;
+  count: number;
+  results: Array<{
+    name: string;
+    score: number;
+    passed: boolean;
+    duration?: number;
+    renderTime?: number;
+    errors?: string[];
+    warnings?: string[];
+    testName: string;
+    metrics?: {
+      memoryUsage?: number;
+    };
+    memoryUsage?: number;
+  }>;
+}
+
+interface RenderTimeResult {
+  name: string;
+  time: number;
+}
+
 export interface TestReport {
   id: string;
   timestamp: number;
@@ -45,7 +72,7 @@ export interface TestReport {
     medium: string[];
     low: string[];
   };
-  detailedResults: any[];
+  detailedResults: DetailedResult[];
   metadata: {
     userAgent: string;
     viewport: string;
@@ -97,9 +124,9 @@ export class ReportGenerator {
   }
 
   // Generate summary statistics
-  private generateSummary(allResults: any[]): TestReport['summary'] {
+  private generateSummary(allResults: TestResult[]): TestReport['summary'] {
     const totalTests = allResults.length;
-    const passed = allResults.filter(r => r.passed || r.score >= 70).length;
+    const passed = allResults.filter(r => (r as any).passed || r.score >= 70).length;
     const failed = totalTests - passed;
     const passRate = totalTests > 0 ? (passed / totalTests) * 100 : 0;
     const averageScore =
@@ -134,12 +161,12 @@ export class ReportGenerator {
   }
 
   // Generate performance analysis
-  private generatePerformanceAnalysis(allResults: any[]): TestReport['performance'] {
-    const renderTimes = allResults
+  private generatePerformanceAnalysis(allResults: TestResult[]): TestReport['performance'] {
+    const renderTimes: RenderTimeResult[] = allResults
       .map(r => {
-        if ('duration' in r) return { name: r.testName, time: r.duration };
-        if ('renderTime' in r) return { name: r.testName, time: r.renderTime };
-        return { name: r.testName, time: 0 };
+        if ('duration' in r) return { name: (r as any).testName, time: r.duration };
+        if ('renderTime' in r) return { name: (r as any).testName, time: r.renderTime };
+        return { name: (r as any).testName, time: 0 };
       })
       .filter(r => r.time > 0);
 
@@ -241,7 +268,7 @@ export class ReportGenerator {
   }
 
   // Generate recommendations
-  private generateRecommendations(allResults: any[]): TestReport['recommendations'] {
+  private generateRecommendations(allResults: TestResult[]): TestReport['recommendations'] {
     const critical: string[] = [];
     const high: string[] = [];
     const medium: string[] = [];
@@ -297,7 +324,7 @@ export class ReportGenerator {
   }
 
   // Identify optimization opportunities
-  private identifyOptimizationOpportunities(allResults: any[]): string[] {
+  private identifyOptimizationOpportunities(allResults: TestResult[]): string[] {
     const opportunities: string[] = [];
 
     // Analyze render performance
@@ -370,43 +397,49 @@ export class ReportGenerator {
     performanceResults: PerformanceTestResult[],
     sidebarResults: SidebarTestResult[],
     componentResults: ComponentTestResult[]
-  ): any[] {
+  ): DetailedResult[] {
     return [
       {
         category: 'Performance Tests',
         count: performanceResults.length,
         results: performanceResults.map(r => ({
-          name: r.testName,
+          name: (r as any).testName,
           score: r.score,
+          passed: r.score >= 70,
           renderTime: r.renderTime,
           rerenderCount: r.rerenderCount,
           memoryUsage: r.memoryUsage,
           recommendations: r.recommendations,
+          testName: (r as any).testName,
         })),
       },
       {
         category: 'Sidebar Tests',
         count: sidebarResults.length,
         results: sidebarResults.map(r => ({
-          name: r.testName,
+          name: (r as any).testName,
           score: r.score,
+          passed: r.score >= 70,
           duration: r.duration,
           errors: r.errors,
           warnings: r.warnings,
           metrics: r.metrics,
+          testName: (r as any).testName,
         })),
       },
       {
         category: 'Component Tests',
         count: componentResults.length,
         results: componentResults.map(r => ({
-          name: r.testName,
+          name: (r as any).testName,
           componentType: r.componentType,
           score: r.score,
+          passed: r.score >= 70,
           duration: r.duration,
           errors: r.errors,
           warnings: r.warnings,
           metrics: r.metrics,
+          testName: (r as any).testName,
         })),
       },
     ];
@@ -443,7 +476,7 @@ export class ReportGenerator {
     const rows: string[][] = [headers];
 
     report.detailedResults.forEach(category => {
-      category.results.forEach((result: any) => {
+      category.results.forEach((result) => {
         rows.push([
           result.name || 'N/A',
           category.category,
@@ -576,7 +609,7 @@ export class ReportGenerator {
             ${report.detailedResults
               .map(
                 category => `
-                <h3>${category.category} (${category.count} tests)</h3>
+                <h3>${category.category} (${(category as any).count} tests)</h3>
                 <table>
                     <thead>
                         <tr>
@@ -589,7 +622,7 @@ export class ReportGenerator {
                     <tbody>
                         ${category.results
                           .map(
-                            (result: any) => `
+                            (result) => `
                             <tr>
                                 <td>${result.name}</td>
                                 <td>

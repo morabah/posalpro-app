@@ -15,6 +15,78 @@ import { useProposal } from '@/hooks/useProposal';
 import { logInfo } from '@/lib/logger';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
+
+// ✅ TYPES: Define proper interfaces for proposal detail view
+interface ProposalMetadata {
+  productData?: {
+    products: Array<{
+      id: string;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      total: number;
+      discount?: number;
+    }>;
+    totalValue?: number;
+  };
+  teamData?: {
+    teamLead?: string;
+    salesRepresentative?: string;
+    subjectMatterExperts?: Record<string, unknown>;
+    executiveReviewers?: Array<{
+      id: string;
+      name: string;
+      role: string;
+    }>;
+  };
+  sectionData?: {
+    sections: Array<{
+      id: string;
+      title: string;
+      content: string;
+      type: string;
+    }>;
+  };
+}
+
+interface ProductData {
+  products: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    discount?: number;
+    product?: {
+      name: string;
+    };
+    productId?: string;
+  }>;
+  totalValue: number;
+}
+
+interface TeamData {
+  teamLead: string | null;
+  salesRepresentative: string | null;
+  subjectMatterExperts: Record<string, unknown>;
+  executiveReviewers: Array<{
+    id: string;
+    name: string;
+    role: string;
+  }>;
+}
+
+interface SectionData {
+  sections: Array<{
+    id: string;
+    title: string;
+    content: string;
+    type: string;
+    order?: number;
+    estimatedHours?: number;
+    assignedTo?: string;
+  }>;
+}
 import {
   Activity,
   AlertTriangle,
@@ -53,7 +125,7 @@ interface ProposalDetailViewProps {
 }
 
 // Helper functions to safely access metadata
-const getProductData = (metadata: any) => {
+const getProductData = (metadata: ProposalMetadata): ProductData | null => {
   if (!metadata?.productData) return null;
   return {
     products: Array.isArray(metadata.productData.products) ? metadata.productData.products : [],
@@ -61,7 +133,7 @@ const getProductData = (metadata: any) => {
   };
 };
 
-const getTeamData = (metadata: any) => {
+const getTeamData = (metadata: ProposalMetadata): TeamData | null => {
   if (!metadata?.teamData) return null;
   return {
     teamLead: metadata.teamData.teamLead || null,
@@ -73,7 +145,7 @@ const getTeamData = (metadata: any) => {
   };
 };
 
-const getSectionData = (metadata: any) => {
+const getSectionData = (metadata: ProposalMetadata): SectionData | null => {
   if (!metadata?.sectionData) return null;
   return {
     sections: Array.isArray(metadata.sectionData.sections) ? metadata.sectionData.sections : [],
@@ -479,7 +551,7 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                       (() => {
                         // ✅ FIXED: Prioritize database products over metadata
                         if (proposal?.products && proposal.products.length > 0) {
-                          const total = proposal.products.reduce((sum: number, product: any) => {
+                          const total = proposal.products.reduce((sum: number, product: { total: string | number }) => {
                             // Convert string totals to numbers (database stores as strings)
                             const productTotal =
                               typeof product.total === 'string'
@@ -493,7 +565,7 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                         const productData = getProductData(proposal?.metadata);
                         if (productData?.products && productData.products.length > 0) {
                           return productData.products.reduce(
-                            (sum: number, product: any) => sum + (product.total || 0),
+                            (sum: number, product: { total: number }) => sum + (product.total || 0),
                             0
                           );
                         }
@@ -665,10 +737,12 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                             {(() => {
                               const hasProducts = (proposal?.products?.length || 0) > 0;
                               const calculatedTotal =
-                                proposal?.products?.reduce((sum: number, product: any) => {
+                                proposal?.products?.reduce((sum: number, product: { total: string | number; quantity?: number; unitPrice?: number }) => {
                                   return (
                                     sum +
-                                    (product.total ||
+                                    (typeof product.total === 'string'
+                                      ? parseFloat(product.total) || 0
+                                      : product.total ||
                                       (product.quantity || 1) * (product.unitPrice || 0))
                                   );
                                 }, 0) || 0;
@@ -684,7 +758,7 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                             {(() => {
                               const hasProducts = (proposal?.products?.length || 0) > 0;
                               const calculatedTotal =
-                                proposal?.products?.reduce((sum: number, product: any) => {
+                                proposal?.products?.reduce((sum: number, product: { total: string | number }) => {
                                   // Convert string totals to numbers (database stores as strings)
                                   const total =
                                     typeof product.total === 'string'
@@ -859,7 +933,7 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                 })() ? (
                   <div className="space-y-4">
                     {(proposal?.products || getProductData(proposal?.metadata)?.products || []).map(
-                      (product: any, index: number) => (
+                      (product: { id: string; name: string; quantity: number; unitPrice: number; total: number }, index: number) => (
                         <div
                           key={product.id || index}
                           className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border"
@@ -870,16 +944,16 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                             </div>
                             <div>
                               <p className="font-medium text-gray-900">
-                                {product.product?.name ||
+                                {(product as any).product?.name ||
                                   product.name ||
-                                  `Product ${product.productId}`}
+                                  `Product ${(product as any).productId}`}
                               </p>
                               <p className="text-sm text-gray-600">
                                 Quantity: {product.quantity} ×{' '}
                                 {formatCurrency(product.unitPrice, proposal?.currency || 'USD')}
-                                {product.discount > 0 && (
+                                {(product as any).discount > 0 && (
                                   <span className="text-green-600 ml-2">
-                                    ({product.discount}% discount)
+                                    ({(product as any).discount}% discount)
                                   </span>
                                 )}
                               </p>
@@ -919,7 +993,7 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                 </h2>
                 {proposal?.sections && proposal.sections.length > 0 ? (
                   <div className="space-y-4">
-                    {proposal.sections.map((section: any, index: number) => (
+                    {proposal.sections.map((section: { id: string; title: string; content: string; type: string }, index: number) => (
                       <div key={index} className="p-4 bg-gray-50 rounded-lg border">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center space-x-3">
@@ -929,17 +1003,17 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
                             </Badge>
                           </div>
                           <div className="flex items-center space-x-2 text-sm text-gray-500">
-                            <span>Order: {section.order}</span>
-                            {section.estimatedHours && (
-                              <span>• Est. Hours: {section.estimatedHours}</span>
+                            <span>Order: {(section as any).order}</span>
+                            {(section as any).estimatedHours && (
+                              <span>• Est. Hours: {(section as any).estimatedHours}</span>
                             )}
                           </div>
                         </div>
                         <p className="text-sm text-gray-600 mb-3">{section.content}</p>
-                        {section.assignedTo && (
+                        {(section as any).assignedTo && (
                           <div className="flex items-center text-sm text-gray-500">
                             <User className="h-4 w-4 mr-1" />
-                            Assigned to: {section.assignedTo}
+                            Assigned to: {(section as any).assignedTo}
                           </div>
                         )}
                       </div>
@@ -999,15 +1073,15 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
 
                     // Add subject matter experts
                     if (teamData.subjectMatterExperts) {
-                      Object.entries(teamData.subjectMatterExperts).forEach(([domain, userId]) => {
+                      Object.entries(teamData.subjectMatterExperts).forEach(([domain, userId]: [string, any]) => {
                         members.push({ role: `${domain} Expert`, userId });
                       });
                     }
 
                     // Add executive reviewers
                     if (teamData.executiveReviewers) {
-                      teamData.executiveReviewers.forEach((userId: string) => {
-                        members.push({ role: 'Executive Reviewer', userId });
+                      teamData.executiveReviewers.forEach((reviewer: any) => {
+                        members.push({ role: 'Executive Reviewer', userId: reviewer.id || reviewer });
                       });
                     }
 
@@ -1045,8 +1119,8 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
 
                         // Add executive reviewers
                         if (teamData.executiveReviewers) {
-                          teamData.executiveReviewers.forEach((userId: string) => {
-                            members.push({ role: 'Executive Reviewer', userId });
+                          teamData.executiveReviewers.forEach((reviewer: any) => {
+                            members.push({ role: 'Executive Reviewer', userId: reviewer.id || reviewer });
                           });
                         }
 

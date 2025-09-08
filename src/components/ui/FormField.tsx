@@ -3,15 +3,20 @@
 import { cn } from '@/lib/utils';
 import React, { forwardRef } from 'react';
 
+// Type definitions for form field values
+type FormFieldValue = string | number | undefined;
+type FormFieldChangeHandler = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: any; type?: any } | FormFieldValue | undefined | any) => void;
+type FormFieldBlurHandler = (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement> | { target: any; type?: any }) => void;
+
 // ✅ Form Field Props Interface
 export interface FormFieldProps {
   name: string;
   label?: string;
   placeholder?: string;
   type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'textarea';
-  value?: any; // Optional for RHF/uncontrolled compatibility
-  onChange?: (value: any | React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; // Supports both value and event signatures
-  onBlur?: (...args: any[]) => void; // Updated for React Hook Form compatibility
+  value?: FormFieldValue; // Optional for RHF/uncontrolled compatibility
+  onChange?: FormFieldChangeHandler; // Supports both value and event signatures
+  onBlur?: FormFieldBlurHandler; // Updated for React Hook Form compatibility
   error?: string;
   touched?: boolean;
   required?: boolean;
@@ -74,16 +79,16 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
       }
 
       // Controlled usage: derive the new value and pass it up.
-      let newValue: any = e.target.value;
+      let newValue: FormFieldValue = e.target.value;
       if (type === 'number') {
         newValue = e.target.value !== '' ? parseFloat(e.target.value) : undefined;
       }
       onChange?.(newValue);
     };
 
-    const handleBlur = (...args: any[]) => {
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       if (onBlur) {
-        onBlur(...args);
+        onBlur(e);
       }
     };
 

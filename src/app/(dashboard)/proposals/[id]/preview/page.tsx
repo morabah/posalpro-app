@@ -29,8 +29,12 @@ interface ProposalPreviewPageProps {
 
 interface ProposalProduct {
   productId: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
   product?: {
     name: string;
+    category?: string;
   };
 }
 
@@ -47,6 +51,73 @@ interface ProductResponse {
     sku: string;
     category?: string;
   }>;
+}
+
+// Additional type definitions for proposal data
+interface CustomerData {
+  name?: string;
+  email?: string;
+  industry?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+}
+
+interface ProposalMetadata {
+  productData?: {
+    products?: Array<{
+      id: string;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      total: number;
+      category?: string;
+    }>;
+    totalValue?: number;
+  };
+  teamData?: {
+    team?: Array<{
+      id: string;
+      name: string;
+      role: string;
+    }>;
+    teamLead?: {
+      name: string;
+      email: string;
+    } | null;
+    salesRepresentative?: {
+      name: string;
+      email: string;
+    } | null;
+    subjectMatterExperts?: Record<string, unknown>;
+    executiveReviewers?: Array<{
+      id: string;
+      name: string;
+      role: string;
+    }>;
+  };
+  sectionData?: {
+    sections?: Array<{
+      id: string;
+      title: string;
+      content: string;
+      type: string;
+    }>;
+  };
+}
+
+interface ProposalData {
+  id: string;
+  title?: string;
+  description?: string;
+  dueDate?: string;
+  priority?: string;
+  currency?: string;
+  customer?: CustomerData;
+  products?: ProposalProduct[];
+  metadata?: ProposalMetadata;
 }
 
 function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
@@ -105,7 +176,7 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
         const cacheData = {
           company: {
             name: proposal.customer?.name || 'Company Name',
-            industry: (proposal.customer as any)?.industry || 'Industry',
+            industry: (proposal.customer as CustomerData)?.industry || 'Industry',
             contactEmail: proposal.customer?.email || 'contact@example.com',
           },
           proposal: {
@@ -114,7 +185,7 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
             dueDate: proposal.dueDate,
             priority: proposal.priority,
           },
-          products: proposal.products.map((p: any) => ({
+          products: proposal.products.map((p: ProposalProduct) => ({
             id: p.productId,
             name: byId.get(p.productId)?.name || p.product?.name || 'Unknown Product',
             quantity: p.quantity,
@@ -278,7 +349,7 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
   }
 
   // ✅ DERIVED VALUES - After early returns, NO MORE HOOKS
-  const getProductData = (metadata: any) => {
+  const getProductData = (metadata: ProposalMetadata) => {
     if (!metadata?.productData) return null;
     return {
       products: Array.isArray(metadata.productData.products) ? metadata.productData.products : [],
@@ -286,7 +357,7 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
     };
   };
 
-  const getTeamData = (metadata: any) => {
+  const getTeamData = (metadata: ProposalMetadata) => {
     if (!metadata?.teamData) return null;
     return {
       teamLead: metadata.teamData.teamLead || null,
@@ -298,45 +369,45 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
     };
   };
 
-  const getSectionData = (metadata: any) => {
+  const getSectionData = (metadata: ProposalMetadata) => {
     if (!metadata?.sectionData) return null;
     return {
       sections: Array.isArray(metadata.sectionData.sections) ? metadata.sectionData.sections : [],
     };
   };
 
-  const calculateTotal = (proposal: any) => {
-    if (proposal?.products?.length > 0) {
-      return proposal.products.reduce((sum: number, product: any) => sum + (product.total || 0), 0);
+  const calculateTotal = (proposal: ProposalData) => {
+    if (proposal?.products && proposal.products.length > 0) {
+      return proposal.products.reduce((sum: number, product: ProposalProduct) => sum + (product.total || 0), 0);
     }
 
-    const productData = getProductData(proposal?.metadata);
-    if (productData?.products?.length > 0) {
-      return productData!.products.reduce((sum: number, product: any) => sum + (product.total || 0), 0);
+    const productData = proposal?.metadata ? getProductData(proposal.metadata) : null;
+    if (productData?.products && productData.products.length > 0) {
+      return productData.products.reduce((sum: number, product: { total?: number }) => sum + (product.total || 0), 0);
     }
 
     return 0;
   };
 
-  const getProducts = (proposal: any) => {
-    if (proposal?.products?.length > 0) {
+  const getProducts = (proposal: ProposalData) => {
+    if (proposal?.products && proposal.products.length > 0) {
       return proposal.products;
     }
 
-    const productData = getProductData(proposal?.metadata);
+    const productData = proposal?.metadata ? getProductData(proposal.metadata) : null;
     return productData?.products || [];
   };
 
-  const products = getProducts(proposal);
-  const totalValue = calculateTotal(proposal);
-  const teamData = getTeamData(proposal?.metadata);
-  const sectionData = getSectionData(proposal?.metadata);
+  const products = getProducts(proposal as ProposalData);
+  const totalValue = calculateTotal(proposal as ProposalData);
+  const teamData = (proposal as ProposalData)?.metadata ? getTeamData((proposal as ProposalData).metadata!) : null;
+  const sectionData = (proposal as ProposalData)?.metadata ? getSectionData((proposal as ProposalData).metadata!) : null;
 
   // Summary calculation - pure functions only
   const productsSummary = {
     totalItems: products?.reduce((sum: number, p: any) => sum + (p.quantity || 1), 0) || 0,
-    categories: new Set(products?.map((p: any) => p.product?.category || p.category).filter(Boolean) || []),
-    avgPrice: products?.length ? totalValue / products.reduce((sum: number, p: any) => sum + (p.quantity || 1), 0) : 0,
+    categories: new Set(products?.map((p: any) => p.product?.category || 'General').filter(Boolean) || []),
+    avgPrice: products?.length ? totalValue / (products.reduce((sum: number, p: any) => sum + (p.quantity || 1), 0) || 1) : 0,
   };
 
   return (
@@ -446,20 +517,20 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
                       <strong>Email:</strong> {proposal.customer.email || 'N/A'}
                     </div>
                     <div>
-                      <strong>Phone:</strong> {(proposal.customer as any).phone || 'N/A'}
+                      <strong>Phone:</strong> {(proposal.customer as CustomerData)?.phone || 'N/A'}
                     </div>
                   </div>
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">Address</h3>
                   <div className="space-y-1 text-sm">
-                    <div>{(proposal.customer as any).address || 'N/A'}</div>
+                    <div>{(proposal.customer as CustomerData)?.address || 'N/A'}</div>
                     <div>
-                      {(proposal.customer as any).city && (proposal.customer as any).state
-                        ? `${(proposal.customer as any).city}, ${(proposal.customer as any).state}`
+                      {(proposal.customer as CustomerData)?.city && (proposal.customer as CustomerData)?.state
+                        ? `${(proposal.customer as CustomerData)?.city}, ${(proposal.customer as CustomerData)?.state}`
                         : 'N/A'}
                     </div>
-                    <div>{(proposal.customer as any).zipCode || ''}</div>
+                    <div>{(proposal.customer as CustomerData)?.zipCode || ''}</div>
                   </div>
                 </div>
               </div>
@@ -621,7 +692,7 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Additional Sections</h2>
             <div className="space-y-6">
-              {sectionData.sections.map((section: any, index: number) => (
+              {sectionData.sections.map((section: { id: string; title: string; content: string; type: string }, index: number) => (
                 <Card key={index} className="p-6">
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">
                     {section.title || `Section ${index + 1}`}

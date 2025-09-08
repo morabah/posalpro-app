@@ -8,6 +8,18 @@ import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logInfo } from '@/lib/logger';
 
+// Type definition for proposal metrics data (matches Prisma query result)
+type ProposalMetricsData = {
+  id: string;
+  status: string;
+  priority: string;
+  dueDate: Date | null;
+  value: number | null;
+  currency: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 // ====================
 // GET /api/proposals/dashboard-metrics - Get dashboard metrics
 // ====================
@@ -43,22 +55,22 @@ export const GET = createRoute(
       // Calculate metrics
       const total = allProposals.length;
 
-      const inProgress = allProposals.filter((p: any) =>
+      const inProgress = allProposals.filter((p) =>
         ['IN_REVIEW', 'PENDING_APPROVAL', 'SUBMITTED'].includes(p.status)
       ).length;
 
-      const approved = allProposals.filter((p: any) =>
+      const approved = allProposals.filter((p) =>
         ['APPROVED', 'ACCEPTED'].includes(p.status)
       ).length;
 
-      const overdue = allProposals.filter((p: any) => {
+      const overdue = allProposals.filter((p) => {
         if (!p.dueDate) return false;
         const dueDate = new Date(p.dueDate);
         const now = new Date();
         return dueDate < now && !['APPROVED', 'ACCEPTED', 'DECLINED'].includes(p.status);
       }).length;
 
-      const totalValue = allProposals.reduce((sum: number, p: any) => {
+      const totalValue = allProposals.reduce((sum: number, p) => {
         const value = Number(p.value || 0);
         // Convert to USD if currency is different (simplified conversion)
         if (p.currency === 'EUR') return sum + value * 1.1; // Approximate EUR to USD
@@ -73,12 +85,12 @@ export const GET = createRoute(
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
       const recentActivity = allProposals.filter(
-        (p: any) => new Date(p.createdAt) >= thirtyDaysAgo || new Date(p.updatedAt) >= thirtyDaysAgo
+        (p) => new Date(p.createdAt) >= thirtyDaysAgo || new Date(p.updatedAt) >= thirtyDaysAgo
       ).length;
 
       // Get status distribution
       const statusDistribution = allProposals.reduce(
-        (acc: Record<string, number>, p: any) => {
+        (acc: Record<string, number>, p) => {
           acc[p.status] = (acc[p.status] || 0) + 1;
           return acc;
         },
@@ -87,7 +99,7 @@ export const GET = createRoute(
 
       // Get priority distribution
       const priorityDistribution = allProposals.reduce(
-        (acc: Record<string, number>, p: any) => {
+        (acc: Record<string, number>, p) => {
           acc[p.priority] = (acc[p.priority] || 0) + 1;
           return acc;
         },

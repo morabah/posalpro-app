@@ -76,6 +76,46 @@ const TeamPerformanceHeatmap = dynamic(
   { ssr: false }
 );
 
+// Type definitions for API response data
+interface EnhancedDashboardApiResponse {
+  data?: EnhancedDashboardData;
+}
+
+interface EnhancedDashboardData {
+  totalRevenue?: number | string;
+  monthlyRevenue?: number | string;
+  revenueGrowth?: number | string;
+  totalProposals?: number | string;
+  activeProposals?: number | string;
+  wonProposals?: number | string;
+  winRate?: number | string;
+  avgProposalValue?: number | string;
+  avgCycleTime?: number | string;
+  overdueCount?: number | string;
+  atRiskCount?: number | string;
+  totalCustomers?: number | string;
+  activeCustomers?: number | string;
+  customerGrowth?: number | string;
+  avgCustomerValue?: number | string;
+  proposalGrowth?: number | string;
+  revenueHistory?: RevenueHistoryItem[];
+  conversionFunnel?: ConversionFunnelItem[];
+}
+
+interface RevenueHistoryItem {
+  month?: string | number;
+  revenue?: number | string;
+  target?: number | string;
+  proposals?: number | string;
+}
+
+interface ConversionFunnelItem {
+  stage?: string;
+  count?: number | string;
+  conversionRate?: number | string;
+  value?: number | string;
+}
+
 // Enhanced KPI interfaces
 interface EnhancedKPIs {
   // Primary Business Metrics
@@ -667,7 +707,7 @@ export default function EnhancedDashboard() {
     });
 
     // Extract data from the enhanced dashboard API response structure
-    const responseData = dashboardData as any;
+    const responseData = dashboardData as EnhancedDashboardApiResponse;
     const data = responseData?.data;
 
     // Skip if data is null or undefined
@@ -702,7 +742,7 @@ export default function EnhancedDashboard() {
 
     // Use revenue chart from enhanced dashboard data
     setRevenueData(
-      (data.revenueHistory || []).map((item: any) => ({
+      (data.revenueHistory || []).map((item: RevenueHistoryItem) => ({
         month: String(item?.month || ''),
         revenue: Number(item?.revenue || 0),
         target: Number(item?.target || 0),
@@ -711,7 +751,7 @@ export default function EnhancedDashboard() {
     );
 
     // Convert conversion funnel from enhanced dashboard data
-    const funnelData: ConversionFunnel[] = (data.conversionFunnel || []).map((stage: any) => ({
+    const funnelData: ConversionFunnel[] = (data.conversionFunnel || []).map((stage: ConversionFunnelItem) => ({
       stage: String(stage.stage || ''),
       count: Number(stage.count || 0),
       conversionRate: Number(stage.conversionRate || 0),

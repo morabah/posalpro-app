@@ -219,9 +219,9 @@ export interface ProductQuery extends BaseQueryOptions {
 
 // API Client type
 export interface ApiClient {
-  get: (url: string, config?: any) => Promise<{ data: any }>;
-  post: (url: string, data?: any) => Promise<{ data: any }>;
-  put: (url: string, data?: any) => Promise<{ data: any }>;
+  get: <T = unknown>(url: string, config?: Record<string, unknown>) => Promise<{ data: T }>;
+  post: <T = unknown>(url: string, data?: unknown) => Promise<{ data: T }>;
+  put: <T = unknown>(url: string, data?: unknown) => Promise<{ data: T }>;
   delete: (url: string) => Promise<void>;
 }
 

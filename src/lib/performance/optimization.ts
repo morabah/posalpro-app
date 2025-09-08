@@ -8,6 +8,43 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+// Type definitions for performance optimization
+interface PerformanceEntryWithProcessing {
+  startTime: number;
+  processingStart: number;
+}
+
+interface PerformanceEntryWithValue {
+  startTime: number;
+  value: number;
+  hadRecentInput?: boolean;
+}
+
+interface PerformanceMemory {
+  usedJSHeapSize: number;
+  totalJSHeapSize: number;
+  jsHeapSizeLimit: number;
+}
+
+interface MetricReport {
+  count: number;
+  average: number;
+  min: number;
+  max: number;
+}
+
+interface PerformanceMetrics {
+  [key: string]: MetricReport;
+}
+
+interface VirtualScrollItem {
+  [key: string]: unknown;
+}
+
+interface PerformanceReport {
+  [key: string]: unknown;
+}
+
 // Performance monitoring utilities
 export class PerformanceMonitor {
   private static instance: PerformanceMonitor | null = null;
@@ -47,7 +84,7 @@ export class PerformanceMonitor {
 
     const observer = new PerformanceObserver(list => {
       for (const entry of list.getEntries()) {
-        const fidEntry = entry as any; // Cast to any for FID-specific properties
+        const fidEntry = entry as unknown as PerformanceEntryWithProcessing;
         this.recordMetric('FID', fidEntry.processingStart - fidEntry.startTime);
       }
     });
@@ -64,7 +101,8 @@ export class PerformanceMonitor {
 
     const observer = new PerformanceObserver(list => {
       for (const entry of list.getEntries()) {
-        if (!(entry as any).hadRecentInput) {
+        const entryWithValue = entry as unknown as PerformanceEntryWithValue;
+        if (!entryWithValue.hadRecentInput) {
           const firstSessionEntry = clsEntries[0];
           const lastSessionEntry = clsEntries[clsEntries.length - 1];
 
@@ -74,7 +112,7 @@ export class PerformanceMonitor {
             clsEntries.push(entry);
           }
 
-          clsValue += (entry as any).value;
+          clsValue += entryWithValue.value;
           this.recordMetric('CLS', clsValue);
         }
       }
@@ -105,8 +143,8 @@ export class PerformanceMonitor {
     this.metrics.get(name)!.push(value);
   }
 
-  getMetrics(): Record<string, { avg: number; min: number; max: number; latest: number }> {
-    const report: Record<string, any> = {};
+  getMetrics(): PerformanceMetrics {
+    const report: PerformanceMetrics = {};
     for (const [name, values] of Array.from(this.metrics.entries())) {
       report[name] = {
         count: values.length,
@@ -192,7 +230,7 @@ export class MemoryMonitor {
       return {};
     }
 
-    const memory = (performance as any).memory;
+    const memory = (performance as Performance & { memory: PerformanceMemory }).memory;
     return {
       usedJSHeapSize: memory.usedJSHeapSize,
       totalJSHeapSize: memory.totalJSHeapSize,
@@ -209,7 +247,7 @@ export class MemoryMonitor {
 
 // Performance optimization hooks
 export function usePerformanceOptimization() {
-  const [metrics, setMetrics] = useState<Record<string, any>>({});
+  const [metrics, setMetrics] = useState<PerformanceMetrics>({});
   const monitor = useMemo(() => PerformanceMonitor.getInstance(), []);
 
   useEffect(() => {
@@ -294,7 +332,7 @@ export function useIntersectionObserver(
 }
 
 // Virtual scrolling for large lists
-export function useVirtualScrolling(items: any[], itemHeight: number, containerHeight: number) {
+export function useVirtualScrolling(items: VirtualScrollItem[], itemHeight: number, containerHeight: number) {
   const [scrollTop, setScrollTop] = useState(0);
 
   const visibleItems = useMemo(() => {
@@ -325,7 +363,7 @@ export function useVirtualScrolling(items: any[], itemHeight: number, containerH
 
 // Performance reporting
 export class PerformanceReporter {
-  static generateReport(): Record<string, any> {
+  static generateReport(): PerformanceReport {
     const monitor = PerformanceMonitor.getInstance();
     const bundleAnalysis = BundleOptimizer.analyzeChunks();
     const memoryUsage = MemoryMonitor.getMemoryUsage();

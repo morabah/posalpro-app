@@ -15,6 +15,40 @@ import { logger } from '@/lib/logger';
 import { BundleOptimizerService } from './BundleOptimizer';
 import { PerformanceMonitor } from './optimization';
 
+// Type definitions for enhanced performance service
+interface AnalyticsService {
+  track: (event: string, data: Record<string, unknown>) => void;
+}
+
+interface PerformanceMemory {
+  usedJSHeapSize: number;
+  totalJSHeapSize: number;
+  jsHeapSizeLimit: number;
+}
+
+interface PerformanceEntryWithProcessing {
+  startTime: number;
+  processingStart: number;
+}
+
+interface PerformanceEntryWithValue {
+  startTime: number;
+  value: number;
+  hadRecentInput?: boolean;
+}
+
+interface ComprehensiveReport {
+  metrics: EnhancedPerformanceMetrics;
+  recommendations: PerformanceRecommendation[];
+  alerts: PerformanceAlert[];
+  timestamp: number;
+  summary: {
+    overallScore: number;
+    criticalIssues: number;
+    optimizationOpportunities: number;
+  };
+}
+
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
   userStories: ['US-6.1', 'US-6.2', 'US-6.3', 'US-4.1'],
@@ -157,7 +191,7 @@ export class EnhancedPerformanceService {
   private errorHandlingService: ErrorHandlingService;
   private performanceMonitor: PerformanceMonitor;
   private bundleOptimizer: BundleOptimizerService;
-  private analytics: any;
+  private analytics: AnalyticsService | null = null;
 
   private metrics!: EnhancedPerformanceMetrics;
   private thresholds!: PerformanceThresholds;
@@ -187,9 +221,9 @@ export class EnhancedPerformanceService {
   /**
    * Initialize analytics integration
    */
-  initializeAnalytics(analytics: any): void {
+  initializeAnalytics(analytics: AnalyticsService): void {
     this.analytics = analytics;
-    this.bundleOptimizer.initializeAnalytics(analytics);
+    this.bundleOptimizer.initializeAnalytics(analytics as any);
 
     // Track service initialization
     this.analytics?.track('enhanced_performance_service_initialized', {
@@ -373,7 +407,7 @@ export class EnhancedPerformanceService {
     if (typeof window === 'undefined' || !('memory' in performance)) return;
 
     try {
-      const memory = (performance as any).memory;
+      const memory = (performance as Performance & { memory: PerformanceMemory }).memory;
 
       this.metrics.memoryMetrics = {
         usedHeapSize: memory.usedJSHeapSize,
@@ -600,18 +634,17 @@ export class EnhancedPerformanceService {
   /**
    * Generate comprehensive performance report
    */
-  async generateComprehensiveReport(): Promise<any> {
+  async generateComprehensiveReport(): Promise<ComprehensiveReport> {
     try {
       // Collect latest metrics
       await this.collectAllMetrics();
 
       const report = {
-        timestamp: new Date().toISOString(),
+        timestamp: Date.now(),
         summary: {
-          optimizationScore: this.metrics.optimizationScore,
-          alertsCount: this.metrics.alerts.length,
-          recommendationsCount: this.metrics.recommendations.length,
+          overallScore: this.metrics.optimizationScore,
           criticalIssues: this.metrics.alerts.filter(alert => alert.severity === 'critical').length,
+          optimizationOpportunities: this.metrics.recommendations.length,
         },
         metrics: this.metrics,
         thresholds: this.thresholds,
@@ -760,7 +793,7 @@ export class EnhancedPerformanceService {
       // FID Observer
       const fidObserver = new PerformanceObserver(list => {
         list.getEntries().forEach(entry => {
-          const firstInputEntry = entry as any; // First Input Delay entries have processingStart
+          const firstInputEntry = entry as unknown as PerformanceEntryWithProcessing;
           this.metrics.webVitals.fid = firstInputEntry.processingStart - firstInputEntry.startTime;
         });
       });
@@ -771,8 +804,9 @@ export class EnhancedPerformanceService {
       const clsObserver = new PerformanceObserver(list => {
         let clsValue = 0;
         list.getEntries().forEach(entry => {
-          if (!(entry as any).hadRecentInput) {
-            clsValue += (entry as any).value;
+          const entryWithValue = entry as unknown as PerformanceEntryWithValue;
+          if (!entryWithValue.hadRecentInput) {
+            clsValue += entryWithValue.value;
           }
         });
         this.metrics.webVitals.cls = clsValue;

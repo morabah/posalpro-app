@@ -27,7 +27,7 @@ export interface SessionData {
   endTime: Date | null;
   duration: number;
   actions: number;
-  deviceInfo?: any;
+  deviceInfo?: Record<string, unknown>;
 }
 
 export interface AnalyticsFilters {
@@ -513,7 +513,7 @@ export class AnalyticsService {
     userId: string,
     component: string,
     operation: string,
-    metadata?: any
+    metadata?: Record<string, unknown>
   ): Promise<void> {
     try {
       logDebug('Analytics Service: Tracking access event', {

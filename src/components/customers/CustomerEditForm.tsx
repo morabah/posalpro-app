@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/forms/Input';
 import { useCustomer, useUpdateCustomer } from '@/features/customers/hooks';
 import { CustomerUpdate } from '@/features/customers/schemas';
 import { logError } from '@/lib/logger';
-import { customerValidationSchema } from '@/lib/validation/customerValidation';
+import { CustomerUpdateSchema } from '@/features/customers/schemas';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
@@ -33,7 +33,7 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
     trigger,
     reset,
   } = useForm<CustomerUpdate>({
-    resolver: zodResolver(customerValidationSchema as any),
+    resolver: zodResolver(CustomerUpdateSchema),
     mode: 'onBlur',
     defaultValues: {
       name: '',

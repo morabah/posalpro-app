@@ -14,29 +14,40 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import React, { lazy, LazyExoticComponent, ComponentType as ReactComponentType } from 'react';
 
+// Type definitions for bundle optimization
+type ComponentModule<T = unknown> = {
+  default: ReactComponentType<T>;
+};
+
+type ComponentImporter<T = unknown> = () => Promise<ComponentModule<T>>;
+
+interface ComponentImporterMap {
+  [key: string]: ComponentImporter<unknown>;
+}
+
 // Explicit component importers to avoid webpack context importing test files
-const COMPONENT_IMPORTERS: Record<string, () => Promise<{ default: ReactComponentType<any> }>> = {
+const COMPONENT_IMPORTERS: ComponentImporterMap = {
   'proposals/ProposalWizard': () =>
     import(
       /* webpackChunkName: "proposal-wizard" */
       '@/components/proposals/ProposalWizard'
-    ) as unknown as Promise<{ default: ReactComponentType<any> }>,
+    ) as any,
   'analytics/AnalyticsDashboard': () =>
     import(
       /* webpackChunkName: "analytics-dashboard" */
       '@/components/analytics/AnalyticsDashboard'
-    ) as unknown as Promise<{ default: ReactComponentType<any> }>,
+    ) as any,
   // Fallback mappings to existing sections/components
   'admin/AdminPanel': () =>
     import(
       /* webpackChunkName: "admin-panel" */
       '@/features/admin/components/RoleManager'
-    ) as unknown as Promise<{ default: ReactComponentType<any> }>,
+    ) as any,
   'executive/ExecutiveReview': () =>
     import(
       /* webpackChunkName: "executive-review" */
       '@/components/dashboard/sections/ExecutiveSummaryCard'
-    ) as unknown as Promise<{ default: ReactComponentType<any> }>,
+    ) as any,
 };
 
 // Component Traceability Matrix
@@ -215,7 +226,7 @@ export class BundleOptimizerService {
    */
   private async loadComponentWithMetrics(
     config: ComponentOptimizationConfig
-  ): Promise<{ default: ReactComponentType<any> }> {
+  ): Promise<ComponentModule<unknown>> {
     const startTime = performance.now();
     const { id, chunkName } = config;
 
@@ -323,7 +334,7 @@ export class BundleOptimizerService {
   private createFallbackComponent(
     config: ComponentOptimizationConfig,
     error: Error
-  ): ReactComponentType<any> {
+  ): ReactComponentType<unknown> {
     // mark error as used (analytics disabled for now)
     void error;
     const { id } = config;
@@ -573,7 +584,7 @@ export class BundleOptimizerService {
 /**
  * Higher-order component for bundle optimization
  */
-export function withBundleOptimization<T extends ReactComponentType<any>>(
+export function withBundleOptimization<T extends ReactComponentType<unknown>>(
   Component: T,
   config: ComponentOptimizationConfig
 ): LazyExoticComponent<T> {

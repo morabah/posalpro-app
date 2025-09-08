@@ -15,9 +15,15 @@ export interface NavigationPerformanceMetrics {
   cacheHitRate: number;
 }
 
+export interface RouteCacheData {
+  component: string;
+  loadTime: number;
+  lastAccessed: number;
+}
+
 export class NavigationOptimizer {
   private static instance: NavigationOptimizer | null = null;
-  private routeCache = new Map<string, any>();
+  private routeCache = new Map<string, RouteCacheData>();
   private navigationTimes = new Map<string, number>();
   private preloadedRoutes = new Set<string>();
 

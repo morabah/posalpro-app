@@ -5,6 +5,21 @@
 
 import { Card } from '@/components/ui/Card';
 import { AnomalyDetection } from '@/types/dashboard';
+
+// Type definitions for anomaly detection settings
+interface AnomalyDetectionSettings {
+  thresholds: {
+    high: number;
+    medium: number;
+    low: number;
+  };
+  notifications: {
+    email: boolean;
+    push: boolean;
+    slack: boolean;
+  };
+  autoAcknowledge: boolean;
+}
 import {
   BellIcon,
   CheckCircleIcon,
@@ -298,7 +313,7 @@ export const AnomalyAlertSettings = memo(
       };
       autoAcknowledge: boolean;
     };
-    onUpdateSettings: (settings: any) => void;
+    onUpdateSettings: (settings: AnomalyDetectionSettings) => void;
   }) => {
     const updateThreshold = (severity: string, value: number) => {
       onUpdateSettings({

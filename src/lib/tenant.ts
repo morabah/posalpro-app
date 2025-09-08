@@ -6,16 +6,26 @@
  * AsyncLocalStorage is used server-side for request context, with browser fallbacks.
  */
 
-// @ts-ignore - Next.js bundler directive to ignore this file in client bundle
 // This file contains Node.js-specific imports that should only be used server-side
 
 // Dynamic import for AsyncLocalStorage to avoid bundling issues
-let AsyncLocalStorage: any = null;
+interface AsyncLocalStorageConstructor {
+  new <T>(): AsyncLocalStorage<T>;
+}
+
+interface AsyncLocalStorage<T> {
+  run<R>(store: T, callback: () => R): R;
+  run<R>(store: T, callback: () => Promise<R>): Promise<R>;
+  getStore(): T | undefined;
+}
+
+let AsyncLocalStorage: AsyncLocalStorageConstructor | null = null;
 
 // Initialize AsyncLocalStorage dynamically (only on server)
 if (typeof window === 'undefined') {
   try {
     // Only import on server-side
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const asyncHooks = require('node:async_hooks');
     AsyncLocalStorage = asyncHooks.AsyncLocalStorage;
   } catch {
@@ -38,9 +48,9 @@ export interface TenantContext {
 
 // Async context to carry tenant per request (works in Node runtime paths)
 // Only create AsyncLocalStorage if available (server-side)
-const tenantAls =
+const tenantAls: AsyncLocalStorage<TenantContext> | null =
   typeof AsyncLocalStorage !== 'undefined' && AsyncLocalStorage
-    ? new (AsyncLocalStorage as any)()
+    ? new AsyncLocalStorage<TenantContext>()
     : null;
 
 /**
@@ -56,7 +66,7 @@ export async function withTenantContext<T>(req: NextRequest, fn: () => T | Promi
 
   // Use AsyncLocalStorage if available (server-side), otherwise just run the function
   if (tenantAls) {
-    return await tenantAls.run(tenant, fn as any);
+    return await tenantAls.run(tenant, fn);
   } else {
     // Browser environment - just run the function without context
     return await fn();
@@ -69,7 +79,7 @@ export async function withTenantContext<T>(req: NextRequest, fn: () => T | Promi
 export async function runWithTenantContext<T>(tenant: TenantContext, fn: () => T | Promise<T>) {
   // Use AsyncLocalStorage if available (server-side), otherwise just run the function
   if (tenantAls) {
-    return await tenantAls.run(tenant, fn as any);
+    return await tenantAls.run(tenant, fn);
   } else {
     // Browser environment - just run the function without context
     return await fn();
@@ -91,7 +101,7 @@ export async function resolveTenantFromRequest(req: NextRequest): Promise<Tenant
   // 2) NextAuth token
   try {
     const token = await getToken({ req, secret: getAuthSecret() });
-    const jwtTenant = (token as any)?.tenantId as string | undefined;
+    const jwtTenant = (token as any)?.tenantId;
     if (jwtTenant) {
       const ctx = { tenantId: jwtTenant, domain: req.headers.get('host') || undefined };
       logDebug('Tenant resolved from JWT', { tenantId: jwtTenant });
@@ -161,7 +171,7 @@ export function getTenantFilter(tenantId?: string): { tenantId: string } {
 }
 
 /** Apply tenant filtering to Prisma queries. */
-export function applyTenantFilter<T extends Record<string, any>>(
+export function applyTenantFilter<T extends Record<string, unknown>>(
   query: T,
   tenantId?: string
 ): T & { where: { tenantId: string } } {
@@ -170,15 +180,15 @@ export function applyTenantFilter<T extends Record<string, any>>(
     return {
       ...query,
       where: {
-        ...query.where,
+        ...(query.where as Record<string, unknown>),
         ...tenantFilter,
       },
-    } as any;
+    } as T & { where: { tenantId: string } };
   }
   return {
     ...query,
     where: tenantFilter,
-  } as any;
+  } as T & { where: { tenantId: string } };
 }
 
 /** Utility to expose ALS for tests */

@@ -15,6 +15,49 @@ import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 
 import { http } from '@/lib/http';
+import { Prisma } from '@prisma/client';
+
+// Type definitions for version history service
+interface VersionHistoryWhereClause {
+  proposalId?: string;
+  changeType?: string;
+  createdBy?: string;
+  createdAt?: {
+    gte?: Date;
+    lte?: Date;
+  };
+}
+
+interface VersionHistoryCursor {
+  createdAt?: Date;
+  id?: string;
+}
+
+interface VersionHistorySnapshot {
+  createdByName?: string;
+  totalValue?: number;
+  value?: number;
+  changeDetails?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface VersionHistoryPrismaResult {
+  id: string;
+  proposalId: string;
+  version: number;
+  changeType: string;
+  changesSummary: string | null;
+  createdAt: Date;
+  createdBy: string | null;
+  snapshot: Prisma.InputJsonValue | null;
+}
+
+interface ChangeTypeStat {
+  changeType: string;
+  _count: {
+    id: number;
+  };
+}
 
 // Import consolidated schemas from features/version-history
 import {
@@ -151,13 +194,13 @@ export class VersionHistoryService {
 
     try {
       // Build Prisma query
-      const where: any = {};
+      const where: VersionHistoryWhereClause = {};
       if (params.proposalId) {
         where.proposalId = params.proposalId;
       }
 
       // Handle cursor-based pagination
-      const cursor: any = {};
+      const cursor: VersionHistoryCursor = {};
       if (params.cursorCreatedAt && params.cursorId) {
         cursor.createdAt = new Date(params.cursorCreatedAt);
         cursor.id = params.cursorId;
@@ -185,10 +228,7 @@ export class VersionHistoryService {
         ...(cursor.createdAt &&
           cursor.id && {
             cursor: {
-              createdAt_id: {
-                createdAt: cursor.createdAt,
-                id: cursor.id,
-              },
+              id: cursor.id,
             },
           }),
       });
@@ -207,13 +247,13 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map((version: any) => {
-        const snapshot = version.snapshot as any;
+      const transformedItems = items.map((version: VersionHistoryPrismaResult) => {
+        const snapshot = version.snapshot as VersionHistorySnapshot | null;
         return {
           id: version.id,
           proposalId: version.proposalId,
           version: version.version,
-          changeType: version.changeType as any,
+          changeType: version.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
           changesSummary: version.changesSummary || undefined,
           createdAt: version.createdAt,
           createdBy: version.createdBy || undefined,
@@ -319,7 +359,7 @@ export class VersionHistoryService {
         id: version.id,
         proposalId: version.proposalId,
         version: version.version,
-        changeType: version.changeType as any,
+        changeType: version.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
         changesSummary: version.changesSummary || undefined,
         createdAt: version.createdAt,
 
@@ -406,7 +446,7 @@ export class VersionHistoryService {
       const where = { proposalId };
 
       // Handle cursor-based pagination
-      const cursor: any = {};
+      const cursor: VersionHistoryCursor = {};
       if (params.cursorCreatedAt && params.cursorId) {
         cursor.createdAt = new Date(params.cursorCreatedAt);
         cursor.id = params.cursorId;
@@ -434,10 +474,7 @@ export class VersionHistoryService {
         ...(cursor.createdAt &&
           cursor.id && {
             cursor: {
-              createdAt_id: {
-                createdAt: cursor.createdAt,
-                id: cursor.id,
-              },
+              id: cursor.id,
             },
           }),
       });
@@ -456,13 +493,13 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map((version: any) => {
-        const snapshot = version.snapshot as any;
+      const transformedItems = items.map((version: VersionHistoryPrismaResult) => {
+        const snapshot = version.snapshot as VersionHistorySnapshot | null;
         return {
           id: version.id,
           proposalId: version.proposalId,
           version: version.version,
-          changeType: version.changeType as any,
+          changeType: version.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
           changesSummary: version.changesSummary || undefined,
           createdAt: version.createdAt,
           createdBy: version.createdBy || undefined,
@@ -587,7 +624,7 @@ export class VersionHistoryService {
         id: versionEntry.id,
         proposalId: versionEntry.proposalId,
         version: versionEntry.version,
-        changeType: versionEntry.changeType as any,
+        changeType: versionEntry.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
         changesSummary: versionEntry.changesSummary || undefined,
         createdAt: versionEntry.createdAt,
         // updatedAt doesn't exist in ProposalVersion model, using createdAt
@@ -668,7 +705,7 @@ export class VersionHistoryService {
 
     try {
       // Build where clause for statistics
-      const where: any = {};
+      const where: VersionHistoryWhereClause = {};
       if (params.proposalId) {
         where.proposalId = params.proposalId;
       }
@@ -711,7 +748,7 @@ export class VersionHistoryService {
         totalVersions,
         totalProposals,
         changeTypeBreakdown: changeTypeStats.reduce(
-          (acc: Record<string, number>, stat: any) => {
+          (acc: Record<string, number>, stat: ChangeTypeStat) => {
             acc[stat.changeType] = stat._count.id;
             return acc;
           },
@@ -789,10 +826,15 @@ export class VersionHistoryService {
 
     try {
       // Build Prisma search query
-      const where: any = {
+      const where: VersionHistoryWhereClause & {
+        OR: Array<{
+          changesSummary?: { contains: string; mode: 'insensitive' };
+          proposalId?: { contains: string; mode: 'insensitive' };
+        }>;
+      } = {
         OR: [
           { changesSummary: { contains: query, mode: 'insensitive' } },
-          { changeType: { contains: query, mode: 'insensitive' } },
+          { proposalId: { contains: query, mode: 'insensitive' } },
         ],
       };
 
@@ -801,7 +843,7 @@ export class VersionHistoryService {
       }
 
       // Handle cursor-based pagination
-      const cursor: any = {};
+      const cursor: VersionHistoryCursor = {};
       if (params.cursorCreatedAt && params.cursorId) {
         cursor.createdAt = new Date(params.cursorCreatedAt);
         cursor.id = params.cursorId;
@@ -829,10 +871,7 @@ export class VersionHistoryService {
         ...(cursor.createdAt &&
           cursor.id && {
             cursor: {
-              createdAt_id: {
-                createdAt: cursor.createdAt,
-                id: cursor.id,
-              },
+              id: cursor.id,
             },
           }),
       });
@@ -851,13 +890,13 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map((version: any) => {
-        const snapshot = version.snapshot as any;
+      const transformedItems = items.map((version: VersionHistoryPrismaResult) => {
+        const snapshot = version.snapshot as VersionHistorySnapshot | null;
         return {
           id: version.id,
           proposalId: version.proposalId,
           version: version.version,
-          changeType: version.changeType as any,
+          changeType: version.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
           changesSummary: version.changesSummary || undefined,
           createdAt: version.createdAt,
           createdBy: version.createdBy || undefined,
@@ -948,7 +987,7 @@ export class VersionHistoryService {
       const where = { createdBy: userId };
 
       // Handle cursor-based pagination
-      const cursor: any = {};
+      const cursor: VersionHistoryCursor = {};
       if (params.cursorCreatedAt && params.cursorId) {
         cursor.createdAt = new Date(params.cursorCreatedAt);
         cursor.id = params.cursorId;
@@ -976,10 +1015,7 @@ export class VersionHistoryService {
         ...(cursor.createdAt &&
           cursor.id && {
             cursor: {
-              createdAt_id: {
-                createdAt: cursor.createdAt,
-                id: cursor.id,
-              },
+              id: cursor.id,
             },
           }),
       });
@@ -998,13 +1034,13 @@ export class VersionHistoryService {
           : null;
 
       // Transform to match the expected schema format
-      const transformedItems = items.map((version: any) => {
-        const snapshot = version.snapshot as any;
+      const transformedItems = items.map((version: VersionHistoryPrismaResult) => {
+        const snapshot = version.snapshot as VersionHistorySnapshot | null;
         return {
           id: version.id,
           proposalId: version.proposalId,
           version: version.version,
-          changeType: version.changeType as any,
+          changeType: version.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
           changesSummary: version.changesSummary || undefined,
           createdAt: version.createdAt,
           createdBy: version.createdBy || undefined,

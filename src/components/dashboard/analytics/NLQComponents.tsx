@@ -15,6 +15,14 @@ import {
 } from '@heroicons/react/24/outline';
 import { NLQQuery } from '@/types/dashboard';
 
+// Type definitions for query builder
+interface QueryBuilderData {
+  metric: string;
+  timeRange: string;
+  filters: string[];
+  aggregation: string;
+}
+
 // NLQ Interface
 export const NLQInterface = memo(
   ({
@@ -349,7 +357,7 @@ export const QueryBuilder = memo(
   ({
     onBuildQuery
   }: {
-    onBuildQuery: (query: any) => void;
+    onBuildQuery: (query: QueryBuilderData) => void;
   }) => {
     const [queryBuilder, setQueryBuilder] = useState({
       metric: '',
@@ -457,6 +465,3 @@ export const QueryBuilder = memo(
 );
 
 QueryBuilder.displayName = 'QueryBuilder';
-
-
-

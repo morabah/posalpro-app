@@ -19,6 +19,47 @@ import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+// Type definitions for user data and activity
+interface UserWithPermissions {
+  id: string;
+  roles: string[];
+  permissions?: string[];
+  tenantId?: string;
+}
+
+interface UserRoleEntry {
+  role: {
+    name: string;
+    description: string;
+    level: number;
+  };
+}
+
+interface AuditLogEntry {
+  id: string;
+  action: string;
+  model: string;
+  targetId: string;
+  at: Date;
+}
+
+interface HypothesisEventEntry {
+  id: string;
+  action: string;
+  hypothesis: string;
+  userStoryId: string;
+  performanceImprovement: number;
+  timestamp: Date;
+}
+
+interface ProposalActivityEntry {
+  id: string;
+  title: string;
+  status: string;
+  createdBy: string;
+  updatedAt: Date;
+}
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-2.1 (User Profile Management), US-2.2 (User Activity Tracking)
@@ -67,7 +108,8 @@ export const GET = createRoute(
 
       // Get user role and permission context for granular security
       const userRoles = (user.roles as string[]) || ['Business Development Manager'];
-      const userPermissions = ((user as any).permissions as string[]) || [];
+      const userWithPermissions = user as UserWithPermissions;
+      const userPermissions = userWithPermissions.permissions || [];
       const userRole = userRoles[0];
 
       // Parse requested fields with selective hydration and security context
@@ -173,7 +215,7 @@ export const GET = createRoute(
           userRecord.communicationPrefs?.language || userRecord.preferences?.language || 'en',
         theme: userRecord.preferences?.theme || 'system',
         analyticsConsent: userRecord.preferences?.analyticsConsent || false,
-        roles: userRecord.roles.map((ur: any) => ({
+        roles: userRecord.roles.map((ur: UserRoleEntry) => ({
           name: ur.role.name,
           description: ur.role.description,
           level: ur.role.level,
@@ -196,7 +238,17 @@ export const GET = createRoute(
       // If activity is requested, fetch recent activity
       if (validatedQuery.includeActivity) {
         // Modern SaaS: gate advanced activity via entitlement
-        const tenantId = (user as any).tenantId;
+        const tenantId = userWithPermissions.tenantId;
+        if (!tenantId) {
+          return createApiErrorResponse(
+            new StandardError({
+              message: 'User has no tenant ID',
+              code: ErrorCodes.AUTH.PERMISSION_DENIED,
+              metadata: { component: 'UsersIdRoute', operation: 'getUserActivity', userId: id },
+            }),
+            'User has no tenant ID'
+          );
+        }
         const ok = await EntitlementService.hasEntitlement(tenantId, 'feature.users.activity');
         if (!ok) {
           return createApiErrorResponse(
@@ -282,7 +334,7 @@ export const GET = createRoute(
             severity: 'info', // Default severity since it doesn't exist
             timestamp: log.at, // Use 'at' instead of timestamp
           })),
-          ...hypothesisEvents.map((event: any) => ({
+          ...hypothesisEvents.map((event: HypothesisEventEntry) => ({
             id: event.id,
             type: 'hypothesis',
             action: event.action,
@@ -291,7 +343,7 @@ export const GET = createRoute(
             improvement: event.performanceImprovement,
             timestamp: event.timestamp,
           })),
-          ...proposalActivity.map((proposal: any) => ({
+          ...proposalActivity.map((proposal: ProposalActivityEntry) => ({
             id: proposal.id,
             type: 'proposal',
             action: proposal.createdBy === id ? 'created' : 'updated',

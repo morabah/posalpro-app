@@ -122,7 +122,7 @@ export function useOptimizedFormValidation<T>(
 export class FormFieldOptimizer {
   private static instance: FormFieldOptimizer | null = null;
   private fieldUpdateTimes = new Map<string, number>();
-  private validationCache = new Map<string, any>();
+  private validationCache = new Map<string, FormFieldValue>();
 
   static getInstance(): FormFieldOptimizer {
     if (FormFieldOptimizer.instance === null) {

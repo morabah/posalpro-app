@@ -16,6 +16,7 @@
  */
 
 import type {
+  DashboardStats,
   EnhancedDashboardStats,
   ExecutiveDashboardQuery,
   ExecutiveDashboardResponse,
@@ -206,7 +207,7 @@ export class DashboardService {
    * Get basic dashboard statistics
    * CORE_REQUIREMENTS.md: Uses HTTP client with proper response handling
    */
-  async getDashboardStats(options: DashboardServiceOptions = {}): Promise<any> {
+  async getDashboardStats(options: DashboardServiceOptions = {}): Promise<EnhancedDashboardStats> {
     const errorHandlingService = ErrorHandlingService.getInstance();
 
     logDebug('[DashboardService] Fetch start', {

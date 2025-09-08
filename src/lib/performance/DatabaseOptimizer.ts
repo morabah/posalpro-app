@@ -13,6 +13,30 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logger } from '@/lib/logger';
 
+// Type definitions for database optimization
+interface CacheEntry<T = unknown> {
+  data: T;
+  timestamp: number;
+}
+
+interface QueryContext {
+  operation: string;
+  filters?: Record<string, unknown>;
+  pagination?: { page?: number; limit?: number };
+}
+
+interface OptimizedFilters {
+  OR?: Array<{
+    name?: { contains: string; mode: 'insensitive' };
+    email?: { contains: string; mode: 'insensitive' };
+    industry?: { contains: string; mode: 'insensitive' };
+  }>;
+  status?: string;
+  tier?: string;
+  industry?: { contains: string; mode: 'insensitive' };
+  [key: string]: unknown;
+}
+
 interface QueryPerformanceMetrics {
   queryStartTime: number;
   queryEndTime: number;
@@ -36,7 +60,7 @@ export class DatabaseOptimizer {
   private static instance: DatabaseOptimizer | null = null;
   private errorHandlingService: ErrorHandlingService;
   private config: DatabaseOptimizationConfig;
-  private queryCache = new Map<string, { data: any; timestamp: number }>();
+  private queryCache = new Map<string, CacheEntry<unknown>>();
 
   private constructor() {
     this.errorHandlingService = ErrorHandlingService.getInstance();
@@ -64,11 +88,7 @@ export class DatabaseOptimizer {
   public async optimizeCustomerQuery<T>(
     queryFn: () => Promise<T>,
     queryIdentifier: string,
-    context: {
-      operation: string;
-      filters?: Record<string, any>;
-      pagination?: { page?: number; limit?: number };
-    }
+    context: QueryContext
   ): Promise<{ data: T; metrics: QueryPerformanceMetrics }> {
     const queryStartTime = Date.now();
     const cacheKey = this.generateCacheKey(queryIdentifier, context);
@@ -80,7 +100,7 @@ export class DatabaseOptimizer {
         if (cached) {
           logger.info(`[DatabaseOptimizer] Cache hit for ${queryIdentifier}`);
           return {
-            data: cached,
+            data: cached as T,
             metrics: {
               queryStartTime,
               queryEndTime: Date.now(),
@@ -225,34 +245,34 @@ export class DatabaseOptimizer {
   /**
    * Get optimized query filters
    */
-  public optimizeQueryFilters(filters: Record<string, any>) {
-    const optimized: any = {};
+  public optimizeQueryFilters(filters: Record<string, unknown>): OptimizedFilters {
+    const optimized: OptimizedFilters = {};
 
     // Convert search filters to optimized database queries
     if (filters.search) {
       optimized.OR = [
-        { name: { contains: filters.search, mode: 'insensitive' } },
-        { email: { contains: filters.search, mode: 'insensitive' } },
-        { industry: { contains: filters.search, mode: 'insensitive' } },
+        { name: { contains: filters.search as string, mode: 'insensitive' } },
+        { email: { contains: filters.search as string, mode: 'insensitive' } },
+        { industry: { contains: filters.search as string, mode: 'insensitive' } },
       ];
     }
 
     // Add exact match filters
-    if (filters.status) optimized.status = filters.status;
-    if (filters.tier) optimized.tier = filters.tier;
-    if (filters.industry) optimized.industry = { contains: filters.industry, mode: 'insensitive' };
+    if (filters.status) optimized.status = filters.status as string;
+    if (filters.tier) optimized.tier = filters.tier as string;
+    if (filters.industry) optimized.industry = { contains: filters.industry as string, mode: 'insensitive' };
 
     return optimized;
   }
 
-  private generateCacheKey(queryId: string, context: any): string {
+  private generateCacheKey(queryId: string, context: QueryContext): string {
     return `${queryId}_${JSON.stringify(context)}`;
   }
 
-  private getCachedResult(key: string): any | null {
+  private getCachedResult<T = unknown>(key: string): T | null {
     const cached = this.queryCache.get(key);
     if (cached && Date.now() - cached.timestamp < this.config.cacheTtlMs) {
-      return cached.data;
+      return cached.data as T | null;
     }
 
     // Clean up expired cache
@@ -263,7 +283,7 @@ export class DatabaseOptimizer {
     return null;
   }
 
-  private setCachedResult(key: string, data: any): void {
+  private setCachedResult<T = unknown>(key: string, data: T): void {
     this.queryCache.set(key, {
       data,
       timestamp: Date.now(),
@@ -291,7 +311,7 @@ export class DatabaseOptimizer {
     ]);
   }
 
-  private inferIndexesUsed(context: any): string[] {
+  private inferIndexesUsed(context: QueryContext): string[] {
     const indexes: string[] = [];
 
     if (context.filters?.search) indexes.push('name_idx', 'email_idx', 'industry_idx');
@@ -302,7 +322,7 @@ export class DatabaseOptimizer {
     return indexes;
   }
 
-  private getOptimizationsApplied(context: any, queryTimeMs: number): string[] {
+  private getOptimizationsApplied(context: QueryContext, queryTimeMs: number): string[] {
     const optimizations: string[] = [];
 
     optimizations.push('selective_fields');

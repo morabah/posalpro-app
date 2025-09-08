@@ -5,7 +5,7 @@
  * Hypotheses: H8 (Load Time Optimization), H12 (Error Handling Improvements)
  */
 
-import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
+import { ErrorCode, ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { logError, logInfo, logWarn } from '@/lib/logger';
 import { NextResponse } from 'next/server';
 
@@ -39,9 +39,10 @@ export interface SuccessResponse<T = unknown> {
   message?: string;
 }
 
-// Route handler function type
+// Route handler function type with proper Next.js API route arguments
 export type SafeRouteHandler<T = unknown> = (
-  ...args: any[]
+  request: Request,
+  context?: { params?: Record<string, string> }
 ) => Promise<NextResponse<ApiResponse<T>>>;
 
 // Error handler configuration
@@ -80,7 +81,7 @@ export class ApiErrorHandler {
   createErrorResponse(
     error: unknown,
     defaultMessage = 'An unexpected error occurred',
-    defaultCode: string = ErrorCodes.SYSTEM.UNKNOWN,
+    defaultCode: ErrorCode = ErrorCodes.SYSTEM.UNKNOWN,
     statusCode = 500
   ): NextResponse<ErrorResponse> {
     try {
@@ -88,7 +89,7 @@ export class ApiErrorHandler {
       const standardError = errorHandlingService.processError(
         error,
         defaultMessage,
-        defaultCode as any
+        defaultCode
       );
 
       // Determine the appropriate HTTP status code
@@ -176,14 +177,14 @@ export class ApiErrorHandler {
    * Wrap a route handler to ensure errors are properly handled
    */
   wrapHandler<T>(
-    handler: (...args: any[]) => Promise<NextResponse<ApiResponse<T>>>,
+    handler: (request: Request, context?: { params?: Record<string, string> }) => Promise<NextResponse<ApiResponse<T>>>,
     config?: Partial<ErrorHandlerConfig>
-  ): (...args: any[]) => Promise<NextResponse<ApiResponse<T> | ErrorResponse>> {
+  ): (request: Request, context?: { params?: Record<string, string> }) => Promise<NextResponse<ApiResponse<T> | ErrorResponse>> {
     const mergedConfig = { ...this.config, ...config };
 
-    return async (...args: any[]): Promise<NextResponse<ApiResponse<T> | ErrorResponse>> => {
+    return async (request: Request, context?: { params?: Record<string, string> }): Promise<NextResponse<ApiResponse<T> | ErrorResponse>> => {
       try {
-        const result = await handler(...args);
+        const result = await handler(request, context);
         return result;
       } catch (error) {
         // Determine appropriate status code based on error type
@@ -315,9 +316,9 @@ export function createSuccessResponse<T>(
  * Wrap a route handler with error handling
  */
 export function withErrorHandler<T>(
-  handler: (...args: any[]) => Promise<NextResponse<ApiResponse<T>>>,
+  handler: (request: Request, context?: { params?: Record<string, string> }) => Promise<NextResponse<ApiResponse<T>>>,
   config?: ErrorHandlerConfig
-): (...args: any[]) => Promise<NextResponse<ApiResponse<T> | ErrorResponse>> {
+): (request: Request, context?: { params?: Record<string, string> }) => Promise<NextResponse<ApiResponse<T> | ErrorResponse>> {
   const errorHandler = getErrorHandler(config);
   return errorHandler.wrapHandler(handler, config);
 }
@@ -338,7 +339,7 @@ export async function withAsyncErrorHandler<T>(
  * Higher-order function to create error-handled route handlers
  */
 export function createSafeRoute<T>(
-  handler: (...args: any[]) => Promise<NextResponse<SuccessResponse<T>>>,
+  handler: (request: Request, context?: { params?: Record<string, string> }) => Promise<NextResponse<SuccessResponse<T>>>,
   config?: ErrorHandlerConfig
 ) {
   return withErrorHandler(handler, config);

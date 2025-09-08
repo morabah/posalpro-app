@@ -15,7 +15,7 @@ import {
 } from '@/features/products/hooks/useProducts';
 import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { logError, logInfo } from '@/lib/logger';
-import { productCreateValidationSchema } from '@/lib/validation/productValidation';
+import { ProductUpdateSchema } from '@/features/products/schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect } from 'react';
@@ -46,7 +46,7 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
     trigger,
     reset,
   } = useForm<ProductUpdate>({
-    resolver: zodResolver(productCreateValidationSchema as any),
+    resolver: zodResolver(ProductUpdateSchema),
     mode: 'onChange',
     defaultValues: {
       name: '',

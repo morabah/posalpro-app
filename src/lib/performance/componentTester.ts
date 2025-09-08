@@ -7,6 +7,13 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { logDebug } from '@/lib/logger';
 
+// Type definitions for performance monitoring
+interface PerformanceWithMemory extends Performance {
+  memory?: {
+    usedJSHeapSize: number;
+  };
+}
+
 export interface ComponentTestResult {
   testName: string;
   componentType: string;
@@ -23,7 +30,7 @@ export interface ComponentTestResult {
     eventCount: number;
     errorCount: number;
   };
-  details: Record<string, any>;
+  details: Record<string, unknown>;
 }
 
 export interface FormFieldTest {
@@ -100,7 +107,7 @@ export class ComponentTester {
   private startTest(_testName: string): void {
     void _testName;
     this.startTime = performance.now();
-    this.memoryStart = (performance as any).memory?.usedJSHeapSize ?? 0;
+    this.memoryStart = (performance as PerformanceWithMemory).memory?.usedJSHeapSize ?? 0;
   }
 
   private endTest(
@@ -109,10 +116,10 @@ export class ComponentTester {
     passed: boolean,
     errors: string[] = [],
     warnings: string[] = [],
-    details: Record<string, any> = {}
+    details: Record<string, unknown> = {}
   ): ComponentTestResult {
     const duration = performance.now() - this.startTime;
-    const memoryEnd = (performance as any).memory?.usedJSHeapSize ?? 0;
+    const memoryEnd = (performance as PerformanceWithMemory).memory?.usedJSHeapSize ?? 0;
     const memoryUsage = memoryEnd - this.memoryStart;
 
     const result: ComponentTestResult = {
@@ -126,9 +133,9 @@ export class ComponentTester {
       metrics: {
         renderTime: duration,
         interactionTime: duration,
-        validationTime: details.validationTime ?? 0,
-        memoryUsage,
-        eventCount: details.eventCount ?? 0,
+        validationTime: (details.validationTime as number) ?? 0,
+        memoryUsage: memoryUsage as number,
+        eventCount: (details.eventCount as number) ?? 0,
         errorCount: errors.length,
       },
       details,
@@ -653,7 +660,7 @@ export class ComponentTester {
 
   // Get summary by component type
   getSummaryByType() {
-    const summary: Record<string, any> = {};
+    const summary: Record<string, unknown> = {};
 
     for (const result of this.testResults) {
       if (!summary[result.componentType]) {
@@ -667,7 +674,7 @@ export class ComponentTester {
         };
       }
 
-      const typeSum = summary[result.componentType];
+      const typeSum = summary[result.componentType] as any;
       typeSum.total++;
       if (result.passed) typeSum.passed++;
       else typeSum.failed++;
@@ -678,7 +685,8 @@ export class ComponentTester {
     // Calculate average scores
     for (const type of Object.keys(summary)) {
       const typeResults = this.testResults.filter(r => r.componentType === type);
-      summary[type].averageScore =
+      const typeSum = summary[type] as any;
+      typeSum.averageScore =
         typeResults.reduce((sum, r) => sum + r.score, 0) / typeResults.length;
     }
 

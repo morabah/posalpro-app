@@ -11,7 +11,7 @@ import { useCreateProduct, useProductCategories, useProductTags } from '@/featur
 import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { analytics } from '@/lib/analytics';
 import { logError, logInfo } from '@/lib/logger';
-import { productCreateValidationSchema } from '@/lib/validation/productValidation';
+import { ProductCreateSchema } from '@/features/products/schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
@@ -36,7 +36,7 @@ export function ProductCreateForm() {
     setValue,
     trigger,
   } = useForm<ProductCreate>({
-    resolver: zodResolver(productCreateValidationSchema as any),
+    resolver: zodResolver(ProductCreateSchema),
     mode: 'onChange',
     defaultValues: {
       name: '',

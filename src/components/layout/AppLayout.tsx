@@ -18,6 +18,18 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { useProposalStats, useDueProposals } from '@/features/proposals/hooks';
 import { Badge } from '@/components/ui/Badge';
 
+// Type definitions for notification items
+interface NotificationItem {
+  id: string;
+  title?: string;
+  customer?: { name?: string };
+  dueDate?: string | Date;
+  status?: string;
+  value?: number | string;
+  currency?: string;
+  priority?: string;
+}
+
 // ✅ CRITICAL: Lazy loading for LCP optimization
 // Following Lesson #30: Performance Optimization - Component Lazy Loading
 const AppFooter = dynamic(() => import('./AppFooter').then(mod => ({ default: mod.AppFooter })), {
@@ -257,8 +269,8 @@ export function AppLayout({ children, user }: AppLayoutProps) {
                   <div className="text-sm text-red-600 mb-3">Failed to load deadlines</div>
                 )}
 
-                <Section title="Overdue" items={(overdueQuery.data as any[]) || []} onClose={() => setNotifOpen(false)} />
-                <Section title="Due in next 14 days" items={(nearDueQuery.data as any[]) || []} onClose={() => setNotifOpen(false)} />
+                <Section title="Overdue" items={(overdueQuery.data as NotificationItem[]) || []} onClose={() => setNotifOpen(false)} />
+                <Section title="Due in next 14 days" items={(nearDueQuery.data as NotificationItem[]) || []} onClose={() => setNotifOpen(false)} />
               </div>
             </div>
           </div>
@@ -274,7 +286,7 @@ function Section({
   onClose,
 }: {
   title: string;
-  items: any[];
+  items: NotificationItem[];
   onClose: () => void;
 }) {
   return (

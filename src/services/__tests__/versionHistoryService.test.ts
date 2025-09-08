@@ -18,6 +18,7 @@
 
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { versionHistoryService } from '../versionHistoryService';
+import type { VersionHistoryQuery } from '@/features/version-history/schemas';
 
 // Mock Prisma to avoid browser environment issues
 jest.mock('@/lib/db/prisma', () => ({
@@ -684,7 +685,7 @@ describe('VersionHistoryService', () => {
       const { http } = require('@/lib/http');
       (http.get as jest.Mock).mockRejectedValueOnce(validationError);
 
-      await versionHistoryService.getVersionHistory({ limit: -1 } as any);
+      await versionHistoryService.getVersionHistory({ limit: -1 } as VersionHistoryQuery);
 
       expect(logError).toHaveBeenCalledWith(
         'VersionHistoryService: Failed to fetch version history list',

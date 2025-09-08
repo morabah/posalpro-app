@@ -13,6 +13,36 @@ import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandle
 import { EntityType, Prisma } from '@prisma/client';
 import { z } from 'zod';
 
+// Type definitions for workflow data and statistics
+interface WorkflowExecutionStats {
+  successRate?: number;
+  lastUsed?: Date;
+  [key: string]: unknown;
+}
+
+interface WorkflowPerformanceMetrics {
+  averageCompletionTime?: number;
+  slaCompliance?: number;
+  [key: string]: unknown;
+}
+
+interface WorkflowWithIncludes {
+  id: string;
+  name: string;
+  description?: string | null;
+  entityType: EntityType;
+  status: string;
+  stages: Array<{
+    id: string;
+    name: string;
+    order: number;
+  }>;
+  executionStats?: any; // Allow JsonValue from Prisma
+  performanceMetrics?: any; // Allow JsonValue from Prisma
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 /**
@@ -121,7 +151,7 @@ export const GET = createRoute(
     const useCursor = Boolean(cursorId) || !url.searchParams.has('page');
 
     let total = 0;
-    let workflows: any[] = []; // Complex Prisma query result with nested includes
+    let workflows: WorkflowWithIncludes[] = []; // Complex Prisma query result with nested includes
     if (useCursor) {
       const take = validatedQuery.limit + 1;
       const list = await withAsyncErrorHandler(
@@ -138,7 +168,10 @@ export const GET = createRoute(
         { component: 'WorkflowsRoute', operation: 'GET' }
       );
       const hasMore = list.length > validatedQuery.limit;
-      workflows = hasMore ? list.slice(0, -1) : list;
+      workflows = (hasMore ? list.slice(0, -1) : list).map(workflow => ({
+        ...workflow,
+        status: 'ACTIVE' // Default status for workflows
+      }));
 
       const responseData = {
         workflows,
@@ -175,11 +208,14 @@ export const GET = createRoute(
       { component: 'WorkflowsRoute', operation: 'GET' }
     );
     total = tx[0] as number;
-    workflows = tx[1] as any[];
+    workflows = (tx[1] as any[]).map(workflow => ({
+      ...workflow,
+      status: 'ACTIVE' // Default status for workflows
+    })) as WorkflowWithIncludes[];
 
     const transformedWorkflows = workflows.map(workflow => {
-      const executionStats = (workflow.executionStats as any) || {};
-      const performanceMetrics = (workflow.performanceMetrics as any) || {};
+      const executionStats = workflow.executionStats || {};
+      const performanceMetrics = workflow.performanceMetrics || {};
 
       return {
         ...workflow,

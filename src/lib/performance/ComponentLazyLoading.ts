@@ -17,6 +17,9 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logDebug, logWarn } from '@/lib/logger';
 import { ComponentType, lazy, LazyExoticComponent } from 'react';
 
+// Generic type for component props
+type ComponentProps = Record<string, unknown>;
+
 export interface LazyLoadConfig {
   preloadDelay: number; // ms delay before preloading next components
   maxConcurrentLoads: number; // maximum simultaneous component loads
@@ -48,9 +51,9 @@ export interface LazyLoadingMetrics {
 export class ComponentLazyLoading {
   private static instance: ComponentLazyLoading | null = null;
   private errorHandlingService: ErrorHandlingService;
-  private loadedComponents: Map<string, LazyExoticComponent<ComponentType<any>>> = new Map();
+  private loadedComponents: Map<string, LazyExoticComponent<ComponentType<ComponentProps>>> = new Map();
   private preloadedComponents: Set<string> = new Set();
-  private loadingPromises: Map<string, Promise<LazyExoticComponent<ComponentType<any>>>> =
+  private loadingPromises: Map<string, Promise<LazyExoticComponent<ComponentType<ComponentProps>>>> =
     new Map();
   private loadMetrics: ComponentLoadMetrics[] = [];
   private config: LazyLoadConfig;
@@ -78,7 +81,7 @@ export class ComponentLazyLoading {
   /**
    * 🔥 Core Method: Load component dynamically with performance tracking
    */
-  public async loadComponentDynamically<T = any>(
+  public async loadComponentDynamically<T = ComponentProps>(
     componentName: string,
     importFunction: () => Promise<{ default: ComponentType<T> }>
   ): Promise<LazyExoticComponent<ComponentType<T>>> {
@@ -154,11 +157,11 @@ export class ComponentLazyLoading {
       });
 
       // Store loading promise
-      const loadingPromise = Promise.resolve(lazyComponent);
+      const loadingPromise = Promise.resolve(lazyComponent as any);
       this.loadingPromises.set(componentName, loadingPromise);
 
       // Store loaded component
-      this.loadedComponents.set(componentName, lazyComponent);
+      this.loadedComponents.set(componentName, lazyComponent as any);
 
       return lazyComponent;
     } catch (error) {
@@ -190,7 +193,7 @@ export class ComponentLazyLoading {
   public async preloadNextStep(
     currentStep: number,
     totalSteps: number,
-    getStepComponent: (step: number) => () => Promise<{ default: ComponentType<any> }>
+    getStepComponent: (step: number) => () => Promise<{ default: ComponentType<ComponentProps> }>
   ): Promise<void> {
     if (!this.config.enablePreloading || currentStep >= totalSteps) {
       return;

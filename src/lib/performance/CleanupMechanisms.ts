@@ -16,6 +16,29 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logDebug } from '@/lib/logger';
 
+// Type definitions for cleanup resources
+type CleanupResource =
+  | EventListener
+  | number // timeout/interval ID
+  | Promise<unknown>
+  | { resource?: unknown } // memory object
+  | unknown; // fallback for other resources
+
+// Type definitions for performance monitoring
+interface PerformanceWithMemory extends Performance {
+  memory?: {
+    usedJSHeapSize: number;
+    jsHeapSizeLimit: number;
+    totalJSHeapSize: number;
+  };
+}
+
+interface MemoryInfo {
+  usedJSHeapSize: number;
+  jsHeapSizeLimit: number;
+  totalJSHeapSize: number;
+}
+
 export interface CleanupConfig {
   enableMemoryCleanup: boolean;
   enableEventListenerCleanup: boolean;
@@ -40,7 +63,7 @@ export interface CleanupMetrics {
 export interface CleanupEntry {
   id: string;
   type: 'event' | 'timeout' | 'interval' | 'promise' | 'memory';
-  resource: any;
+  resource: CleanupResource;
   timestamp: number;
   component?: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
@@ -123,18 +146,18 @@ export class CleanupMechanisms {
       switch (entry.type) {
         case 'timeout':
           if (entry.resource) {
-            clearTimeout(entry.resource);
+            clearTimeout(entry.resource as any);
           }
           return true;
         case 'interval':
           if (entry.resource) {
-            clearInterval(entry.resource);
+            clearInterval(entry.resource as any);
           }
           return true;
         case 'promise':
           // Best-effort cancellation if supported
-          if (entry.resource && typeof entry.resource.cancel === 'function') {
-            entry.resource.cancel();
+          if (entry.resource && typeof (entry.resource as any).cancel === 'function') {
+            (entry.resource as any).cancel();
           }
           return true;
         case 'event':
@@ -149,7 +172,8 @@ export class CleanupMechanisms {
           return true;
         case 'memory':
           // Help GC without assigning to `any`
-          (entry as { resource?: unknown }).resource = undefined;
+          const memoryEntry = entry as { resource?: unknown };
+          memoryEntry.resource = undefined;
           return true;
         default:
           return false;
@@ -185,7 +209,7 @@ export class CleanupMechanisms {
   public registerCleanupResource(
     id: string,
     type: CleanupEntry['type'],
-    resource: any,
+    resource: CleanupResource,
     component?: string,
     priority: CleanupEntry['priority'] = 'medium'
   ): void {
@@ -324,6 +348,7 @@ export class CleanupMechanisms {
 
       // Get current memory usage
       const memoryInfo = this.getMemoryInfo();
+      if (!memoryInfo) return;
       const memoryUsagePercent = (memoryInfo.usedJSHeapSize / memoryInfo.jsHeapSizeLimit) * 100;
 
       if (memoryUsagePercent < this.config.memoryThreshold) {
@@ -450,9 +475,10 @@ export class CleanupMechanisms {
   /**
    * 🔧 Private: Get memory information
    */
-  private getMemoryInfo(): MemoryInfo {
+  private getMemoryInfo(): MemoryInfo | null {
     if ('memory' in performance) {
-      return (performance as any).memory;
+      const memory = (performance as PerformanceWithMemory).memory;
+      return memory || null;
     }
 
     // Fallback for environments without memory API

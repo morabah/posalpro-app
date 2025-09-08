@@ -41,7 +41,7 @@ export interface SearchResult {
   description: string;
   entityType: 'content' | 'proposal' | 'product' | 'customer' | 'user';
   score?: number;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   tags?: string[];
   createdAt: Date;
   updatedAt: Date;

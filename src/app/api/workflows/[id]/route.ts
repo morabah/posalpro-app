@@ -13,6 +13,40 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 import { z } from 'zod';
 
+// Type definitions for workflow data
+interface WorkflowExecution {
+  id: string;
+  status: string;
+  startedAt: Date;
+  completedAt: Date | null;
+  entityId: string;
+}
+
+interface ExecutionStats {
+  totalExecutions?: number;
+  completedExecutions?: number;
+  activeExecutions?: number;
+  averageCompletionTime?: number;
+  slaCompliance?: number;
+  successRate?: number;
+}
+
+interface PerformanceMetrics {
+  averageCompletionTime?: number;
+  slaCompliance?: number;
+  escalationCount?: number;
+  approvalRate?: number;
+  archivedBy?: string;
+  archivedAt?: string;
+  archivedReason?: string;
+}
+
+interface WorkflowData {
+  name?: string;
+  description?: string;
+  isActive?: boolean;
+}
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-4.1 (Timeline Management), US-4.3 (Task Prioritization)
@@ -129,11 +163,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // Calculate workflow analytics
-    const executionStats = (workflow.executionStats as any) || {};
-    const performanceMetrics = (workflow.performanceMetrics as any) || {};
+    const executionStats = (workflow.executionStats as ExecutionStats) || {};
+    const performanceMetrics = (workflow.performanceMetrics as PerformanceMetrics) || {};
 
-    const completedExecutions = workflow.executions.filter((e: any) => e.status === 'COMPLETED');
-    const activeExecutions = workflow.executions.filter((e: any) => e.status === 'IN_PROGRESS');
+    const completedExecutions = workflow.executions.filter((e: WorkflowExecution) => e.status === 'COMPLETED');
+    const activeExecutions = workflow.executions.filter((e: WorkflowExecution) => e.status === 'IN_PROGRESS');
 
     const enhancedWorkflow = {
       ...workflow,
@@ -151,9 +185,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         lastUsed: workflow.executions[0]?.startedAt || null,
       },
       complexity:
-        workflow.stages.length + workflow.stages.filter((s: any) => s.isParallel).length * 0.5,
-      criticalPathLength: workflow.stages.filter((s: any) => !s.isOptional).length,
-      recentExecutions: workflow.executions.slice(0, 5).map((execution: any) => ({
+        workflow.stages.length + workflow.stages.filter((s) => s.isParallel).length * 0.5,
+      criticalPathLength: workflow.stages.filter((s) => !s.isOptional).length,
+      recentExecutions: workflow.executions.slice(0, 5).map((execution: WorkflowExecution) => ({
         id: execution.id,
         status: execution.status,
         startedAt: execution.startedAt,
@@ -217,7 +251,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
     // Check if workflow has active executions
     const hasActiveExecutions = existingWorkflow.executions.some(
-      (execution: any) => execution.status === 'IN_PROGRESS' || execution.status === 'PENDING'
+      (execution: WorkflowExecution) => execution.status === 'IN_PROGRESS' || execution.status === 'PENDING'
     );
 
     if (hasActiveExecutions && validatedData.stages) {
@@ -248,9 +282,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     }
 
     // Update workflow with stages in transaction
-    const updatedWorkflow = await prisma.$transaction(async (tx: any) => {
+    const updatedWorkflow = await prisma.$transaction(async (tx) => {
       // Update the workflow
-      const workflowData: any = {};
+      const workflowData: WorkflowData = {};
       if (validatedData.name !== undefined) workflowData.name = validatedData.name;
       if (validatedData.description !== undefined)
         workflowData.description = validatedData.description;
@@ -373,7 +407,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     // Check if workflow has active executions
     const hasActiveExecutions = workflow.executions.some(
-      (execution: any) => execution.status === 'IN_PROGRESS' || execution.status === 'PENDING'
+      (execution: WorkflowExecution) => execution.status === 'IN_PROGRESS' || execution.status === 'PENDING'
     );
 
     if (hasActiveExecutions) {
@@ -393,7 +427,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
         data: {
           isActive: false,
           performanceMetrics: {
-            ...((workflow.performanceMetrics as any) || {}),
+            ...((workflow.performanceMetrics as PerformanceMetrics) || {}),
             archivedBy: session.user.id,
             archivedAt: new Date().toISOString(),
             archivedReason: 'Workflow archived due to existing executions',
@@ -417,7 +451,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       });
     } else {
       // Hard delete if no executions
-      await prisma.$transaction(async (tx: any) => {
+      await prisma.$transaction(async (tx) => {
         // Delete stages first
         await tx.workflowStage.deleteMany({
           where: { workflowId: id },

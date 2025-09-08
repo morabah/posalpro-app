@@ -55,11 +55,36 @@ interface ProductFormData {
   featured: boolean;
 }
 
+// Type definitions for product modal
+type TabId = 'info' | 'pricing' | 'customization' | 'resources' | 'visibility';
+
+interface ProductSuccessData {
+  id: string;
+  name: string;
+  productId: string;
+  sku: string;
+  category: string;
+  priceModel: 'Fixed Price' | 'Hourly Rate' | 'Subscription';
+  basePrice: number;
+  status: string;
+  [key: string]: unknown;
+}
+
+interface CustomizationOptionUpdate {
+  name?: string;
+  type?: 'single-select' | 'multi-select' | 'text' | 'number';
+  options?: Array<{
+    name: string;
+    modifier: number;
+    description?: string;
+  }>;
+}
+
 interface AdvancedProductModalProps {
   id?: string;
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: (product: any) => void;
+  onSuccess?: (product: ProductSuccessData) => void;
 }
 
 export default function AdvancedProductModal({
@@ -75,9 +100,7 @@ export default function AdvancedProductModal({
   });
 
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<
-    'info' | 'pricing' | 'customization' | 'resources' | 'visibility'
-  >('info');
+  const [activeTab, setActiveTab] = useState<TabId>('info');
 
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
@@ -137,7 +160,7 @@ export default function AdvancedProductModal({
   }, []);
 
   // Update customization option
-  const updateCustomizationOption = useCallback((index: number, updates: any) => {
+  const updateCustomizationOption = useCallback((index: number, updates: CustomizationOptionUpdate) => {
     setFormData(prev => ({
       ...prev,
       customizationOptions: prev.customizationOptions.map((opt, i) =>
@@ -212,7 +235,7 @@ export default function AdvancedProductModal({
           hypothesis: 'H8',
         });
 
-        onSuccess?.(formData);
+        onSuccess?.({ ...formData, id: `temp-${Date.now()}` });
         onClose();
       } catch (error) {
         logError('Failed to create advanced product', {
@@ -326,7 +349,7 @@ export default function AdvancedProductModal({
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as TabId)}
               className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600 bg-white'
@@ -440,7 +463,7 @@ export default function AdvancedProductModal({
                   <select
                     value={formData.priceModel}
                     onChange={e =>
-                      setFormData(prev => ({ ...prev, priceModel: e.target.value as any }))
+                      setFormData(prev => ({ ...prev, priceModel: e.target.value as 'Fixed Price' | 'Hourly Rate' | 'Subscription' }))
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
@@ -591,7 +614,7 @@ export default function AdvancedProductModal({
                           <select
                             value={option.type}
                             onChange={e =>
-                              updateCustomizationOption(index, { type: e.target.value })
+                              updateCustomizationOption(index, { type: e.target.value as 'single-select' | 'multi-select' | 'text' | 'number' })
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded-md"
                           >
@@ -675,7 +698,7 @@ export default function AdvancedProductModal({
                     <select
                       value={formData.status}
                       onChange={e =>
-                        setFormData(prev => ({ ...prev, status: e.target.value as any }))
+                        setFormData(prev => ({ ...prev, status: e.target.value as 'Draft' | 'Active' }))
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >

@@ -54,6 +54,19 @@ export interface DashboardFilters {
   endDate?: Date;
 }
 
+// Additional type definitions for data access
+interface ProposalDataRaw {
+  total_proposals: number;
+  proposals_with_value: number;
+  revenue_sum: string | number;
+}
+
+interface CustomerAggregationData {
+  _count: {
+    id: number;
+  };
+}
+
 /**
  * Dashboard Service class with analytics and metrics calculation
  * Following CORE_REQUIREMENTS.md service layer patterns
@@ -436,7 +449,7 @@ export class DashboardService {
         tenant.tenantId !== 'tenant_default' ? { tenantId: tenant.tenantId } : {};
 
       // Get proposal data using raw SQL to handle Decimal properly
-      const [proposalData, customersAgg]: any[] = await Promise.all([
+      const [proposalData, customersAgg] = await Promise.all([
         prisma.$queryRaw`
           SELECT
             COUNT(*)::int AS total_proposals,
@@ -451,18 +464,20 @@ export class DashboardService {
       ]);
 
       // Transform to match expected format
+      const proposalDataRaw = (proposalData as any)[0] as ProposalDataRaw | undefined;
       const proposalDataFormatted = {
-        total_proposals: Number(proposalData[0]?.total_proposals ?? 0),
-        active_proposals: Number(proposalData[0]?.proposals_with_value ?? 0),
-        approved_proposals: Number(proposalData[0]?.proposals_with_value ?? 0),
-        recent_proposals: Number(proposalData[0]?.proposals_with_value ?? 0),
+        total_proposals: Number(proposalDataRaw?.total_proposals ?? 0),
+        active_proposals: Number(proposalDataRaw?.proposals_with_value ?? 0),
+        approved_proposals: Number(proposalDataRaw?.proposals_with_value ?? 0),
+        recent_proposals: Number(proposalDataRaw?.proposals_with_value ?? 0),
         previous_proposals: 0,
-        revenue_sum: proposalData[0]?.revenue_sum ? parseFloat(proposalData[0].revenue_sum) : 0,
+        revenue_sum: proposalDataRaw?.revenue_sum ? parseFloat(String(proposalDataRaw.revenue_sum)) : 0,
       };
 
+      const customerDataRaw = customersAgg as CustomerAggregationData;
       const customerData = {
-        total_customers: customersAgg._count.id,
-        recent_customers: customersAgg._count.id,
+        total_customers: customerDataRaw._count.id,
+        recent_customers: customerDataRaw._count.id,
       };
 
       const totalProposals: number = proposalDataFormatted.total_proposals ?? 0;

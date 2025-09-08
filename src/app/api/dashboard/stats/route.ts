@@ -15,8 +15,34 @@ import { logDebug, logError, logInfo } from '@/lib/logger';
 import { dashboardService } from '@/lib/services/dashboardService';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+// ✅ TYPES: Define proper interface for dashboard stats cache
+interface DashboardStatsData {
+  totalProposals: number;
+  totalRevenue: number;
+  totalCustomers: number;
+  activeProposals: number;
+  wonProposals: number;
+  winRate: number;
+  avgProposalValue: number;
+  avgCycleTime: number;
+  overdueCount: number;
+  atRiskCount: number;
+  stalledCount: number;
+  activeCustomers: number;
+  customerGrowth: number;
+  avgCustomerValue: number;
+  proposalGrowth: number;
+  revenueGrowth: number;
+  monthlyRevenue: number;
+}
+
+interface CachedDashboardStats {
+  data: DashboardStatsData;
+  ts: number;
+}
+
 // Simple in-memory cache to reduce repeated heavy queries
-const dashboardStatsCache = new Map<string, { data: any; ts: number }>();
+const dashboardStatsCache = new Map<string, CachedDashboardStats>();
 // In development, keep a small TTL to avoid repeated recomputation during tests while staying fresh
 const DASHBOARD_STATS_TTL_MS = process.env.NODE_ENV === 'production' ? 60 * 1000 : 5 * 1000;
 
@@ -105,7 +131,10 @@ export const GET = createRoute(
       });
 
       // Update cache
-      dashboardStatsCache.set(cacheKey, { data: stats, ts: Date.now() });
+      dashboardStatsCache.set(cacheKey, {
+        data: stats as unknown as DashboardStatsData,
+        ts: Date.now(),
+      });
 
       const headers = new Headers();
       if (process.env.NODE_ENV === 'production') {

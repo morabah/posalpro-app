@@ -10,6 +10,40 @@ import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSecret } from '@/lib/auth/secret';
 
+// Type definitions for auth debug data
+interface ExtendedUser {
+  id?: string;
+  email?: string;
+  roles?: string[];
+  permissions?: string[];
+}
+
+interface ExtendedToken {
+  id?: string;
+  sub?: string;
+  email?: string;
+  roles?: string[];
+  permissions?: string[];
+  sessionId?: string;
+}
+
+interface AuthDebugResponse {
+  environment: string;
+  hasCookie: boolean;
+  cookieNamesPresent: string[];
+  session: {
+    hasUser: boolean;
+    user: ExtendedUser | null;
+  } | null;
+  token: {
+    id?: string;
+    email?: string;
+    roles: string[];
+    permissions: string[];
+    hasSessionId: boolean;
+  } | null;
+}
+
 export async function GET(req: NextRequest) {
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -34,22 +68,22 @@ export async function GET(req: NextRequest) {
         ? {
             hasUser: Boolean(session.user),
             user: session.user && {
-              id: (session.user as any).id,
-              email: (session.user as any).email,
-              roles: (session.user as any).roles || [],
-              permissions: (session.user as any).permissions || [],
+              id: (session.user as ExtendedUser).id,
+              email: (session.user as ExtendedUser).email,
+              roles: (session.user as ExtendedUser).roles || [],
+              permissions: (session.user as ExtendedUser).permissions || [],
             },
           }
         : null,
       token: token
         ? {
-            id: (token as any).id ?? (token as any).sub,
-            email: (token as any).email,
-            roles: Array.isArray((token as any).roles) ? (token as any).roles : [],
-            permissions: Array.isArray((token as any).permissions)
-              ? (token as any).permissions
+            id: (token as ExtendedToken).id ?? (token as ExtendedToken).sub,
+            email: (token as ExtendedToken).email,
+            roles: Array.isArray((token as ExtendedToken).roles) ? (token as ExtendedToken).roles : [],
+            permissions: Array.isArray((token as ExtendedToken).permissions)
+              ? (token as ExtendedToken).permissions
               : [],
-            hasSessionId: Boolean((token as any).sessionId),
+            hasSessionId: Boolean((token as ExtendedToken).sessionId),
           }
         : null,
     });

@@ -6314,13 +6314,24 @@ function generateClassificationSummary(frontendFields: Record<string, any>): any
     }>,
   };
 
+  const classificationToSummaryKey: Record<string, keyof Omit<typeof summary, 'total' | 'skipped' | 'details'>> = {
+    'api-data-fetching': 'apiDataFetching',
+    'form-component': 'formComponents',
+    'ui-display': 'uiDisplay',
+    'mixed': 'mixed',
+    'unknown': 'unknown',
+  };
+
   for (const [componentName, componentData] of Object.entries(frontendFields)) {
     try {
       const componentContent = fs.readFileSync(componentData.file, 'utf-8');
       const classification = classifyComponent(componentName, componentContent);
 
       summary.total++;
-      summary[classification.type]++;
+      const summaryKey = classificationToSummaryKey[classification.type];
+      if (summaryKey) {
+        summary[summaryKey]++;
+      }
 
       summary.details.push({
         component: componentName,

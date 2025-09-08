@@ -17,6 +17,22 @@ import { prisma } from '../prisma';
 import { getCurrentTenant } from '../tenant';
 import { toPrismaJson } from '../utils/prismaUtils';
 
+// ✅ TYPES: Define proper interfaces for customer service
+interface CustomerWhereClause {
+  tenantId: string;
+  status?: { in: CustomerStatus[] };
+  tier?: { in: CustomerTier[] };
+  revenue?: {
+    gte?: number;
+    lte?: number;
+  };
+  createdAt?: {
+    gte?: Date;
+    lte?: Date;
+  };
+  [key: string]: unknown;
+}
+
 // Helper function to check if error is a Prisma error
 function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
   return error instanceof Prisma.PrismaClientKnownRequestError;
@@ -335,7 +351,7 @@ export class CustomerService {
   ): Promise<{ customers: Customer[]; total: number; page: number; totalPages: number }> {
     try {
       const tenant = getCurrentTenant();
-      const where: any = {
+      const where: CustomerWhereClause = {
         tenantId: tenant.tenantId,
       };
 
@@ -1066,12 +1082,25 @@ export class CustomerService {
    * Helper: Normalize customer data (Decimal conversion, null handling)
    * Following CORE_REQUIREMENTS.md transformation patterns
    */
-  private normalizeCustomerData(customer: any): any {
+  private normalizeCustomerData(customer: any): Customer {
     return {
       ...customer,
+      tenantId: customer.tenantId || '',
       industry: customer.industry || '',
       revenue: customer.revenue ? Number(customer.revenue) : 0,
       tags: customer.tags || [],
+      riskScore: customer.riskScore || null,
+      metadata: customer.metadata || {},
+      cloudId: customer.cloudId || null,
+      lastContact: customer.lastContact || null,
+      totalValue: customer.totalValue || null,
+      status: customer.status || 'ACTIVE',
+      version: customer.version || 1,
+      attributes: customer.attributes || {},
+      userStoryMappings: customer.userStoryMappings || [],
+      hypothesisMappings: customer.hypothesisMappings || [],
+      createdAt: customer.createdAt || new Date(),
+      updatedAt: customer.updatedAt || new Date(),
     };
   }
 }

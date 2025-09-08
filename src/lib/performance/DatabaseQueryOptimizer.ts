@@ -67,15 +67,15 @@ export interface SlowQuery {
   query: string;
   executionTime: number;
   timestamp: number;
-  parameters?: any[];
+  parameters?: unknown[];
   stackTrace?: string;
 }
 
 // Query cache entry
 export interface QueryCacheEntry {
   query: string;
-  parameters: any[];
-  result: any;
+  parameters: unknown[];
+  result: unknown;
   timestamp: number;
   executionTime: number;
   tablesTouched: string[];
@@ -97,7 +97,10 @@ export class DatabaseQueryOptimizer {
   private static instance: DatabaseQueryOptimizer | null = null;
   private errorHandlingService: ErrorHandlingService;
   // Removed cacheManager field - using built-in caching only
-  private analytics: any;
+  private analytics!: {
+    track: (event: string, data: Record<string, unknown>) => void;
+    trackPerformance: (metric: string, value: number, metadata?: Record<string, unknown>) => void;
+  };
 
   private config: QueryOptimizerConfig;
   private queryMetrics: QueryMetrics = {
@@ -150,7 +153,10 @@ export class DatabaseQueryOptimizer {
   /**
    * Initialize analytics integration
    */
-  initializeAnalytics(analytics: any) {
+  initializeAnalytics(analytics: {
+    track: (event: string, data: Record<string, unknown>) => void;
+    trackPerformance: (metric: string, value: number, metadata?: Record<string, unknown>) => void;
+  }) {
     this.analytics = analytics;
   }
 
@@ -241,7 +247,7 @@ export class DatabaseQueryOptimizer {
 
       // Analytics tracking
       if (this.analytics) {
-        this.analytics('database_query_executed', {
+        this.analytics.track('database_query_executed', {
           userStories: ['US-6.1', 'US-6.3', 'US-4.1'],
           hypotheses: ['H8', 'H11', 'H12'],
           queryKey,
@@ -250,7 +256,7 @@ export class DatabaseQueryOptimizer {
           tablesTouched,
           cacheHit: false,
           slowQuery: executionTime > this.config.slowQueryThreshold,
-        }, 'medium');
+        });
       }
 
       return result;
@@ -293,7 +299,7 @@ export class DatabaseQueryOptimizer {
    */
   private async cacheQueryResult(
     queryKey: string,
-    result: any,
+    result: unknown,
     executionTime: number,
     tablesTouched: string[],
     cacheTTL: number
@@ -410,13 +416,13 @@ export class DatabaseQueryOptimizer {
 
     // Analytics tracking for slow queries
     if (this.analytics) {
-      this.analytics('slow_query_detected', {
+      this.analytics.track('slow_query_detected', {
         userStories: ['US-6.1', 'US-6.3'],
         hypotheses: ['H8', 'H12'],
         queryKey,
         executionTime,
         threshold: this.config.slowQueryThreshold,
-      }, 'high');
+      });
     }
   }
 
@@ -438,11 +444,11 @@ export class DatabaseQueryOptimizer {
       });
 
       if (this.analytics) {
-        this.analytics('cache_invalidated', {
+        this.analytics.track('cache_invalidated', {
           userStories: ['US-6.1', 'US-6.3'],
           hypotheses: ['H11'],
           patterns,
-        }, 'medium');
+        });
       }
     } catch (error) {
       const processedError = this.errorHandlingService.processError(
@@ -545,12 +551,12 @@ export class DatabaseQueryOptimizer {
 
     // Analytics tracking
     if (this.analytics) {
-      this.analytics('database_performance_metrics_updated', {
+      this.analytics.track('database_performance_metrics_updated', {
         userStories: ['US-6.1', 'US-6.3', 'US-4.1'],
         hypotheses: ['H8', 'H11', 'H12'],
         metrics: this.queryMetrics,
         connectionPool: this.connectionPoolStats,
-      }, 'low');
+      });
     }
   }
 
@@ -604,7 +610,7 @@ export function useDatabaseOptimizer(config?: Partial<QueryOptimizerConfig>) {
   }, [config]);
 
   React.useEffect(() => {
-    optimizer.initializeAnalytics(analytics);
+    optimizer.initializeAnalytics(analytics as any);
   }, [optimizer, analytics]);
 
   return {

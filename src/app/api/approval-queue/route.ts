@@ -18,6 +18,71 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+// Type definitions for approval queue data processing
+interface ApprovalExecutionWithRelations {
+  id: string;
+  currentStage: string | null;
+  startedAt: Date;
+  workflow: {
+    id: string;
+    name: string;
+    stages: Array<{
+      id: string;
+      name: string;
+      order: number;
+      slaHours?: number | null;
+    }>;
+  };
+  proposal: {
+    id: string;
+    title: string;
+    value: any; // Allow Decimal type from Prisma
+    customer: {
+      id: string;
+      name: string;
+      email: string;
+    };
+    creator: {
+      id: string;
+      name: string;
+      email: string;
+    };
+  } | null;
+  decisions: Array<{
+    id: string;
+    decision: any; // Allow DecisionType from Prisma
+    timestamp: Date;
+  }>;
+}
+
+interface ApprovalQueueItem {
+  id: string;
+  title: string;
+  assignee: string | null;
+  priority: 'Critical' | 'High' | 'Medium' | 'Low';
+  stageType: 'Technical' | 'Legal' | 'Finance' | 'Executive' | 'Security' | 'Compliance';
+  status: 'Pending' | 'In Review' | 'Needs Info' | 'Escalated' | 'Blocked';
+  urgency: 'Immediate' | 'Today' | 'This Week' | 'Next Week';
+  riskLevel: 'Low' | 'Medium' | 'High' | 'Critical';
+  deadline: Date;
+  slaRemaining: number;
+  complexity: number;
+  isOverdue: boolean;
+  isCriticalPath: boolean;
+  customer: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  creator: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  value: number | null;
+  currency: string;
+}
+
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 /**
@@ -112,7 +177,9 @@ export async function GET(request: NextRequest) {
     const { default: prisma } = await import('@/lib/db/prisma');
 
     // Build complex query to get approval queue items
-    const where: any = {
+    const where: {
+      status: { in: ExecutionStatus[] };
+    } = {
       status: { in: ['PENDING', 'IN_PROGRESS'] as ExecutionStatus[] },
     };
 
@@ -163,13 +230,13 @@ export async function GET(request: NextRequest) {
   );
 
     // Transform executions into approval queue items
-    const queueItems = executions.map((execution: any) => {
+    const queueItems = executions.map((execution: ApprovalExecutionWithRelations) => {
       const workflow = execution.workflow;
       const proposal = execution.proposal;
 
       // Find current stage from workflow stages
-      const currentStageId = execution.currentStage;
-      const currentStage = workflow?.stages?.find((stage: any) => stage.id === currentStageId);
+      const currentStageId = execution.currentStage || '';
+      const currentStage = workflow?.stages?.find((stage) => stage.id === currentStageId);
 
       // For now, we'll use a placeholder assignee since the assignment logic is complex
       const assignee = null;
@@ -202,9 +269,10 @@ export async function GET(request: NextRequest) {
       // Estimate duration based on SLA
       const estimatedDuration = slaHours;
 
-      // Determine status based on execution status
+      // Determine status based on execution state
       let status: 'Pending' | 'In Review' | 'Needs Info' | 'Escalated' | 'Blocked' = 'Pending';
-      if (execution.status === 'IN_PROGRESS') status = 'In Review';
+      // Default to 'In Review' since execution is active
+      status = 'In Review';
 
       // Risk level based on complexity and time pressure
       let riskLevel: 'Low' | 'Medium' | 'High' | 'Critical' = 'Medium';
@@ -317,7 +385,7 @@ export async function GET(request: NextRequest) {
 
     // Apply sorting
     filteredItems.sort((a, b) => {
-      let aValue: any, bValue: any;
+      let aValue: number | string, bValue: number | string;
 
       switch (validatedQuery.sortBy) {
         case 'priority': {

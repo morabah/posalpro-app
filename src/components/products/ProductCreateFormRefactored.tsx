@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/forms/Button';
 import type { ProductCreate } from '@/features/products';
 import { useCreateProduct } from '@/features/products/hooks/useProducts';
 import { analytics } from '@/lib/analytics';
-import { productCreateValidationSchema } from '@/lib/validation/productValidation';
+import { ProductCreateSchema } from '@/features/products/schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -33,7 +33,7 @@ export function ProductCreateFormRefactored() {
     setValue,
     trigger,
   } = useForm<ProductCreate>({
-    resolver: zodResolver(productCreateValidationSchema as any),
+    resolver: zodResolver(ProductCreateSchema),
     mode: 'onChange',
     defaultValues: {
       name: '',

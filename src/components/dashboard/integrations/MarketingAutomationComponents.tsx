@@ -17,6 +17,13 @@ import {
 } from '@heroicons/react/24/outline';
 import { MarketingAutomation } from '@/types/dashboard';
 
+// Type definitions for marketing automation
+interface AutomationWorkflow {
+  name: string;
+  trigger: string;
+  actions: string[];
+}
+
 const numberFormatter = new Intl.NumberFormat('en-US');
 
 // Marketing Automation Dashboard
@@ -237,7 +244,7 @@ export const AutomationWorkflowBuilder = memo(
   ({
     onSave
   }: {
-    onSave: (workflow: any) => void;
+    onSave: (workflow: AutomationWorkflow) => void;
   }) => {
     const [workflow, setWorkflow] = useState({
       name: '',
@@ -358,8 +365,3 @@ export const AutomationWorkflowBuilder = memo(
 );
 
 AutomationWorkflowBuilder.displayName = 'AutomationWorkflowBuilder';
-
-
-
-
-

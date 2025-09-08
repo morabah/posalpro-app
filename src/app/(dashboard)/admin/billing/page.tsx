@@ -7,7 +7,10 @@ type SubscriptionDTO = {
   status: string;
   seats: number;
   plan: { id: string; name: string; tier: 'FREE' | 'PRO' | 'ENTERPRISE' };
+  stripeSubscriptionId?: string;
 } | null;
+
+type PlanTier = 'FREE' | 'PRO' | 'ENTERPRISE';
 
 export default function AdminBillingPage() {
   const [loading, setLoading] = useState(true);
@@ -16,7 +19,7 @@ export default function AdminBillingPage() {
   const [entitlements, setEntitlements] = useState<string[]>([]);
   const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
   const [seats, setSeats] = useState<number>(5);
-  const [planName, setPlanName] = useState<'FREE' | 'PRO' | 'ENTERPRISE'>('FREE');
+  const [planName, setPlanName] = useState<PlanTier>('FREE');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [enforceSubscription, setEnforceSubscription] = useState<boolean>(false);
@@ -43,9 +46,10 @@ export default function AdminBillingPage() {
           setSeats(json.data.subscription.seats);
           setPlanName(json.data.subscription.plan.tier);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!mounted) return;
-        setError(e?.message || 'Error loading billing data');
+        const errorMessage = e instanceof Error ? e.message : 'Error loading billing data';
+        setError(errorMessage);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -71,8 +75,9 @@ export default function AdminBillingPage() {
       setSubscription(json.data.subscription);
       setEntitlements(json.data.entitlements || []);
       setMessage('Subscription updated');
-    } catch (e: any) {
-      setError(e?.message || 'Failed to update');
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : 'Failed to update';
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -88,8 +93,9 @@ export default function AdminBillingPage() {
         throw new Error(json?.message || 'Unable to open billing portal');
       }
       window.location.href = json.url;
-    } catch (e: any) {
-      setError(e?.message || 'Failed to open billing portal');
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : 'Failed to open billing portal';
+      setError(errorMessage);
     }
   }
 
@@ -116,7 +122,7 @@ export default function AdminBillingPage() {
                 <select
                   className="w-full border rounded px-2 py-1"
                   value={planName}
-                  onChange={e => setPlanName(e.target.value as any)}
+                  onChange={e => setPlanName(e.target.value as PlanTier)}
                 >
                   <option value="FREE">FREE</option>
                   <option value="PRO">PRO</option>
@@ -157,7 +163,7 @@ export default function AdminBillingPage() {
               <div>Status: {subscription?.status || 'N/A'}</div>
               <div>Stripe Customer: {stripeCustomerId || '—'}</div>
               <div>
-                Stripe Subscription: {subscription && (subscription as any).stripeSubscriptionId ? (subscription as any).stripeSubscriptionId : '—'}
+                Stripe Subscription: {subscription?.stripeSubscriptionId || '—'}
               </div>
             </div>
           </section>

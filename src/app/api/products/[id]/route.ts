@@ -48,7 +48,7 @@ type ProductRelationship = {
   id: string;
   type: string;
   quantity: number | null;
-  condition: any; // JsonValue from Prisma
+  condition: Prisma.JsonValue;
   targetProduct: {
     id: string;
     name: string;
@@ -64,7 +64,7 @@ type ProductRelatedFrom = {
   id: string;
   type: string;
   quantity: number | null;
-  condition: any; // JsonValue from Prisma
+  condition: Prisma.JsonValue;
   sourceProduct: {
     id: string;
     name: string;
@@ -75,6 +75,51 @@ type ProductRelatedFrom = {
   };
   createdAt: Date;
 };
+
+// Additional type definitions for API operations
+interface ProductWithAnalytics {
+  id: string;
+  name: string;
+  description?: string | null;
+  price?: Decimal | null;
+  category?: string | string[] | null;
+  stockQuantity?: number | null;
+  status?: string | null;
+  attributes?: Prisma.InputJsonValue | null;
+  usageAnalytics?: {
+    updateCount?: number;
+    lastUpdatedBy?: string;
+    lastUpdatedAt?: string;
+    hypothesis?: string[];
+    userStories?: string[];
+  } | null;
+}
+
+interface TransformedProduct {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: string[];
+  stockQuantity: number;
+  status: string;
+  attributes?: Prisma.InputJsonValue;
+  usageAnalytics?: {
+    updateCount?: number;
+    lastUpdatedBy?: string;
+    lastUpdatedAt?: string;
+    hypothesis?: string[];
+    userStories?: string[];
+  };
+  relationships?: ProductRelationship[];
+  relatedFrom?: ProductRelatedFrom[];
+  proposalProducts?: ProductProposal[];
+  _count?: {
+    relationships?: number;
+    relatedFrom?: number;
+    proposalProducts?: number;
+  };
+}
 
 /**
  * Component Traceability Matrix:
@@ -248,10 +293,7 @@ export const GET = createRoute(
       };
 
       // Remove the nested arrays that are now transformed
-      delete (transformedProduct as any).relationships;
-      delete (transformedProduct as any).relatedFrom;
-      delete (transformedProduct as any).proposalProducts;
-      delete (transformedProduct as any)._count;
+      const { relationships, relatedFrom, proposalProducts, _count, ...cleanProduct } = transformedProduct;
 
       // Track product view for analytics
       await trackProductViewEvent(user.id, id, product.name);
@@ -396,11 +438,11 @@ export const PUT = createRoute(
               usageAnalytics: {
                 lastUpdatedBy: user.id,
                 lastUpdatedAt: new Date().toISOString(),
-                updateCount: (existingProduct as any).usageAnalytics?.updateCount + 1 || 1,
+                updateCount: ((existingProduct as ProductWithAnalytics).usageAnalytics?.updateCount || 0) + 1,
                 hypothesis: ['H3', 'H4'],
                 userStories: ['US-3.1', 'US-3.2'],
               } as unknown as Prisma.InputJsonValue,
-            } as any,
+            } as Prisma.ProductUpdateInput,
             select: {
               id: true,
               name: true,
@@ -420,7 +462,7 @@ export const PUT = createRoute(
               createdAt: true,
               updatedAt: true,
             },
-          } as any),
+          } as Prisma.ProductUpdateArgs),
         'Failed to update product in database',
         { component: 'ProductAPI', operation: 'PUT' }
       );
@@ -442,7 +484,7 @@ export const PUT = createRoute(
         stockQuantity: updatedProduct.stockQuantity || 0,
         status: updatedProduct.status || 'ACTIVE',
         attributes: updatedProduct.attributes || undefined,
-        usageAnalytics: (updatedProduct as any).usageAnalytics || undefined,
+        usageAnalytics: (updatedProduct as ProductWithAnalytics).usageAnalytics || undefined,
       };
 
       const validationResult = ProductSchema.safeParse(transformedProduct);
@@ -576,7 +618,7 @@ export const DELETE = createRoute(
 
         await trackProductArchiveEvent(user.id, id, product.name, 'in_use');
 
-        const transformedProduct = {
+        const transformedProduct: TransformedProduct = {
           ...archivedProduct,
           description: (archivedProduct as any).description || '',
           price:
@@ -592,7 +634,7 @@ export const DELETE = createRoute(
           stockQuantity: (archivedProduct as any).stockQuantity || 0,
           status: (archivedProduct as any).status || 'ACTIVE',
           attributes: (archivedProduct as any).attributes || undefined,
-          usageAnalytics: (archivedProduct as any).usageAnalytics || undefined,
+          usageAnalytics: (archivedProduct as ProductWithAnalytics).usageAnalytics || undefined,
         };
 
         const validationResult = ProductSchema.safeParse(transformedProduct);
@@ -867,7 +909,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
               ? { usageAnalytics: validatedData.usageAnalytics as unknown as Prisma.InputJsonValue }
               : {}),
             updatedAt: new Date(),
-          } as any,
+          } as Prisma.ProductUpdateInput,
           include: {
             relationships: {
               include: {
@@ -898,7 +940,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
               },
             },
           },
-        } as any),
+        } as Prisma.ProductUpdateArgs),
       'Failed to update product in database',
       { component: 'ProductAPI', operation: 'PATCH' }
     );

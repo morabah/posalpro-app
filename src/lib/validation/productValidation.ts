@@ -7,6 +7,11 @@
 
 import { VALIDATION_PATTERNS, createValidationSchema } from '@/hooks/useFormValidation';
 
+// ✅ TYPES: Define proper interfaces for product validation
+interface ProductAttributes {
+  [key: string]: string | number | boolean | string[] | number[];
+}
+
 export interface ProductEditData {
   name: string;
   description?: string;
@@ -16,7 +21,7 @@ export interface ProductEditData {
   category: string[];
   tags: string[];
   isActive: boolean;
-  attributes?: Record<string, any>;
+  attributes?: ProductAttributes;
 }
 
 // ✅ Product Validation Schema
@@ -46,7 +51,7 @@ export const productValidationSchema = createValidationSchema({
 
   price: {
     required: true,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       if (value === undefined || value === null) {
         return 'Price is required';
       }
@@ -63,9 +68,9 @@ export const productValidationSchema = createValidationSchema({
 
   currency: {
     required: true,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       const validCurrencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'];
-      if (!value || !validCurrencies.includes(value)) {
+      if (!value || !validCurrencies.includes(value as string)) {
         return 'Please select a valid currency';
       }
       return null;
@@ -74,7 +79,7 @@ export const productValidationSchema = createValidationSchema({
 
   category: {
     required: false,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       if (Array.isArray(value)) {
         if (value.length > 10) {
           return 'Maximum 10 categories allowed';
@@ -91,7 +96,7 @@ export const productValidationSchema = createValidationSchema({
 
   tags: {
     required: false,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       if (Array.isArray(value)) {
         if (value.length > 20) {
           return 'Maximum 20 tags allowed';
@@ -108,7 +113,7 @@ export const productValidationSchema = createValidationSchema({
 
   isActive: {
     required: false,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       if (typeof value !== 'boolean') {
         return 'Active status must be a boolean value';
       }
@@ -144,7 +149,7 @@ export const productCreateValidationSchema = createValidationSchema({
 
   price: {
     required: true,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       if (value === undefined || value === null) {
         return 'Price is required';
       }
@@ -161,9 +166,9 @@ export const productCreateValidationSchema = createValidationSchema({
 
   currency: {
     required: true,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       const validCurrencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'];
-      if (!value || !validCurrencies.includes(value)) {
+      if (!value || !validCurrencies.includes(value as string)) {
         return 'Please select a valid currency';
       }
       return null;
@@ -172,7 +177,7 @@ export const productCreateValidationSchema = createValidationSchema({
 
   category: {
     required: false,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       if (Array.isArray(value)) {
         if (value.length > 10) {
           return 'Maximum 10 categories allowed';
@@ -189,7 +194,7 @@ export const productCreateValidationSchema = createValidationSchema({
 
   tags: {
     required: false,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       if (Array.isArray(value)) {
         if (value.length > 20) {
           return 'Maximum 20 tags allowed';
@@ -206,7 +211,7 @@ export const productCreateValidationSchema = createValidationSchema({
 
   isActive: {
     required: false,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       if (typeof value !== 'boolean') {
         return 'Active status must be a boolean value';
       }
@@ -231,7 +236,7 @@ export const productSearchValidationSchema = createValidationSchema({
 
   minPrice: {
     required: false,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       if (value !== undefined && value !== null) {
         if (typeof value === 'number' && value < 0) return 'Minimum price must be positive';
       }
@@ -241,7 +246,7 @@ export const productSearchValidationSchema = createValidationSchema({
 
   maxPrice: {
     required: false,
-    custom: (value: any) => {
+    custom: (value: unknown) => {
       if (value !== undefined && value !== null) {
         if (typeof value === 'number' && value < 0) return 'Maximum price must be positive';
       }

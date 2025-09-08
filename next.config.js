@@ -1,4 +1,5 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
+/* eslint-disable @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports */
+/* eslint-env node */
 let withBundleAnalyzer = config => config;
 let TerserPlugin;
 try {
@@ -7,7 +8,7 @@ try {
     enabled: process.env.ANALYZE === 'true',
   });
   withBundleAnalyzer = analyzer;
-} catch (err) {
+} catch {
   // eslint-disable-next-line no-console
   console.log('[next.config] @next/bundle-analyzer not installed; proceeding without it');
 }
@@ -16,7 +17,7 @@ try {
   // Make terser optional in CI (e.g., Netlify) to avoid MODULE_NOT_FOUND
   // Next.js has its own minifier; this is only an enhancement when available
   TerserPlugin = require('terser-webpack-plugin');
-} catch (err) {
+} catch {
   // eslint-disable-next-line no-console
   console.log('[next.config] terser-webpack-plugin not installed; proceeding without it');
 }
@@ -209,4 +210,5 @@ const baseConfig = {
   },
 };
 
+/* eslint-env node */
 module.exports = withBundleAnalyzer(baseConfig);

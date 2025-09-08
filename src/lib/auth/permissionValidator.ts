@@ -7,6 +7,27 @@ import prisma from '@/lib/db/prisma';
 import { deleteAuthCache, getAuthCache, setAuthCache } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 
+// ✅ TYPES: Define proper interfaces for permission validation
+interface UserPermission {
+  permission: {
+    resource: string;
+    action: string;
+  };
+}
+
+interface RolePermission {
+  permission: {
+    resource: string;
+    action: string;
+  };
+}
+
+interface UserRole {
+  role: {
+    permissions: RolePermission[];
+  };
+}
+
 export interface PermissionContext {
   userId: string;
   resourceId?: string;
@@ -187,14 +208,14 @@ export class PermissionValidator {
       const permissions = new Set<string>();
 
       // Add direct user permissions
-      user.permissions.forEach((up: any) => {
+      user.permissions.forEach((up: UserPermission) => {
         const perm = `${up.permission.resource}:${up.permission.action}`;
         permissions.add(perm);
       });
 
       // Add role-based permissions
-      user.roles.forEach((ur: any) => {
-        ur.role.permissions.forEach((rp: any) => {
+      user.roles.forEach((ur: UserRole) => {
+        ur.role.permissions.forEach((rp: RolePermission) => {
           const perm = `${rp.permission.resource}:${rp.permission.action}`;
           permissions.add(perm);
         });
@@ -414,7 +435,7 @@ export class PermissionValidator {
 
         while (currentRole) {
           const hasPermission = currentRole.permissions.some(
-            (rp: any) => `${rp.permission.resource}:${rp.permission.action}` === requiredPermission
+            (rp: RolePermission) => `${rp.permission.resource}:${rp.permission.action}` === requiredPermission
           );
 
           if (hasPermission) {
@@ -487,11 +508,11 @@ export class PermissionValidator {
    */
   private getContextValue(context: PermissionContext, attribute: string): unknown {
     const parts = attribute.split('.');
-    let value: any = context;
+    let value: unknown = context;
 
     for (const part of parts) {
       if (value && typeof value === 'object' && part in value) {
-        value = value[part];
+        value = (value as any)[part];
       } else {
         return undefined;
       }

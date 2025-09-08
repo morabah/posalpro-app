@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
-import { ProposalBasicInfo, useProposalActions } from '@/lib/store/proposalStore';
+import { ProposalBasicInfo, ProposalStepData, useProposalActions } from '@/lib/store/proposalStore';
 import { CalendarIcon, CurrencyDollarIcon, UserIcon } from '@heroicons/react/24/outline';
 import { useQuery } from '@tanstack/react-query';
 import React, { useCallback, useMemo } from 'react';
@@ -175,8 +175,8 @@ export const BasicInformationStep = React.memo(function BasicInformationStep({
   // Handle field changes
   const handleFieldChange = useCallback(
     (field: string, value: string | number) => {
-      setStepData(1, (prevData: ProposalBasicInfo | undefined) => {
-        const currentData: ProposalBasicInfo = prevData || {
+      setStepData(1, (prevData: ProposalStepData) => {
+        const currentData: ProposalBasicInfo = (prevData as ProposalBasicInfo) || {
           title: '',
           description: '',
           customerId: '',
@@ -207,7 +207,7 @@ export const BasicInformationStep = React.memo(function BasicInformationStep({
         return {
           ...currentData,
           ...updates,
-        };
+        } as ProposalStepData;
       });
 
       analytics.trackOptimized('proposal_field_change', {
@@ -227,8 +227,8 @@ export const BasicInformationStep = React.memo(function BasicInformationStep({
       const customer = customersData?.find((c: Customer) => c.id === customerId);
       const customerName = customer?.name;
 
-      setStepData(1, (prevData: ProposalBasicInfo | undefined) => {
-        const currentData: ProposalBasicInfo = prevData || {
+      setStepData(1, (prevData: ProposalStepData) => {
+        const currentData: ProposalBasicInfo = (prevData as ProposalBasicInfo) || {
           title: '',
           description: '',
           customerId: '',
@@ -250,7 +250,7 @@ export const BasicInformationStep = React.memo(function BasicInformationStep({
             email: customer.email,
             industry: customer.industry,
           } : undefined,
-        };
+        } as ProposalStepData;
       });
 
       analytics.trackOptimized('proposal_customer_selected', {

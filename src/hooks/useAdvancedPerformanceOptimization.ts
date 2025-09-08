@@ -162,7 +162,13 @@ export function useAdvancedPerformanceOptimization(
   const initializeMonitoring = useCallback(async () => {
     try {
       // Initialize Enhanced Performance Service with analytics
-      enhancedPerformanceService.initializeAnalytics(analytics);
+      // Create a wrapper to match AnalyticsService interface
+      const analyticsWrapper = {
+        track: (event: string, data: Record<string, unknown>) => {
+          analytics(event, data, 'medium');
+        }
+      };
+      enhancedPerformanceService.initializeAnalytics(analyticsWrapper);
 
       // Start monitoring if enabled
       if (enableRealTimeMonitoring) {

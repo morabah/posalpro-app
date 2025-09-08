@@ -7,6 +7,43 @@ import prisma from '@/lib/db/prisma';
 import { logger } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
 
+// Type definitions for security audit
+interface SecurityEventDetails {
+  userAgent?: string;
+  resource?: string;
+  action?: string;
+  success?: boolean;
+  [key: string]: unknown;
+}
+
+interface AuditEventChanges {
+  [key: string]: unknown;
+}
+
+interface SecurityEventQueryResult {
+  type: SecurityEventType;
+  riskLevel: RiskLevel;
+  id: string;
+  userId?: string;
+  ipAddress: string;
+  userAgent: string;
+  details: string;
+  timestamp: Date;
+}
+
+interface RiskDistributionItem {
+  riskLevel: RiskLevel;
+  _count: { id: number };
+}
+
+interface ThreatCounts {
+  [key: string]: number;
+}
+
+interface RiskDistribution {
+  [key: string]: number;
+}
+
 // Define proper types for Prisma query results
 type SecurityEventSelect = {
   type: SecurityEventType;
@@ -154,7 +191,7 @@ export class SecurityAuditManager {
               userAgent: event.userAgent,
               resource: event.resource,
               action: event.action,
-            }) as unknown as any,
+            }),
             timestamp: event.timestamp,
             status: 'DETECTED',
           },
@@ -186,7 +223,7 @@ export class SecurityAuditManager {
             action: event.action,
             model: event.entity, // Use model instead of entity
             targetId: event.entityId, // Use targetId instead of entityId
-            diff: event.changes as unknown as any,
+            diff: event.changes as any,
             ip: event.ipAddress, // Use ip instead of ipAddress
           },
         });
@@ -297,8 +334,8 @@ export class SecurityAuditManager {
     identifier?: string,
     timeWindow?: number,
     riskLevels?: RiskLevel[]
-  ): Promise<any[]> {
-    const whereClause: any = {};
+  ): Promise<SecurityEventQueryResult[]> {
+    const whereClause: Record<string, unknown> = {};
 
     if (type) {
       whereClause.type = type;
@@ -320,10 +357,15 @@ export class SecurityAuditManager {
       };
     }
 
-    return await prisma.securityEvent.findMany({
+    const events = await prisma.securityEvent.findMany({
       where: whereClause,
       orderBy: { timestamp: 'desc' },
     });
+
+    return events.map(event => ({
+      ...event,
+      userAgent: (event.details as any)?.userAgent || 'Unknown'
+    })) as any;
   }
 
   /**
@@ -531,15 +573,13 @@ export class SecurityAuditManager {
       }),
     ]);
 
-    // Use any[] for Prisma query results due to complex enum type mismatches
-    // between local enums and Prisma-generated enums. This is a necessary compromise
-    // to maintain type safety while avoiding major refactoring of the enum system.
-    const threatCounts = (events as any[]).reduce(
-      (acc: Record<string, number>, event: any) => {
+    // Use proper typing for Prisma query results
+    const threatCounts = events.reduce(
+      (acc: ThreatCounts, event: any) => {
         acc[event.type] = (acc[event.type] || 0) + 1;
         return acc;
       },
-      {} as Record<string, number>
+      {} as ThreatCounts
     );
 
     const topThreats = Object.entries(threatCounts)
@@ -547,19 +587,19 @@ export class SecurityAuditManager {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    const riskDist = (riskDistribution as any[]).reduce(
-      (acc: Record<RiskLevel, number>, item: any) => {
-        acc[item.riskLevel as RiskLevel] = item._count;
+    const riskDist = riskDistribution.reduce(
+      (acc: any, item: any) => {
+        acc[item.riskLevel] = item._count.id;
         return acc;
       },
-      {} as Record<RiskLevel, number>
+      {} as any
     );
 
     return {
       totalEvents: events.length,
       riskDistribution: riskDist,
       topThreats,
-      recentAlerts: (events as any[]).filter(
+      recentAlerts: events.filter(
         (e: any) => e.riskLevel === 'HIGH' || e.riskLevel === 'CRITICAL'
       ).length,
     };

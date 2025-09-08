@@ -4,7 +4,7 @@
  * Hypothesis: H5 (Modern data fetching improves performance and user experience)
  */
 
-import type { Product } from '@/services/productService';
+import { logDebug } from '@/lib/logger';
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -184,14 +184,22 @@ if (process.env.NODE_ENV === 'development') {
   useProductStore.subscribe(
     state => state.selectedProducts,
     selectedProducts => {
-      console.debug('[ProductStore] Selection changed:', selectedProducts.length, 'items');
+      logDebug('[ProductStore] Selection changed', {
+        component: 'ProductStore',
+        operation: 'selectionChange',
+        itemCount: selectedProducts.length,
+      });
     }
   );
 
   useProductStore.subscribe(
     state => state.filters,
     filters => {
-      console.debug('[ProductStore] Filters changed:', filters);
+      logDebug('[ProductStore] Filters changed', {
+        component: 'ProductStore',
+        operation: 'filterChange',
+        filters,
+      });
     }
   );
 }

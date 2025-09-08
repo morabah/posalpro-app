@@ -24,6 +24,9 @@ import {
 } from '@/components/proposals/DecisionInterface';
 import { WorkflowOrchestrator } from '@/components/proposals/WorkflowOrchestrator';
 import { WorkflowRuleBuilder } from '@/components/proposals/WorkflowRuleBuilder';
+
+// Import the correct types from WorkflowRuleBuilder
+import type { WorkflowRule, RuleTestResult, RuleTemplate } from '@/components/proposals/WorkflowRuleBuilder';
 import { WorkflowVisualization } from '@/components/proposals/WorkflowVisualization';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -38,6 +41,22 @@ import {
   QueueListIcon,
 } from '@heroicons/react/24/outline';
 import { useCallback, useMemo, useState } from 'react';
+
+// Type definitions for workflow templates and rules
+// Use RuleTemplate from WorkflowRuleBuilder for consistency
+type WorkflowTemplate = RuleTemplate;
+
+interface WorkflowRuleData {
+  id: string;
+  name: string;
+  condition: string;
+  action: string;
+  priority: number;
+  enabled: boolean;
+}
+
+// Use RuleTestResult from WorkflowRuleBuilder for consistency
+// interface RuleTestResult is now imported from WorkflowRuleBuilder
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -112,6 +131,9 @@ interface WorkflowComment {
   content: string;
   timestamp: Date;
   type: 'comment' | 'approval' | 'rejection' | 'escalation';
+  stageId?: string;
+  stageName?: string;
+  isResolved?: boolean;
 }
 
 interface WorkflowAttachment {
@@ -122,24 +144,10 @@ interface WorkflowAttachment {
   url: string;
   uploadedBy: string;
   uploadedAt: Date;
+  category?: string;
 }
 
-interface WorkflowRule {
-  id: string;
-  name: string;
-  description: string;
-  isActive: boolean;
-  priority: number;
-  category: 'routing' | 'approval' | 'escalation' | 'notification' | 'validation';
-  conditions: WorkflowCondition[];
-  actions: WorkflowAction[];
-  triggers: WorkflowTrigger[];
-  exceptions: WorkflowException[];
-  lastModified: Date;
-  modifiedBy: string;
-  isValid: boolean;
-  validationErrors: string[];
-}
+// WorkflowRule interface is now imported from WorkflowRuleBuilder component
 
 interface ApprovalTask {
   id: string;
@@ -330,7 +338,7 @@ export default function ApprovalWorkflowPage() {
   }, []);
 
   const handleRuleTest = useCallback(
-    async (rule: WorkflowRule, testData: Record<string, unknown>) => {
+    async (rule: WorkflowRule, testData: Record<string, string | number | boolean | string[]>) => {
       // Mock rule testing for demonstration
       return {
         id: `test-${Date.now()}`,
@@ -341,21 +349,21 @@ export default function ApprovalWorkflowPage() {
         passed: true,
         executionTime: Math.random() * 100,
         timestamp: new Date(),
-      };
+      } as RuleTestResult;
     },
     []
   );
 
-  const handleTemplateApply = useCallback((template: any) => {
+  const handleTemplateApply = useCallback((template: WorkflowTemplate) => {
     // Apply template rules to current workflow
-    const newRules = template.rules.map((rule: any, index: number) => ({
+    const newRules = template.rules.map((rule: Partial<WorkflowRule>, index: number) => ({
       ...rule,
       id: `template-rule-${Date.now()}-${index}`,
       lastModified: new Date(),
       modifiedBy: 'Current User',
       isValid: true,
       validationErrors: [],
-    }));
+    })) as WorkflowRule[];
 
     setWorkflowRules(prev => [...prev, ...newRules]);
 
@@ -665,14 +673,9 @@ export default function ApprovalWorkflowPage() {
           <WorkflowRuleBuilder
             rules={workflowRules}
             availableFields={availableFields}
-            onRuleSave={handleRuleSave as unknown as (rule: any) => void}
-            onRuleDelete={handleRuleDelete as unknown as (rule: any) => void}
-            onRuleTest={
-              handleRuleTest as unknown as (
-                rule: any,
-                testData: Record<string, string | number | boolean | string[]>
-              ) => Promise<any>
-            }
+            onRuleSave={handleRuleSave}
+            onRuleDelete={handleRuleDelete}
+            onRuleTest={handleRuleTest}
             onTemplateApply={handleTemplateApply}
           />
         )}
@@ -709,18 +712,18 @@ export default function ApprovalWorkflowPage() {
               riskLevel: (selectedTask.riskLevel.charAt(0).toUpperCase() +
                 selectedTask.riskLevel.slice(1)) as DecisionContext['riskLevel'],
               previousStageComments: (selectedTask.comments || []).map(
-                (comment: any, index: number) => ({
+                (comment: WorkflowComment, index: number) => ({
                   id: `comment-${index}-${selectedTask.id}`,
-                  stageId: comment.stageId || selectedTask.currentStage, // attempt to get from comment or default
-                  stageName: comment.stageName || selectedTask.currentStage, // attempt to get from comment or default
+                  stageId: comment.stageId || selectedTask.currentStage,
+                  stageName: comment.stageName || selectedTask.currentStage,
                   author: comment.author || 'Unknown',
-                  content: comment.content || String(comment), // handle if comment is just a string
+                  content: comment.content || String(comment),
                   timestamp: comment.timestamp ? new Date(comment.timestamp) : new Date(),
                   type: comment.type || 'comment',
                   isResolved: comment.isResolved || false,
                 })
               ) as StageComment[],
-              attachments: (selectedTask.attachments || []).map((att: any, index: number) => ({
+              attachments: (selectedTask.attachments || []).map((att: WorkflowAttachment, index: number) => ({
                 id: `att-${index}-${selectedTask.id}`,
                 name: att.name || 'Attachment',
                 type: att.type || 'unknown',

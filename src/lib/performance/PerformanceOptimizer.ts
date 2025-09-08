@@ -11,6 +11,27 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logger } from '@/lib/logger';
 
+// Type definitions for browser APIs
+interface WindowWithGC extends Window {
+  gc?: () => void;
+}
+
+interface PerformanceWithMemory extends Performance {
+  memory?: {
+    usedJSHeapSize: number;
+    jsHeapSizeLimit: number;
+  };
+}
+
+interface PerformanceEntryWithInput extends PerformanceEntry {
+  processingStart?: number;
+}
+
+interface PerformanceEntryWithLayoutShift extends PerformanceEntry {
+  hadRecentInput?: boolean;
+  value?: number;
+}
+
 interface PerformanceOptimizationMetrics {
   // Web Vitals
   lcp: number; // Largest Contentful Paint
@@ -501,7 +522,7 @@ export class PerformanceOptimizer {
 
     // Force garbage collection if available
     if (typeof window !== 'undefined' && 'gc' in window) {
-      (window as any).gc();
+      (window as WindowWithGC).gc?.();
     }
   }
 
@@ -647,15 +668,16 @@ export class PerformanceOptimizer {
   }
 
   private getFID(): number {
-    const entry = this.getPerformanceEntry('first-input') as any;
+    const entry = this.getPerformanceEntry('first-input') as PerformanceEntryWithInput;
     return entry?.processingStart ?? 0;
   }
 
   private getCLS(): number {
     const entries = this.getPerformanceEntries('layout-shift');
     return entries.reduce((cls, entry) => {
-      if (!(entry as any).hadRecentInput) {
-        cls += (entry as any).value;
+      const layoutShiftEntry = entry as PerformanceEntryWithLayoutShift;
+      if (!layoutShiftEntry.hadRecentInput) {
+        cls += layoutShiftEntry.value ?? 0;
       }
       return cls;
     }, 0);
@@ -674,8 +696,10 @@ export class PerformanceOptimizer {
 
   private getMemoryUsage(): number {
     if (typeof window !== 'undefined' && 'memory' in performance) {
-      const memory = (performance as any).memory;
-      return (memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100;
+      const memory = (performance as PerformanceWithMemory).memory;
+      if (memory) {
+        return (memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100;
+      }
     }
     return 0;
   }

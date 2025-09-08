@@ -14,6 +14,38 @@ import { Role, User } from '@prisma/client';
 import { toPrismaJson } from '@/lib/utils/prismaUtils';
 import { isPrismaError } from '@/lib/utils/errorUtils';
 
+// ✅ TYPES: Define proper interfaces for user service
+interface UserFilters {
+  search?: string;
+  department?: string;
+  status?: string;
+  role?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+  cursor?: string;
+}
+
+interface UserUpdateData {
+  name?: string;
+  email?: string;
+  department?: string;
+  preferences?: Record<string, unknown>;
+}
+
+interface NormalizedUserData {
+  id: string;
+  name: string;
+  email: string;
+  department: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+  lastLogin?: Date;
+  roles?: Role[];
+  preferences?: Record<string, unknown>;
+}
+
 // ✅ CRITICAL: Performance optimization - User cache
 const userCache = new Map<string, { user: AuthUserRecord; timestamp: number }>();
 const USER_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
@@ -456,8 +488,8 @@ export class UserService {
    * Helper: Build where clause for filtering
    * Following CORE_REQUIREMENTS.md patterns
    */
-  private buildWhereClause(filters: any) {
-    const where: any = {};
+  private buildWhereClause(filters: UserFilters) {
+    const where: Record<string, unknown> = {};
 
     if (filters.search) {
       where.OR = [
@@ -490,11 +522,11 @@ export class UserService {
   /**
    * Helper: Build order by clause with cursor pagination support
    */
-  private buildOrderByClause(filters: any) {
+  private buildOrderByClause(filters: UserFilters) {
     const sortBy = filters.sortBy || 'createdAt';
     const sortOrder = filters.sortOrder || 'desc';
 
-    const orderBy: any[] = [{ [sortBy]: sortOrder }];
+    const orderBy: Record<string, string>[] = [{ [sortBy]: sortOrder }];
 
     // Add secondary sort for cursor pagination stability
     if (sortBy !== 'id') {
@@ -510,12 +542,7 @@ export class UserService {
    */
   async updateUserWithValidation(
     userId: string,
-    data: {
-      name?: string;
-      email?: string;
-      department?: string;
-      preferences?: any;
-    },
+    data: UserUpdateData,
     updatedBy: string
   ): Promise<User> {
     try {
@@ -551,7 +578,7 @@ export class UserService {
           ...(data.email && { email: data.email }),
           ...(data.department && { department: data.department }),
           ...(data.preferences && {
-            preferences: toPrismaJson(data.preferences),
+            preferences: toPrismaJson(data.preferences) as any,
           }),
           updatedAt: new Date(),
         },
@@ -605,12 +632,14 @@ export class UserService {
    * Helper: Normalize user data (null handling)
    * Following CORE_REQUIREMENTS.md transformation patterns
    */
-  private normalizeUserData(user: any): any {
+  private normalizeUserData(user: any): NormalizedUserData {
     return {
       ...user,
+      tenantId: user.tenantId || '',
       name: user.name || '',
       department: user.department || '',
-      lastLogin: user.lastLogin || null,
+      password: user.password || null,
+      lastLogin: user.lastLogin || undefined,
     };
   }
 }

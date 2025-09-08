@@ -30,11 +30,63 @@ import {
 } from '@heroicons/react/24/outline';
 import { useCallback, useMemo, useState, useEffect } from 'react';
 
+// Type definitions for approval queue
+interface QueueFilters {
+  assignee?: string[];
+  priority?: string[];
+  stageType?: string[];
+  status?: string[];
+  riskLevel?: string[];
+  urgency?: string[];
+  showOverdueOnly?: boolean;
+  showCriticalPathOnly?: boolean;
+  showMyTasksOnly?: boolean;
+  currentUser?: string;
+  filters?: QueueFilters;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+interface ApiResponse<T> {
+  data?: T;
+  items?: T[];
+  [key: string]: unknown;
+}
+
+interface QueueItemRaw {
+  id: string;
+  workflowId: string;
+  proposalId: string;
+  proposalName: string;
+  client: string;
+  currentStage: string;
+  stageType: 'Technical' | 'Legal' | 'Finance' | 'Executive' | 'Security' | 'Compliance';
+  assignee: string;
+  priority: 'Critical' | 'High' | 'Medium' | 'Low';
+  urgency: 'Immediate' | 'Today' | 'This Week' | 'Next Week';
+  complexity: number;
+  estimatedDuration: number;
+  deadline: string;
+  slaRemaining: number;
+  status: 'Pending' | 'In Review' | 'Needs Info' | 'Escalated' | 'Blocked';
+  riskLevel: 'Low' | 'Medium' | 'High' | 'Critical';
+  dependencies: string[];
+  collaborators: string[];
+  lastActivity: string;
+  proposalValue: number;
+  isOverdue: boolean;
+  isCriticalPath: boolean;
+  escalationLevel: number;
+  reviewCycles: number;
+  requiredActions: string[];
+  attachments: number;
+}
+
 // Query key factory following gold standard pattern
 const APPROVAL_QUEUE_QUERY_KEYS = {
   all: ['approval-queue'] as const,
   lists: () => [...APPROVAL_QUEUE_QUERY_KEYS.all, 'list'] as const,
-  list: (filters: Record<string, any>) => [...APPROVAL_QUEUE_QUERY_KEYS.lists(), { filters }] as const,
+  list: (filters: QueueFilters) => [...APPROVAL_QUEUE_QUERY_KEYS.lists(), { filters }] as const,
   stats: () => [...APPROVAL_QUEUE_QUERY_KEYS.all, 'stats'] as const,
   item: (id: string) => [...APPROVAL_QUEUE_QUERY_KEYS.all, 'item', id] as const,
 };
@@ -78,17 +130,6 @@ interface QueueItem {
   attachments: number;
 }
 
-interface QueueFilters {
-  assignee: string[];
-  priority: string[];
-  stageType: string[];
-  status: string[];
-  riskLevel: string[];
-  urgency: string[];
-  showOverdueOnly: boolean;
-  showCriticalPathOnly: boolean;
-  showMyTasksOnly: boolean;
-}
 
 export interface QueueMetrics {
   totalItems: number;
@@ -158,10 +199,10 @@ export function ApprovalQueue({
         const response = await apiClient.get('/api/approval-queue');
         const loadTime = Date.now() - startTime;
 
-        const apiResponse = response as any;
+        const apiResponse = response as ApiResponse<QueueItemRaw[]>;
         // Defensive extraction: handle both single and double-wrapped responses
-        const responseData = apiResponse?.data || apiResponse;
-        const items: QueueItem[] = (responseData?.items || []).map((item: any) => ({
+        const responseData = (apiResponse?.data || apiResponse) as QueueItemRaw[];
+        const items: QueueItem[] = (responseData || []).map((item: QueueItemRaw) => ({
           ...item,
           deadline: new Date(item.deadline),
           lastActivity: new Date(item.lastActivity),
@@ -222,7 +263,7 @@ export function ApprovalQueue({
         });
 
         // Defensive extraction: handle both single and double-wrapped responses
-        const responseData = (response as any)?.data || response;
+        const responseData = (response as ApiResponse<QueueMetrics>)?.data || response;
         return responseData;
       } catch (error) {
         logError('Bulk action failed', error, {
@@ -345,25 +386,25 @@ export function ApprovalQueue({
     if (filters.showCriticalPathOnly) {
       filtered = filtered.filter(item => item.isCriticalPath);
     }
-    if (filters.priority.length > 0) {
-      filtered = filtered.filter(item => filters.priority.includes(item.priority));
+    if (filters.priority && filters.priority.length > 0) {
+      filtered = filtered.filter(item => filters.priority!.includes(item.priority));
     }
-    if (filters.stageType.length > 0) {
-      filtered = filtered.filter(item => filters.stageType.includes(item.stageType));
+    if (filters.stageType && filters.stageType.length > 0) {
+      filtered = filtered.filter(item => filters.stageType!.includes(item.stageType));
     }
-    if (filters.status.length > 0) {
-      filtered = filtered.filter(item => filters.status.includes(item.status));
+    if (filters.status && filters.status.length > 0) {
+      filtered = filtered.filter(item => filters.status!.includes(item.status));
     }
-    if (filters.riskLevel.length > 0) {
-      filtered = filtered.filter(item => filters.riskLevel.includes(item.riskLevel));
+    if (filters.riskLevel && filters.riskLevel.length > 0) {
+      filtered = filtered.filter(item => filters.riskLevel!.includes(item.riskLevel));
     }
-    if (filters.urgency.length > 0) {
-      filtered = filtered.filter(item => filters.urgency.includes(item.urgency));
+    if (filters.urgency && filters.urgency.length > 0) {
+      filtered = filtered.filter(item => filters.urgency!.includes(item.urgency));
     }
 
     // Apply sorting
     filtered.sort((a, b) => {
-      let aValue: any, bValue: any;
+      let aValue: string | number | Date, bValue: string | number | Date;
 
       switch (sortBy) {
         case 'priority':
@@ -721,11 +762,11 @@ export function ApprovalQueue({
                     <label key={priority} className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={filters.priority.includes(priority)}
+                        checked={filters.priority?.includes(priority) || false}
                         onChange={e => {
                           const newPriority = e.target.checked
-                            ? [...filters.priority, priority]
-                            : filters.priority.filter(p => p !== priority);
+                            ? [...(filters.priority || []), priority]
+                            : (filters.priority || []).filter(p => p !== priority);
                           setFilters(prev => ({ ...prev, priority: newPriority }));
                         }}
                         className="mr-2"
@@ -743,11 +784,11 @@ export function ApprovalQueue({
                     <label key={type} className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={filters.stageType.includes(type)}
+                        checked={filters.stageType?.includes(type) || false}
                         onChange={e => {
                           const newTypes = e.target.checked
-                            ? [...filters.stageType, type]
-                            : filters.stageType.filter(t => t !== type);
+                            ? [...(filters.stageType || []), type]
+                            : (filters.stageType || []).filter(t => t !== type);
                           setFilters(prev => ({ ...prev, stageType: newTypes }));
                         }}
                         className="mr-2"

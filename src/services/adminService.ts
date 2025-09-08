@@ -15,6 +15,11 @@ import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { http } from '@/lib/http';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 
+// Type definition for HTTP errors
+interface HttpError extends Error {
+  status?: number;
+}
+
 // Import consolidated schemas and types
 import {
   AuditLogsQuerySchema,
@@ -347,7 +352,7 @@ export class AdminService {
         error: error instanceof Error ? error.message : 'Unknown error',
         errorType: error?.constructor?.name,
         isHttpError: error instanceof Error && 'status' in error,
-        status: error instanceof Error && 'status' in error ? (error as any).status : undefined,
+        status: error instanceof Error && 'status' in error ? (error as HttpError).status : undefined,
       });
 
       // Throw error to match service layer pattern

@@ -16,6 +16,17 @@ import { prisma } from '../prisma';
 import { getCurrentTenant } from '../tenant';
 import { toPrismaJson } from '../utils/prismaUtils';
 
+// ✅ TYPES: Define proper interfaces for product service
+interface ProductWhereClause {
+  tenantId: string;
+  isActive?: boolean;
+  price?: {
+    gte?: number;
+    lte?: number;
+  };
+  [key: string]: unknown;
+}
+
 // Helper function to check if error is a Prisma error
 function isPrismaError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
   return error instanceof Prisma.PrismaClientKnownRequestError;
@@ -376,7 +387,7 @@ export class ProductService {
   ): Promise<{ products: Product[]; total: number; page: number; totalPages: number }> {
     try {
       const tenant = getCurrentTenant();
-      const where: any = {
+      const where: ProductWhereClause = {
         tenantId: tenant.tenantId,
       };
 
@@ -1163,9 +1174,10 @@ export class ProductService {
    * Helper: Normalize product data (Decimal conversion, null handling)
    * Following CORE_REQUIREMENTS.md transformation patterns
    */
-  private normalizeProductData(product: any): any {
+  private normalizeProductData(product: any): Product {
     return {
       ...product,
+      tenantId: product.tenantId || '',
       description: product.description || '',
       price: product.price ? Number(product.price) : 0,
       category: Array.isArray(product.category)
@@ -1175,6 +1187,13 @@ export class ProductService {
           : [],
       tags: product.tags || [],
       images: product.images || [],
+      status: product.status || 'ACTIVE',
+      version: product.version || 1,
+      attributes: product.attributes || {},
+      userStoryMappings: product.userStoryMappings || [],
+      hypothesisMappings: product.hypothesisMappings || [],
+      createdAt: product.createdAt || new Date(),
+      updatedAt: product.updatedAt || new Date(),
     };
   }
 }

@@ -17,6 +17,25 @@ import {
 } from '@/lib/validation/schemas/user';
 import { UserType } from '@/types';
 
+// Type definitions for user data transformation
+interface RawUserData {
+  id?: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  role?: string;
+  roles?: (string | { role: string; assignedAt?: Date; assignedBy?: string })[];
+  createdAt?: Date;
+  [key: string]: unknown;
+}
+
+interface RoleEntry {
+  role: string;
+  assignedAt?: Date;
+  assignedBy?: string;
+}
+
 // Re-export types for backward compatibility
 export type User = UserEntity;
 export type UserCreate = CreateUserData;
@@ -80,7 +99,7 @@ export class UserService {
    * Transform user data to ensure consistent structure for components
    * This handles schema evolution and provides backward compatibility
    */
-  private transformUserForComponent(user: any): UserEntity {
+  private transformUserForComponent(user: RawUserData): UserEntity {
     // Ensure name field exists (computed from firstName + lastName)
     if (!user.name && (user.firstName || user.lastName)) {
       user.name = `${user.firstName || ''} ${user.lastName || ''}`.trim();
@@ -101,7 +120,7 @@ export class UserService {
 
     // Ensure roles is always an array with proper structure
     if (Array.isArray(user.roles)) {
-      user.roles = user.roles.map((roleEntry: any) => {
+      user.roles = user.roles.map((roleEntry: string | RoleEntry): RoleEntry => {
         if (typeof roleEntry === 'string') {
           // Convert simple role string to role object
           return {
@@ -110,7 +129,7 @@ export class UserService {
             assignedBy: undefined,
           };
         }
-        return roleEntry;
+        return roleEntry as RoleEntry;
       });
     }
 

@@ -17,6 +17,18 @@ import { getServerSession } from 'next-auth';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 
+// Type definitions for proposal statistics
+interface ProposalStatisticsData {
+  status: string;
+  priority: string;
+  value: Prisma.Decimal | null;
+  currency: string;
+  createdAt: Date;
+  approvedAt: Date | null;
+  updatedAt: Date;
+  dueDate: Date | null;
+}
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-4.2 (Customer Relationship Management)
@@ -235,32 +247,32 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
       statistics = {
         totalProposals: allProposals.length,
-        totalValue: allProposals.reduce((sum: number, p: any) => sum + Number(p.value || 0), 0),
+        totalValue: allProposals.reduce((sum: number, p: ProposalStatisticsData) => sum + Number(p.value || 0), 0),
         averageValue:
           allProposals.length > 0
-            ? allProposals.reduce((sum: number, p: any) => sum + Number(p.value || 0), 0) /
+            ? allProposals.reduce((sum: number, p: ProposalStatisticsData) => sum + Number(p.value || 0), 0) /
               allProposals.length
             : 0,
         statusBreakdown: allProposals.reduce(
-          (acc: Record<string, number>, p: any) => {
+          (acc: Record<string, number>, p: ProposalStatisticsData) => {
             acc[p.status] = (acc[p.status] || 0) + 1;
             return acc;
           },
           {} as Record<string, number>
         ),
         priorityBreakdown: allProposals.reduce(
-          (acc: Record<string, number>, p: any) => {
+          (acc: Record<string, number>, p: ProposalStatisticsData) => {
             acc[p.priority] = (acc[p.priority] || 0) + 1;
             return acc;
           },
           {} as Record<string, number>
         ),
-        proposalsThisMonth: allProposals.filter((p: any) => {
+        proposalsThisMonth: allProposals.filter((p: ProposalStatisticsData) => {
           const thisMonth = new Date();
           thisMonth.setDate(1);
           return p.createdAt >= thisMonth;
         }).length,
-        proposalsThisYear: allProposals.filter((p: any) => {
+        proposalsThisYear: allProposals.filter((p: ProposalStatisticsData) => {
           const thisYear = new Date(new Date().getFullYear(), 0, 1);
           return p.createdAt >= thisYear;
         }).length,

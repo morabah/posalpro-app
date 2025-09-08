@@ -10,6 +10,23 @@ import { logError, logInfo } from '@/lib/logger';
 import { getCache, setCache } from '@/lib/redis';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+// ✅ TYPES: Define proper interfaces for proposal stats
+interface ProposalStatusCount {
+  status: string;
+  _count: { status: number };
+}
+
+interface ProposalStatsData {
+  total: number;
+  byStatus: Record<string, number>;
+  winRate: number;
+  avgValue: number;
+  totalValue: number;
+  activeCount: number;
+  overdueCount: number;
+  atRiskCount: number;
+}
+
 // ====================
 // GET /api/proposals/stats - Get proposal statistics
 // ====================
@@ -54,7 +71,10 @@ export const GET = createRoute(
             userStory: 'US-3.2',
             hypothesis: 'H4',
           });
-          return errorHandler.createSuccessResponse(cachedStats, 'Proposal stats retrieved from cache');
+          return errorHandler.createSuccessResponse(
+            cachedStats,
+            'Proposal stats retrieved from cache'
+          );
         }
       }
 
@@ -64,11 +84,10 @@ export const GET = createRoute(
 
       const [total, statusCounts, overdue, totalValueResult, recentActivity] = await Promise.all([
         // Total proposals
-        withAsyncErrorHandler(
-          () => prisma.proposal.count(),
-          'Failed to count total proposals',
-          { component: 'ProposalStatsAPI', operation: 'COUNT_TOTAL' }
-        ),
+        withAsyncErrorHandler(() => prisma.proposal.count(), 'Failed to count total proposals', {
+          component: 'ProposalStatsAPI',
+          operation: 'COUNT_TOTAL',
+        }),
 
         // Status counts
         withAsyncErrorHandler(
@@ -120,9 +139,9 @@ export const GET = createRoute(
 
       // Calculate win rate
       const acceptedCount =
-        statusCounts.find((s: any) => s.status === 'ACCEPTED')?._count.status || 0;
+        statusCounts.find((s: ProposalStatusCount) => s.status === 'ACCEPTED')?._count.status || 0;
       const declinedCount =
-        statusCounts.find((s: any) => s.status === 'DECLINED')?._count.status || 0;
+        statusCounts.find((s: ProposalStatusCount) => s.status === 'DECLINED')?._count.status || 0;
       const winRate =
         acceptedCount + declinedCount > 0
           ? (acceptedCount / (acceptedCount + declinedCount)) * 100
@@ -131,7 +150,7 @@ export const GET = createRoute(
       const stats = {
         total,
         byStatus: statusCounts.reduce(
-          (acc: Record<string, number>, item: any) => {
+          (acc: Record<string, number>, item: ProposalStatusCount) => {
             acc[item.status] = item._count.status;
             return acc;
           },

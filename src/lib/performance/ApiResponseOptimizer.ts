@@ -39,8 +39,8 @@ interface ApiOptimizationConfig {
   maxCacheSize: number;
 }
 
-interface CacheEntry {
-  data: any;
+interface CacheEntry<T = unknown> {
+  data: T;
   timestamp: number;
   ttl: number;
   size: number;
@@ -60,8 +60,8 @@ interface ApiPerformanceMetrics {
   lastOptimized: number;
 }
 
-interface ResponseOptimizationResult {
-  optimizedData: any;
+interface ResponseOptimizationResult<T = unknown> {
+  optimizedData: T;
   originalSize: number;
   optimizedSize: number;
   compressionRatio: number;
@@ -75,7 +75,7 @@ interface ResponseOptimizationResult {
  */
 export class ApiResponseOptimizer {
   private static instance: ApiResponseOptimizer | null = null;
-  private cache = new Map<string, CacheEntry>();
+  private cache = new Map<string, CacheEntry<unknown>>();
   private metrics: ApiPerformanceMetrics;
   private config: ApiOptimizationConfig;
   private errorHandlingService: ErrorHandlingService;
@@ -143,7 +143,7 @@ export class ApiResponseOptimizer {
   /**
    * Optimize API response with caching, compression, and performance tracking
    */
-  public async optimizeResponse<T = any>(
+  public async optimizeResponse<T = unknown>(
     key: string,
     data: T,
     options: {
@@ -152,7 +152,7 @@ export class ApiResponseOptimizer {
       skipCache?: boolean;
       trackPerformance?: boolean;
     } = {}
-  ): Promise<ResponseOptimizationResult> {
+  ): Promise<ResponseOptimizationResult<T>> {
     const startTime = Date.now();
 
     try {
@@ -162,7 +162,7 @@ export class ApiResponseOptimizer {
         if (cachedResult) {
           this.updateMetrics(startTime, true, cachedResult.size);
           return {
-            optimizedData: cachedResult.data,
+            optimizedData: cachedResult.data as T,
             originalSize: cachedResult.originalSize,
             optimizedSize: cachedResult.size,
             compressionRatio: cachedResult.originalSize / cachedResult.size,
@@ -237,7 +237,7 @@ export class ApiResponseOptimizer {
   /**
    * Get cached response if available and not expired
    */
-  private getCachedResponse(key: string): CacheEntry | null {
+  private getCachedResponse<T = unknown>(key: string): CacheEntry<T> | null {
     const entry = this.cache.get(key);
     if (!entry) return null;
 
@@ -251,15 +251,15 @@ export class ApiResponseOptimizer {
     entry.accessCount++;
     entry.lastAccessed = now;
 
-    return entry;
+    return entry as any;
   }
 
   /**
    * Cache response with optimization metadata
    */
-  private cacheResponse(
+  private cacheResponse<T = unknown>(
     key: string,
-    data: any,
+    data: T,
     options: {
       ttl: number;
       originalSize: number;
@@ -273,7 +273,7 @@ export class ApiResponseOptimizer {
         this.evictLeastRecentlyUsed();
       }
 
-      const entry: CacheEntry = {
+      const entry: CacheEntry<T> = {
         data,
         timestamp: Date.now(),
         ttl: options.ttl,
@@ -302,8 +302,8 @@ export class ApiResponseOptimizer {
   /**
    * Compress data using various algorithms
    */
-  private async compressData(data: any): Promise<{
-    compressedData: any;
+  private async compressData<T = unknown>(data: T): Promise<{
+    compressedData: T;
     compressedSize: number;
     algorithm: string;
   }> {
@@ -327,7 +327,7 @@ export class ApiResponseOptimizer {
       if (typeof data === 'string') {
         const compressed = this.compressString(data);
         return {
-          compressedData: compressed,
+          compressedData: compressed as any,
           compressedSize: this.calculateDataSize(compressed),
           algorithm: 'string-compression',
         };
@@ -361,21 +361,21 @@ export class ApiResponseOptimizer {
   /**
    * Remove empty values from objects to reduce size
    */
-  private removeEmptyValues(obj: any): any {
+  private removeEmptyValues<T = unknown>(obj: T): T {
     if (Array.isArray(obj)) {
       return obj
         .map(item => this.removeEmptyValues(item))
-        .filter(item => item !== null && item !== undefined && item !== '');
+        .filter(item => item !== null && item !== undefined && item !== '') as any;
     }
 
     if (obj && typeof obj === 'object') {
-      const cleaned: any = {};
+      const cleaned: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(obj)) {
         if (value !== null && value !== undefined && value !== '') {
           cleaned[key] = this.removeEmptyValues(value);
         }
       }
-      return cleaned;
+      return cleaned as any;
     }
 
     return obj;
@@ -384,20 +384,20 @@ export class ApiResponseOptimizer {
   /**
    * Optimize data structure for better compression
    */
-  private optimizeDataStructure(data: any): any {
+  private optimizeDataStructure<T = unknown>(data: T): T {
     if (Array.isArray(data)) {
-      return data.map(item => this.optimizeDataStructure(item));
+      return data.map(item => this.optimizeDataStructure(item)) as any;
     }
 
     if (data && typeof data === 'object') {
-      const optimized: any = {};
+      const optimized: Record<string, unknown> = {};
       const sortedKeys = Object.keys(data).sort();
 
       for (const key of sortedKeys) {
-        optimized[key] = this.optimizeDataStructure(data[key]);
+        optimized[key] = this.optimizeDataStructure((data as any)[key]);
       }
 
-      return optimized;
+      return optimized as any;
     }
 
     return data;
@@ -415,7 +415,7 @@ export class ApiResponseOptimizer {
   /**
    * Calculate the size of data in bytes
    */
-  private calculateDataSize(data: any): number {
+  private calculateDataSize(data: unknown): number {
     try {
       if (typeof data === 'string') {
         return new Blob([data]).size;

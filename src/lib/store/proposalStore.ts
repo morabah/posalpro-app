@@ -18,6 +18,42 @@ import { logDebug, logError } from '@/lib/logger';
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
+// ✅ TYPES: Define proper interfaces for proposal store
+
+interface ProposalMetadata {
+  id?: string;
+  title?: string;
+  description?: string;
+  customerId?: string;
+  customer?: any;
+  dueDate?: string;
+  priority?: string;
+  value?: number;
+  currency?: string;
+  metadata?: any;
+  projectType?: string;
+  tags?: string[];
+  assignedTo?: any[];
+  teamData?: {
+    teamLead?: string;
+    salesRepresentative?: string;
+  };
+  productData?: {
+    products: Array<{
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      total: number;
+      discount?: number;
+    }>;
+  };
+  contentData?: Record<string, unknown>;
+  sectionData?: Record<string, unknown>;
+  planType?: string;
+  wizardVersion?: string;
+  submittedAt?: string;
+}
+
 // Types for proposal wizard data
 export interface ProposalBasicInfo {
   title: string;
@@ -34,7 +70,8 @@ export interface ProposalBasicInfo {
   value?: number; // Changed from estimatedValue to match database
   currency: string;
   projectType?: string;
-  tags?: string[]; // Added to match database
+  tags?: string[];
+  assignedTo?: string; // Added to match database
 }
 
 export interface ProposalTeamData {
@@ -146,7 +183,7 @@ interface ProposalWizardState {
   // Actions
   setCurrentStep: (step: number) => void;
   setPlanType: (plan: 'BASIC' | 'PROFESSIONAL' | 'ENTERPRISE') => void;
-  setStepData: (step: number, data: any) => void;
+  setStepData: (step: number, data: ProposalStepData | ((prevData: ProposalStepData) => ProposalStepData)) => void;
   setValidationErrors: (step: number, errors: string[]) => void;
   nextStep: () => Promise<void>;
   previousStep: () => void;
@@ -154,7 +191,7 @@ interface ProposalWizardState {
   validateStep: (step: number) => string[];
   submitProposal: () => Promise<string>;
   updateProposal: (proposalId: string) => Promise<string>;
-  initializeFromData: (proposalData: any) => void;
+  initializeFromData: (proposalData: ProposalMetadata) => void;
   resetWizard: () => void;
   setIsSubmitting: (isSubmitting: boolean) => void;
 }
@@ -318,10 +355,10 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
     });
   },
 
-  setStepData: (step: number, data: any | ((prevData: any) => any)) => {
+  setStepData: (step: number, data: ProposalStepData | ((prevData: ProposalStepData) => ProposalStepData)) => {
     set(state => {
-      const currentStepData = state.stepData[step];
-      const newData = typeof data === 'function' ? data(currentStepData) : data;
+      const currentStepData = state.stepData[step] as any;
+      const newData = typeof data === 'function' ? data(currentStepData as any) : data;
 
       // ✅ ADDED: Debug logging to track step data updates (only in development)
       if (process.env.NODE_ENV === 'development') {
@@ -331,8 +368,8 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
           step,
           currentDataKeys: currentStepData ? Object.keys(currentStepData) : null,
           newDataKeys: newData ? Object.keys(newData) : null,
-          productCount: newData?.products?.length || 0,
-          totalValue: newData?.totalValue || 0,
+          productCount: (newData && 'products' in newData) ? newData.products?.length || 0 : 0,
+          totalValue: (newData && 'totalValue' in newData) ? newData.totalValue || 0 : 0,
         });
       }
 
@@ -615,7 +652,7 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
     }
   },
 
-  initializeFromData: (proposalData: any) => {
+  initializeFromData: (proposalData: ProposalMetadata) => {
     logDebug('Initializing wizard from existing data', {
       component: 'ProposalStore',
       operation: 'initializeFromData',
@@ -695,7 +732,7 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
         },
       };
 
-      const updates: any = { stepData };
+      const updates: Record<string, unknown> = { stepData };
       if (planTypeFromMetadata) {
         updates.planType = planTypeFromMetadata;
       }
@@ -776,7 +813,7 @@ export const useProposalNavigation = (): {
 export const useProposalSetCurrentStep = () => useProposalStore(state => state.setCurrentStep);
 
 export const useProposalActions = (): {
-  setStepData: (step: number, data: any) => void;
+  setStepData: (step: number, data: ProposalStepData | ((prevData: ProposalStepData) => ProposalStepData)) => void;
   setCurrentStep: (step: number) => void;
   nextStep: () => Promise<void>;
   previousStep: () => void;

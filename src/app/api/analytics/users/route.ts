@@ -16,6 +16,17 @@ import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandle
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+// ✅ TYPES: Define proper interface for analytics filters
+interface AnalyticsFilters {
+  userId?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+  eventType?: string;
+  includeEvents?: boolean;
+  includeMetrics?: boolean;
+  limit?: number;
+}
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-5.1 (Analytics Dashboard), US-5.2 (User Behavior)
@@ -116,7 +127,7 @@ export const GET = createRoute(
       );
 
       // Convert query to service filters
-      const filters: any = {
+      const filters: AnalyticsFilters = {
         userId: validatedQuery.userId,
         dateFrom: validatedQuery.dateFrom ? new Date(validatedQuery.dateFrom) : undefined,
         dateTo: validatedQuery.dateTo ? new Date(validatedQuery.dateTo) : undefined,

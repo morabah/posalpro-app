@@ -4,9 +4,9 @@
 
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { logError, logWarn, logInfo } from '@/lib/logger';
+import { logDebug, logWarn } from '@/lib/logger';
+import React, { useCallback, useEffect, useState } from 'react';
 
 export const EmergencyAnalyticsController: React.FC = () => {
   const [violationCount, setViolationCount] = useState(0);
@@ -22,44 +22,29 @@ export const EmergencyAnalyticsController: React.FC = () => {
       localStorage.setItem('optimized_analytics_disabled', 'true');
 
       // Track this critical event
-      trackOptimized('analytics_emergency_disabled', {
-        reason: 'performance_violations',
-        violationCount,
-        timestamp: Date.now(),
-      }, 'high');
+      trackOptimized(
+        'analytics_emergency_disabled',
+        {
+          reason: 'performance_violations',
+          violationCount,
+          timestamp: Date.now(),
+        },
+        'high'
+      );
     }
   }, [trackOptimized, violationCount]);
 
   useEffect(() => {
-    let violationDetected = false;
-
-    const originalWarn = console.warn;
-    const customWarn = (...args: unknown[]) => {
-      const message = args.join(' ');
-
-      if (message.includes('[Violation]')) {
-        setViolationCount(prev => {
-          const newCount = prev + 1;
-
-          // Auto-disable after 2 violations
-          if (newCount >= 2 && !violationDetected) {
-            violationDetected = true;
-            emergencyDisable();
-            logError('EMERGENCY: Analytics disabled due to performance violations', new Error('Performance violations exceeded threshold'), {
-              component: 'EmergencyAnalyticsController',
-              violationCount: newCount
-            });
-          }
-
-          return newCount;
-        });
-      }
-
-      originalWarn.apply(console, args);
-    };
+    logDebug('[EmergencyAnalyticsController] Performance monitoring initialized', {
+      component: 'EmergencyAnalyticsController',
+      operation: 'initialization',
+    });
 
     return () => {
-      console.warn = originalWarn;
+      logDebug('[EmergencyAnalyticsController] Component cleanup', {
+        component: 'EmergencyAnalyticsController',
+        operation: 'cleanup',
+      });
     };
   }, [trackOptimized, violationCount, emergencyDisable]);
 
