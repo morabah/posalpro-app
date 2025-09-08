@@ -229,11 +229,17 @@ Observability & Analytics: WebVitalsProvider, logger, metrics store, optimized a
 
 **Business Logic Separation (MANDATORY)**
 
-- API routes act as thin boundaries. Routes MUST NOT contain Prisma calls, raw SQL, or non-trivial query building.
-- Put all business logic (query composition, transactions, denormalization, normalization of Decimal/dates, cross-entity orchestration) in server DB services under `src/lib/services/*`.
-- Routes handle only: schema validation (Zod), RBAC/permissions, idempotency keys, request-ID propagation, light response shaping, and optional cache lookups.
+- API routes act as thin boundaries. Routes MUST NOT contain Prisma calls, raw
+  SQL, or non-trivial query building.
+- Put all business logic (query composition, transactions, denormalization,
+  normalization of Decimal/dates, cross-entity orchestration) in server DB
+  services under `src/lib/services/*`.
+- Routes handle only: schema validation (Zod), RBAC/permissions, idempotency
+  keys, request-ID propagation, light response shaping, and optional cache
+  lookups.
 - Raw SQL (`$queryRaw`), `$transaction`, and transformations belong in services.
-- Cursor pagination logic for domain lists lives in services; routes simply pass typed filters.
+- Cursor pagination logic for domain lists lives in services; routes simply pass
+  typed filters.
 
 Correct vs Wrong
 
@@ -241,7 +247,11 @@ Correct vs Wrong
 // ❌ Wrong (route with Prisma/business logic)
 import prisma from '@/lib/db/prisma';
 export const GET = createRoute({ query: MyQuery }, async ({ query }) => {
-  const rows = await prisma.myEntity.findMany({ where: {/*...*/} });
+  const rows = await prisma.myEntity.findMany({
+    where: {
+      /*...*/
+    },
+  });
   return ok({ items: rows });
 });
 
@@ -258,16 +268,20 @@ Route Responsibilities
 - Validate inputs via feature schemas.
 - Enforce authorization with `validateApiPermission`/`withRole`.
 - Apply idempotency protection for mutating endpoints when needed.
-- Optionally consult/set cache around stable service calls (cache key strategy lives near service filters).
+- Optionally consult/set cache around stable service calls (cache key strategy
+  lives near service filters).
 - Return standardized envelopes (ProblemDetails/ok).
 
 Service Responsibilities (src/lib/services)
 
-- Build type-safe filters and ordering (including cursor pagination secondary sort).
+- Build type-safe filters and ordering (including cursor pagination secondary
+  sort).
 - Execute Prisma queries/transactions and handle integrity checks.
-- Normalize data (Decimal → number, null handling, assignedTo flattening) once, consistently.
+- Normalize data (Decimal → number, null handling, assignedTo flattening) once,
+  consistently.
 - Emit domain errors via `StandardError` with `ErrorCodes` and metadata.
-- Provide stable method signatures (e.g., `list`, `getById`, `create`, `update`, `remove`).
+- Provide stable method signatures (e.g., `list`, `getById`, `create`, `update`,
+  `remove`).
 
 Acceptance
 
@@ -709,12 +723,54 @@ Acceptance
 - Exception: highly route‑specific shapes (e.g., raw SQL payloads or Prisma
   native enums) may remain local but must include a comment explaining why.
 
+**Query Parameter Structure Alignment (MANDATORY)**
+
+**Always ensure frontend query parameters match API schema structure. Use direct
+parameters for validated fields, filters object only for non-schema
+parameters.**
+
+- ✅ **CORRECT**: Direct parameters for validated API fields
+
+```typescript
+// Frontend - send category as direct parameter
+const params = { category: 'Electronics', limit: 50 };
+// Results in: /api/products?category=Electronics&limit=50
+
+// API schema expects: category as direct validated parameter
+export const ProductQuerySchema = z.object({
+  category: z.string().optional(),
+  limit: z.coerce.number().min(1).max(100).default(20),
+});
+```
+
+- ❌ **FORBIDDEN**: Wrap validated fields in filters object
+
+```typescript
+// ❌ WRONG: Category in filters object causes validation mismatch
+const params = {
+  filters: { category: 'Electronics' },
+  limit: 50,
+};
+// Results in: /api/products?filters[category]=Electronics&limit=50
+// API schema doesn't recognize filters[category] as valid
+```
+
+**Parameter Alignment Rules:**
+
+- [ ] Check API route schema for expected parameter structure
+- [ ] Send validated fields as direct query parameters
+- [ ] Use `filters` object only for non-schema parameters (sorting, pagination
+      cursors)
+- [ ] Test parameter structure with real API calls during development
+- [ ] Document parameter structure in feature module `schemas.ts`
+
 **Acceptance Checks**
 
 - [ ] No inline `z.object` in `src/app/api/{proposals,customers,products}` for
       shared shapes
 - [ ] Centralized request/response schemas exported from feature `schemas.ts`
 - [ ] Response objects validated where appropriate before returning
+- [ ] Frontend query parameters match API schema structure exactly
 
 **Consistency Rules**
 
@@ -725,7 +781,8 @@ Acceptance
   schemas.
 
 > Rationale: Centralizing schemas eliminates drift, improves type safety, and
-> keeps UI and API contracts in lockstep.
+> keeps UI and API contracts in lockstep. Proper query parameter alignment
+> prevents 400 Bad Request validation errors.
 
 ## 🎯 **FEATURE ORGANIZATION** {#feature-organization}
 

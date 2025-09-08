@@ -10,7 +10,10 @@ import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useInfiniteProductsMigrated } from '@/features/products/hooks/useProducts';
 import SuggestionCombobox from '@/components/ui/forms/SuggestionCombobox';
 import { useSuggestions } from '@/features/search/hooks/useSuggestions';
-import { useProductStatsMigrated, useProductCategories } from '@/features/products/hooks/useProducts';
+import {
+  useProductStatsMigrated,
+  useProductCategories,
+} from '@/features/products/hooks/useProducts';
 import { logError, logInfo } from '@/lib/logger';
 import type { Product } from '@/features/products';
 import useProductStore from '@/lib/store/productStore';
@@ -88,15 +91,27 @@ function ProductListHeader() {
             <span className="text-sm text-gray-600" aria-live="polite">
               {selectedCount} selected
             </span>
-            <Button onClick={handleBulkDelete} variant="danger" size="sm" aria-label="Delete selected products">
+            <Button
+              onClick={handleBulkDelete}
+              variant="danger"
+              size="sm"
+              aria-label="Delete selected products"
+            >
               Delete Selected
             </Button>
-            <Button onClick={clearSelection} variant="outline" size="sm" aria-label="Clear selection">
+            <Button
+              onClick={clearSelection}
+              variant="outline"
+              size="sm"
+              aria-label="Clear selection"
+            >
               Clear
             </Button>
           </div>
         )}
-        <Button onClick={handleCreateProduct} aria-label="Create product">Create Product</Button>
+        <Button onClick={handleCreateProduct} aria-label="Create product">
+          Create Product
+        </Button>
       </div>
     </div>
   );
@@ -116,7 +131,10 @@ function ProductStats() {
   if (isError) return null;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4" aria-label="Product quick stats">
+    <div
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4"
+      aria-label="Product quick stats"
+    >
       {isLoading ? (
         <>
           {Array.from({ length: 4 }).map((_, i) => (
@@ -167,10 +185,11 @@ function ProductFilters() {
     return () => clearTimeout(t);
   }, [filters.search]);
 
-  const suggestionsQuery = useSuggestions(
-    debouncedQuery,
-    { type: searchMode === 'known' ? 'products' : 'all', limit: 7, enabled: (debouncedQuery?.length || 0) >= 2 }
-  );
+  const suggestionsQuery = useSuggestions(debouncedQuery, {
+    type: searchMode === 'known' ? 'products' : 'all',
+    limit: 7,
+    enabled: (debouncedQuery?.length || 0) >= 2,
+  });
 
   const handleSearchChange = useCallback(
     (searchValue: string) => {
@@ -258,7 +277,9 @@ function ProductFilters() {
     <Card className="p-4 mb-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <div className="relative">
-          <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+          <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
+            Search
+          </label>
           {/* Search mode segmented control */}
           <div className="mb-2 inline-flex rounded-md border border-gray-200 bg-white shadow-sm overflow-hidden">
             <button
@@ -309,7 +330,9 @@ function ProductFilters() {
             minChars={2}
             groupByType
           />
-          <p id="search-help" className="sr-only">Type to filter products by name or description</p>
+          <p id="search-help" className="sr-only">
+            Type to filter products by name or description
+          </p>
         </div>
 
         <div>
@@ -385,7 +408,12 @@ function ProductFilters() {
         </div>
 
         <div className="flex items-end">
-          <Button variant="outline" onClick={resetFilters} aria-label="Reset filters" className="w-full">
+          <Button
+            variant="outline"
+            onClick={resetFilters}
+            aria-label="Reset filters"
+            className="w-full"
+          >
             Reset
           </Button>
         </div>
@@ -406,11 +434,11 @@ function ProductTable() {
   const { data, error, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage } =
     useInfiniteProductsMigrated({
       search: filters.search || undefined,
+      category: filters.category || undefined,
       sortBy: filters.sortBy,
       sortOrder: filters.sortOrder,
       limit: 50,
       filters: {
-        category: filters.category || undefined,
         isActive: filters.isActive,
       },
     });
@@ -455,7 +483,9 @@ function ProductTable() {
         <div className="divide-y">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="grid grid-cols-12 gap-4 px-6 py-4 items-center">
-              <div className="col-span-1"><SkeletonLoader className="w-5" height="h-5" /></div>
+              <div className="col-span-1">
+                <SkeletonLoader className="w-5" height="h-5" />
+              </div>
               <div className="col-span-4">
                 <div className="flex items-center gap-3">
                   <SkeletonLoader className="w-10" height="h-10" />
@@ -465,10 +495,18 @@ function ProductTable() {
                   </div>
                 </div>
               </div>
-              <div className="col-span-2"><SkeletonLoader className="w-24" height="h-4" /></div>
-              <div className="col-span-2"><SkeletonLoader className="w-24" height="h-4" /></div>
-              <div className="col-span-1"><SkeletonLoader className="w-16" height="h-4" /></div>
-              <div className="col-span-2"><SkeletonLoader className="w-28" height="h-4" /></div>
+              <div className="col-span-2">
+                <SkeletonLoader className="w-24" height="h-4" />
+              </div>
+              <div className="col-span-2">
+                <SkeletonLoader className="w-24" height="h-4" />
+              </div>
+              <div className="col-span-1">
+                <SkeletonLoader className="w-16" height="h-4" />
+              </div>
+              <div className="col-span-2">
+                <SkeletonLoader className="w-28" height="h-4" />
+              </div>
             </div>
           ))}
         </div>
@@ -489,11 +527,19 @@ function ProductTable() {
   return (
     <Card className="overflow-hidden" role="region" aria-label="Products list">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200" role="table" aria-label="Products table">
+        <table
+          className="min-w-full divide-y divide-gray-200"
+          role="table"
+          aria-label="Products table"
+        >
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
               <th className="w-12 px-6 py-3 text-left">
-                <Checkbox checked={isAllSelected} onChange={handleSelectAll} aria-label="Select all products" />
+                <Checkbox
+                  checked={isAllSelected}
+                  onChange={handleSelectAll}
+                  aria-label="Select all products"
+                />
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Product
@@ -522,9 +568,14 @@ function ProductTable() {
                   <div className="text-center">
                     <div className="text-4xl mb-2">📦</div>
                     <h3 className="text-lg font-medium text-gray-900">No products found</h3>
-                    <p className="text-gray-600 mt-1">Try adjusting filters or create a new product.</p>
+                    <p className="text-gray-600 mt-1">
+                      Try adjusting filters or create a new product.
+                    </p>
                     <div className="mt-4">
-                      <Button onClick={() => router.push('/products/create')} aria-label="Create product from empty state">
+                      <Button
+                        onClick={() => router.push('/products/create')}
+                        aria-label="Create product from empty state"
+                      >
                         Create Product
                       </Button>
                     </div>

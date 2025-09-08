@@ -18,15 +18,17 @@ export const qk = {
     // ====================
     list: (
       search: string,
+      category: string | undefined,
       limit: number,
       sortBy: string,
       sortOrder: 'asc' | 'desc',
       cursor?: string,
       filters?: Record<string, unknown>
-    ) => [
-      ...qk.products.lists(),
-      { search, limit, sortBy, sortOrder, cursor, filters }
-    ] as const,
+    ) =>
+      [
+        ...qk.products.lists(),
+        { search, category, limit, sortBy, sortOrder, cursor, filters },
+      ] as const,
 
     byId: (id: string) => [...qk.products.all, 'byId', id] as const,
     search: (query: string, limit: number) => [...qk.products.all, 'search', query, limit] as const,

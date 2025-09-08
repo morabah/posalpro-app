@@ -50,6 +50,7 @@ export function ProductCreateForm() {
       status: 'ACTIVE' as const,
       isActive: true,
       images: [],
+      datasheetPath: '',
       version: 1,
       userStoryMappings: ['US-4.1'],
     },
@@ -252,6 +253,59 @@ export function ProductCreateForm() {
               error={errors.description?.message}
               touched={!!touchedFields.description}
             />
+
+            {/* Datasheet Path */}
+            <div>
+              <label
+                htmlFor="datasheetPath"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Datasheet Path (Optional)
+              </label>
+              <div className="flex space-x-2">
+                <FormField
+                  {...register('datasheetPath')}
+                  name="datasheetPath"
+                  placeholder="Enter datasheet path or select file"
+                  value={watch('datasheetPath') || ''}
+                  onBlur={() => register('datasheetPath').onBlur}
+                  error={errors.datasheetPath?.message}
+                  touched={!!touchedFields.datasheetPath}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.pdf,.doc,.docx,.xls,.xlsx,.txt';
+                    input.onchange = e => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) {
+                        // Get the complete path from the file input
+                        const fullPath = (e.target as HTMLInputElement).value;
+                        if (fullPath) {
+                          // Use the complete path if available
+                          setValue('datasheetPath', fullPath);
+                        } else {
+                          // Fallback to just filename if path is not accessible
+                          setValue('datasheetPath', file.name);
+                        }
+                        trigger('datasheetPath');
+                      }
+                    };
+                    input.click();
+                  }}
+                  className="px-4 py-2"
+                >
+                  Browse...
+                </Button>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Enter network path or select local file (PDF, DOC, DOCX, XLS, XLSX, TXT)
+              </p>
+            </div>
           </div>
 
           {/* Categories and Tags */}

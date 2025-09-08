@@ -293,7 +293,8 @@ export const GET = createRoute(
       };
 
       // Remove the nested arrays that are now transformed
-      const { relationships, relatedFrom, proposalProducts, _count, ...cleanProduct } = transformedProduct;
+      const { relationships, relatedFrom, proposalProducts, _count, ...cleanProduct } =
+        transformedProduct;
 
       // Track product view for analytics
       await trackProductViewEvent(user.id, id, product.name);
@@ -438,7 +439,8 @@ export const PUT = createRoute(
               usageAnalytics: {
                 lastUpdatedBy: user.id,
                 lastUpdatedAt: new Date().toISOString(),
-                updateCount: ((existingProduct as ProductWithAnalytics).usageAnalytics?.updateCount || 0) + 1,
+                updateCount:
+                  ((existingProduct as ProductWithAnalytics).usageAnalytics?.updateCount || 0) + 1,
                 hypothesis: ['H3', 'H4'],
                 userStories: ['US-3.1', 'US-3.2'],
               } as unknown as Prisma.InputJsonValue,
@@ -454,6 +456,7 @@ export const PUT = createRoute(
               tags: true,
               attributes: true,
               images: true,
+              datasheetPath: true, // Include datasheet path
               stockQuantity: true,
               status: true,
               isActive: true,
@@ -921,6 +924,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
                     price: true,
                     currency: true,
                     isActive: true,
+                    datasheetPath: true, // Include datasheet path
                   },
                 },
               },
@@ -935,6 +939,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
                     price: true,
                     currency: true,
                     isActive: true,
+                    datasheetPath: true, // Include datasheet path
                   },
                 },
               },

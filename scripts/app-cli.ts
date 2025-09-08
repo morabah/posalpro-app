@@ -745,12 +745,14 @@ function printHelp() {
   schema check                               # Comprehensive schema consistency check
   schema integrity                           # Data integrity and referential integrity check
   schema validate                            # Zod schema validation against live data
-  schema detect-mismatch [componentName]     # 🆕 Dynamic frontend-backend field mismatch detection
+  schema detect-mismatch [componentName]     # 🆕 Dynamic frontend-backend field mismatch detection (includes query parameter structure)
 
 🔧 DEVELOPMENT WORKFLOW TESTING
   schema detect-mismatch [componentName]     # Automated frontend-backend field validation
                                             # - Analyzes React components for form field usage
                                             # - Matches components to backend Zod schemas dynamically
+                                            # - Detects query parameter structure issues (filters.category vs category)
+                                            # - Provides actionable suggestions for parameter alignment
                                             # - Detects enum mismatches, missing fields, type conflicts
                                             # - Provides actionable developer suggestions
                                             # - Optional: Filter by specific component name
@@ -8941,6 +8943,18 @@ async function handleFieldValueMismatchDetection(api: ApiClient, targetComponent
       suggestedPattern: string;
       severity: 'high' | 'medium' | 'low';
     }>,
+    queryParameterIssues: [] as Array<{
+      component: string;
+      hook: string;
+      endpoint: string;
+      issue: string;
+      currentParameterStructure: string;
+      expectedParameterStructure: string;
+      actualQueryString: string;
+      expectedQueryString: string;
+      severity: 'high' | 'medium' | 'low';
+      suggestion: string;
+    }>,
     classificationSummary: null as any,
   };
 
@@ -8972,6 +8986,9 @@ async function handleFieldValueMismatchDetection(api: ApiClient, targetComponent
 
     // Step 4.5: Detect response structure issues (double-wrapped responses, data extraction problems)
     await detectResponseStructureIssues(frontendFields, detectedIssues);
+
+    // Step 4.6: Detect query parameter structure issues (filters.category vs category)
+    await detectQueryParameterIssues(frontendFields, backendSchemas, detectedIssues);
 
     // Add classification summary
     const classificationSummary = generateClassificationSummary(frontendFields);
@@ -9032,6 +9049,23 @@ async function handleFieldValueMismatchDetection(api: ApiClient, targetComponent
       });
     }
 
+    if (detectedIssues.queryParameterIssues.length > 0) {
+      console.log('\n🟣 Query Parameter Structure Issues:');
+      detectedIssues.queryParameterIssues.forEach((issue, index) => {
+        const severityIcon =
+          issue.severity === 'high' ? '🔴' : issue.severity === 'medium' ? '🟡' : '🟢';
+        console.log(`\n${index + 1}. ${severityIcon} Component: ${issue.component}`);
+        console.log(`   Hook: ${issue.hook}`);
+        console.log(`   Endpoint: ${issue.endpoint}`);
+        console.log(`   Issue: ${issue.issue}`);
+        console.log(`   Current structure: ${issue.currentParameterStructure}`);
+        console.log(`   Expected structure: ${issue.expectedParameterStructure}`);
+        console.log(`   Actual query: ${issue.actualQueryString}`);
+        console.log(`   Expected query: ${issue.expectedQueryString}`);
+        console.log(`   Suggestion: ${issue.suggestion}`);
+      });
+    }
+
     // Show classification summary
     if (detectedIssues.classificationSummary) {
       const summary = detectedIssues.classificationSummary;
@@ -9049,7 +9083,8 @@ async function handleFieldValueMismatchDetection(api: ApiClient, targetComponent
       detectedIssues.enumMismatches.length +
       detectedIssues.typeMismatches.length +
       detectedIssues.validationFailures.length +
-      detectedIssues.responseStructureIssues.length;
+      detectedIssues.responseStructureIssues.length +
+      detectedIssues.queryParameterIssues.length;
 
     if (totalIssues === 0) {
       console.log('✅ No field value mismatches detected!');
@@ -9283,6 +9318,145 @@ async function detectHookResponseMismatches(
       });
     }
   }
+}
+
+async function detectQueryParameterIssues(
+  frontendFields: Record<string, any>,
+  backendSchemas: Record<string, any>,
+  detectedIssues: any
+) {
+  console.log('\n🔍 Analyzing query parameter structure patterns...\n');
+
+  for (const [componentName, componentData] of Object.entries(frontendFields)) {
+    try {
+      const componentContent = fs.readFileSync(componentData.file, 'utf-8');
+
+      // Use component classification to focus on API data-fetching components
+      const classification = classifyComponent(componentName, componentContent);
+
+      // Only analyze components that are likely to have query parameter issues
+      if (
+        classification.type !== 'api-data-fetching' &&
+        !(classification.type === 'mixed' && classification.confidence > 0.5)
+      ) {
+        continue;
+      }
+
+      console.log(`🔍 Analyzing ${componentName} for query parameter structure`);
+
+      // Look for React Query hooks with parameter structures
+      const reactQueryPatterns = [
+        /useInfiniteQuery\s*\(\s*\{[\s\S]*?queryKey:\s*(\w+)\s*\([\s\S]*?\)\s*,[\s\S]*?queryFn:\s*async\s*\(\{[\s\S]*?\}\)\s*=>\s*\{[\s\S]*?\}\s*,?/g,
+        /useQuery\s*\(\s*\{[\s\S]*?queryKey:\s*(\w+)\s*\([\s\S]*?\)\s*,[\s\S]*?queryFn:\s*async\s*\(\{[\s\S]*?\}\)\s*=>\s*\{[\s\S]*?\}\s*,?/g,
+      ];
+
+      for (const pattern of reactQueryPatterns) {
+        const matches = componentContent.match(pattern);
+        if (!matches) continue;
+
+        for (const match of matches) {
+          // Look for parameter construction patterns
+          const paramPatterns = [
+            // Direct parameter: { category: value }
+            /\{[\s\S]*?(\w+):\s*([^,}]+)[\s\S]*?\}/g,
+            // Nested filters object: { filters: { category: value } }
+            /filters:\s*\{[\s\S]*?(\w+):\s*([^,}]+)[\s\S]*?\}/g,
+          ];
+
+          for (const paramPattern of paramPatterns) {
+            const paramMatches = match.match(paramPattern);
+            if (!paramMatches) continue;
+
+            for (const paramMatch of paramMatches) {
+              // Check for nested filters pattern
+              if (paramMatch.includes('filters:')) {
+                const filterFields = paramMatch.match(/(\w+):\s*[^,}]*/g);
+                if (filterFields) {
+                  for (const field of filterFields) {
+                    const [fieldName] = field.split(':').map(s => s.trim());
+                    if (fieldName && fieldName !== 'filters') {
+                      // Check if this field exists as a direct parameter in backend schema
+                      const backendSchema = findBackendSchemaForEndpoint(
+                        componentContent,
+                        backendSchemas
+                      );
+                      if (backendSchema && backendSchema[fieldName]) {
+                        // This is a query parameter structure issue
+                        detectedIssues.queryParameterIssues.push({
+                          component: componentName,
+                          hook: 'React Query Hook',
+                          endpoint: extractEndpointFromQuery(match) || 'API Endpoint',
+                          issue: `Field '${fieldName}' is sent in nested 'filters' object but should be direct parameter`,
+                          currentParameterStructure: `filters: { ${fieldName}: value }`,
+                          expectedParameterStructure: `{ ${fieldName}: value }`,
+                          actualQueryString: `?filters[${fieldName}]=value`,
+                          expectedQueryString: `?${fieldName}=value`,
+                          severity: 'high' as const,
+                          suggestion: `Move '${fieldName}' from filters object to direct parameter to match API schema expectations`,
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.log(`⚠️  Could not analyze component: ${componentName}`);
+    }
+  }
+}
+
+// Helper function to find backend schema for a given endpoint
+function findBackendSchemaForEndpoint(
+  componentContent: string,
+  backendSchemas: Record<string, any>
+) {
+  // Look for API endpoint patterns in the component
+  const endpointPatterns = [
+    /['"`]\/api\/(\w+)['"`]/g,
+    /`\/api\/(\w+)\/\$\{(\w+)\}`/g,
+    /\/api\/(\w+)/g,
+  ];
+
+  for (const pattern of endpointPatterns) {
+    const matches = componentContent.match(pattern);
+    if (matches) {
+      for (const match of matches) {
+        const endpoint = match
+          .replace(/['"`]/g, '')
+          .replace(/\/api\//, '')
+          .replace(/\/\$\{.*\}/, '');
+        // Try to match with backend schemas
+        if (backendSchemas[endpoint]) {
+          return backendSchemas[endpoint];
+        }
+        // Try plural variations
+        if (backendSchemas[endpoint + 's']) {
+          return backendSchemas[endpoint + 's'];
+        }
+        if (endpoint.endsWith('s') && backendSchemas[endpoint.slice(0, -1)]) {
+          return backendSchemas[endpoint.slice(0, -1)];
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Helper function to extract endpoint from query
+function extractEndpointFromQuery(queryMatch: string): string | null {
+  const endpointPatterns = [/['"`]\/api\/([^'"`]+)['"`]/g, /`\/api\/([^`]+)`/g];
+
+  for (const pattern of endpointPatterns) {
+    const matches = queryMatch.match(pattern);
+    if (matches) {
+      return matches[1];
+    }
+  }
+  return null;
 }
 
 main().catch(err => {

@@ -12,9 +12,9 @@
  */
 
 import { createRoute } from '@/lib/api/route';
-import { logDebug, logInfo, logError } from '@/lib/logger';
-import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
+import { logDebug, logError, logInfo } from '@/lib/logger';
 import { productService } from '@/lib/services/productService';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 // Import consolidated schemas from feature folder
 import {
@@ -23,7 +23,6 @@ import {
   ProductQuerySchema,
   ProductSchema,
 } from '@/features/products';
-
 
 // GET /api/products - Retrieve products with filtering and cursor pagination
 export const GET = createRoute(

@@ -16,6 +16,7 @@
 import { Select, SelectOption } from '@/components/ui/forms/Select';
 import { countries, countryUtils } from '@/lib/data/countries';
 import { useMemo } from 'react';
+import { UseFormSetValue } from 'react-hook-form';
 
 interface SearchableCountrySelectProps {
   /**
@@ -62,7 +63,7 @@ interface SearchableCountrySelectProps {
    * Direct form props (alternative to useFormContext)
    */
   register?: any;
-  setValue?: any;
+  setValue?: UseFormSetValue<any>;
   watch?: any;
   formErrors?: any;
 }
@@ -118,7 +119,7 @@ export function SearchableCountrySelect({
   const handleChange = (value: string | string[]) => {
     const selectedValue = Array.isArray(value) ? value[0] : value;
     if (setValue) {
-      setValue(name, selectedValue || '', {
+      setValue(name as any, selectedValue || '', {
         shouldValidate: true,
         shouldDirty: true,
       });
@@ -154,7 +155,7 @@ export function SearchableCountrySelect({
         value={currentValue || ''}
         onChange={e => {
           if (setValue) {
-            setValue(name, e.target.value, {
+            setValue(name as any, e.target.value, {
               shouldValidate: true,
               shouldDirty: true,
             });

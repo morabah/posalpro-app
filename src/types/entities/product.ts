@@ -24,6 +24,7 @@ export interface Product {
   tags: string[];
   attributes?: Record<string, unknown> | null;
   images: string[];
+  datasheetPath?: string | null; // Optional path to product datasheet (network or local)
   isActive: boolean;
   version: number;
   usageAnalytics?: Record<string, unknown> | null;
@@ -120,6 +121,7 @@ export interface CreateProductData {
   tags?: string[];
   attributes?: Record<string, unknown>;
   images?: string[];
+  datasheetPath?: string; // Optional path to product datasheet (network or local)
   userStoryMappings?: string[];
 }
 

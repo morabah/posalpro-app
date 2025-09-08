@@ -25,6 +25,13 @@ export const ProductRelationshipTypeSchema = z.enum([
 
 export const ProductStatusSchema = z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']);
 
+// Datasheet path validation schema
+export const DatasheetPathSchema = z
+  .string()
+  .max(500, 'Datasheet path must be 500 characters or less')
+  .optional()
+  .nullable();
+
 // ====================
 // Core Product Schemas
 // ====================
@@ -40,6 +47,7 @@ export const ProductSchema = z.object({
   tags: z.union([z.array(z.string()), z.undefined()]).transform(val => val || []),
   attributes: z.record(z.unknown()).optional(),
   images: z.union([z.array(z.string()), z.undefined()]).transform(val => val || []),
+  datasheetPath: z.string().nullable().optional(), // Optional path to product datasheet (network or local)
   stockQuantity: z.number().optional().default(0),
   status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional().default('ACTIVE'),
   isActive: z.boolean().default(true),
@@ -189,7 +197,7 @@ export const ProductQuerySchema = z.object({
   search: z.string().trim().default(''),
   limit: z.coerce.number().min(1).max(100).default(20),
   cursor: z.string().nullable().optional(),
-  sortBy: z.enum(['createdAt', 'name', 'price', 'isActive']).default('createdAt'),
+  sortBy: z.enum(['createdAt', 'name', 'price', 'isActive', 'datasheetPath']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   category: z.string().optional(),
   isActive: z.preprocess(val => {
@@ -198,6 +206,12 @@ export const ProductQuerySchema = z.object({
     }
     return val;
   }, z.boolean().optional()),
+  hasDatasheet: z.preprocess(val => {
+    if (typeof val === 'string') {
+      return val.toLowerCase() === 'true';
+    }
+    return val;
+  }, z.boolean().optional()), // Filter products that have a datasheet
 });
 
 export const ProductSearchSchema = z.object({
@@ -211,6 +225,7 @@ export const ProductSearchSchema = z.object({
       max: z.number().optional(),
     })
     .optional(),
+  hasDatasheet: z.boolean().optional(), // Search for products with/without datasheets
 });
 
 // ====================
@@ -275,6 +290,7 @@ export type ProductUsageAnalytics = z.infer<typeof ProductUsageAnalyticsSchema>;
 export type ProductBulkOperation = z.infer<typeof ProductBulkOperationSchema>;
 export type LicenseDependency = z.infer<typeof LicenseDependencySchema>;
 export type ProductRelationshipType = z.infer<typeof ProductRelationshipTypeSchema>;
+export type DatasheetPath = z.infer<typeof DatasheetPathSchema>;
 
 // ====================
 // API‑Specific Schemas

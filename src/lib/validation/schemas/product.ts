@@ -255,6 +255,7 @@ export const productSchema = baseEntitySchema.extend({
 
   // Resources
   images: z.array(urlSchema).max(20, 'Maximum 20 images allowed'),
+  datasheetPath: z.string().max(500, 'Datasheet path must be 500 characters or less').optional(), // Optional path to product datasheet (network or local)
   resources: z.array(productResourceSchema).optional(),
 
   // Status and Lifecycle

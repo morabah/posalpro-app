@@ -514,7 +514,7 @@ function CustomerCreationPageComponent() {
                           placeholder="Search countries..."
                           size="md"
                           register={register}
-                          setValue={setValue}
+                          setValue={setValue as any}
                           watch={watch}
                           formErrors={errors}
                         />

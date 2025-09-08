@@ -3,14 +3,14 @@
  * Data access layer for Product entities and relationships
  */
 
-import { Prisma, Product, ProductRelationship, RelationshipType } from '@prisma/client';
 import {
   CreateProductData,
   CreateProductRelationshipData,
   ProductFilters,
   ProductSortOptions,
   UpdateProductData,
-} from '../../types/entities/product';
+} from '@/types/entities/product';
+import { Prisma, Product, ProductRelationship, RelationshipType } from '@prisma/client';
 import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { prisma } from '../prisma';
 import { getCurrentTenant } from '../tenant';
@@ -133,6 +133,7 @@ export class ProductService {
           tags: data.tags || [],
           attributes: data.attributes ? toPrismaJson(data.attributes) : undefined,
           images: data.images || [],
+          datasheetPath: data.datasheetPath, // Include datasheet path
           userStoryMappings: data.userStoryMappings || [],
         },
       });
@@ -975,6 +976,7 @@ export class ProductService {
           sku: true,
           category: true,
           tags: true,
+          datasheetPath: true, // Include datasheet path
           isActive: true,
           createdAt: true,
           updatedAt: true,
@@ -1058,6 +1060,7 @@ export class ProductService {
           tags: data.tags || [],
           attributes: data.attributes ? toPrismaJson(data.attributes) : undefined,
           images: data.images || [],
+          datasheetPath: data.datasheetPath, // Include datasheet path
           userStoryMappings: data.userStoryMappings || [],
           isActive: true,
           stockQuantity: 0,
@@ -1073,6 +1076,7 @@ export class ProductService {
           sku: true,
           category: true,
           tags: true,
+          datasheetPath: true, // Include datasheet path
           isActive: true,
           createdAt: true,
           updatedAt: true,
@@ -1187,6 +1191,7 @@ export class ProductService {
           : [],
       tags: product.tags || [],
       images: product.images || [],
+      datasheetPath: product.datasheetPath, // Include datasheet path
       status: product.status || 'ACTIVE',
       version: product.version || 1,
       attributes: product.attributes || {},

@@ -26,6 +26,7 @@ import { productKeys } from '@/features/products';
 
 export function useInfiniteProductsMigrated({
   search = '',
+  category,
   limit = 20,
   sortBy = 'createdAt',
   sortOrder = 'desc',
@@ -33,6 +34,7 @@ export function useInfiniteProductsMigrated({
   filters,
 }: {
   search?: string;
+  category?: string;
   limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
@@ -42,12 +44,21 @@ export function useInfiniteProductsMigrated({
   const { get } = useHttpClient();
 
   return useInfiniteQuery({
-    queryKey: productKeys.products.list(search, limit, sortBy, sortOrder, cursor, filters),
+    queryKey: productKeys.products.list(
+      search,
+      category,
+      limit,
+      sortBy,
+      sortOrder,
+      cursor,
+      filters
+    ),
     queryFn: async ({ pageParam }) => {
       logDebug('Fetching products with cursor pagination', {
         component: 'useInfiniteProductsMigrated',
         operation: 'queryFn',
         search,
+        category,
         limit,
         sortBy,
         sortOrder,
@@ -59,6 +70,7 @@ export function useInfiniteProductsMigrated({
 
       const params = new URLSearchParams();
       if (search) params.append('search', search);
+      if (category) params.append('category', category);
       if (limit) params.append('limit', limit.toString());
       if (sortBy) params.append('sortBy', sortBy);
       if (sortOrder) params.append('sortOrder', sortOrder);

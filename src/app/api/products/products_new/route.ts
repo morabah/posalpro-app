@@ -12,7 +12,6 @@ import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
-import { ErrorCodes } from '@/lib/errors';
 
 // Import consolidated schemas from feature folder
 import {
@@ -103,6 +102,7 @@ export const GET = createRoute(
               tags: true,
               attributes: true,
               images: true,
+              datasheetPath: true, // Include datasheet path
               isActive: true,
               version: true,
               usageAnalytics: true,
@@ -192,8 +192,11 @@ export const POST = createRoute(
               sku: body!.sku,
               category: body!.category,
               tags: body!.tags,
-              attributes: body!.attributes ? JSON.parse(JSON.stringify(body!.attributes)) : undefined,
+              attributes: body!.attributes
+                ? JSON.parse(JSON.stringify(body!.attributes))
+                : undefined,
               images: body!.images,
+              datasheetPath: body!.datasheetPath, // Include datasheet path
               isActive: body!.isActive,
               version: body!.version,
               usageAnalytics: body!.usageAnalytics
@@ -211,6 +214,7 @@ export const POST = createRoute(
               tags: true,
               attributes: true,
               images: true,
+              datasheetPath: true, // Include datasheet path
               isActive: true,
               version: true,
               usageAnalytics: true,
@@ -247,10 +251,16 @@ export const POST = createRoute(
           productId: product.id,
         });
         // Return the transformed product data anyway for now, but log the validation error
-        return errorHandler.createSuccessResponse(transformedProduct, 'Product created successfully');
+        return errorHandler.createSuccessResponse(
+          transformedProduct,
+          'Product created successfully'
+        );
       }
 
-      return errorHandler.createSuccessResponse(validationResult.data, 'Product created successfully');
+      return errorHandler.createSuccessResponse(
+        validationResult.data,
+        'Product created successfully'
+      );
     } catch (error) {
       logError('Failed to create product', {
         component: 'ProductAPI',
