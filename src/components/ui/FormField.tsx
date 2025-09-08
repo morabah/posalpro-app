@@ -5,12 +5,32 @@ import React, { forwardRef } from 'react';
 
 // Type definitions for form field values
 type FormFieldValue = string | number | undefined;
-type FormFieldChangeHandler = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: any; type?: any } | FormFieldValue | undefined | any) => void;
-type FormFieldBlurHandler = (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement> | { target: any; type?: any }) => void;
+type FormFieldChangeHandler = (
+  event:
+    | React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    | { target: any; type?: any }
+    | FormFieldValue
+    | undefined
+    | any
+) => void;
+type FormFieldBlurHandler = (
+  event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement> | { target: any; type?: any }
+) => void;
+
+// ✅ React Hook Form Register Props Interface
+interface RegisterProps {
+  name?: string;
+  onChange?: (event: any) => void;
+  onBlur?: (event: any) => void;
+  ref?: React.Ref<any>;
+}
 
 // ✅ Form Field Props Interface
-export interface FormFieldProps {
-  name: string;
+export interface FormFieldProps
+  extends Omit<
+    React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement>,
+    'onChange' | 'onBlur'
+  > {
   label?: string;
   placeholder?: string;
   type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'textarea';
@@ -50,11 +70,36 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
       errorClassName,
       icon,
       validationClass,
+      ...restProps // Capture any additional props from register (like ref, name from RHF)
     },
     ref
   ) => {
+    // Extract register-specific props
+    const registerProps = restProps as RegisterProps;
+
+    // Determine if we should use custom handlers or register handlers
+    const hasRegisterHandlers = registerProps.onChange || registerProps.onBlur;
+    const hasValue = value !== undefined;
+    const hasCustomHandlers = onChange || onBlur;
+
+    // Use register handlers if available, otherwise use custom handlers if we have a value
+    const shouldUseRegisterHandlers = hasRegisterHandlers;
+    const shouldUseCustomHandlers = !hasRegisterHandlers && hasValue;
+
+    // Debug logging for component initialization
+    console.log('FormField initialized:', {
+      fieldName: name || registerProps.name,
+      hasValue,
+      hasCustomHandlers,
+      hasRegisterHandlers,
+      shouldUseRegisterHandlers,
+      shouldUseCustomHandlers,
+      component: 'FormField',
+      timestamp: new Date().toISOString(),
+    });
+
     const hasError = error && touched;
-    const fieldId = `field-${name}`;
+    const fieldId = `field-${name || registerProps.name || 'unnamed'}`;
 
     const baseInputClasses = cn(
       'w-full border-b bg-transparent focus:outline-none transition-colors duration-200',
@@ -71,10 +116,47 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       if (disabled) return;
 
-      // If no value prop is provided, assume React Hook Form/uncontrolled usage.
+      // Debug: Log all change events
+      console.log('FormField handleChange called:', {
+        event: e,
+        eventType: typeof e,
+        hasTarget: e && typeof e === 'object' && 'target' in e,
+        targetValue: e && typeof e === 'object' && e.target ? (e.target as any).value : 'no target',
+        fieldName: name || registerProps.name,
+        component: 'FormField',
+        timestamp: new Date().toISOString(),
+      });
+
+      // Safety check: ensure event and target exist
+      if (!e || !e.target) {
+        console.error('FormField: Invalid event object passed to handleChange', {
+          event: e,
+          eventType: typeof e,
+          hasTarget: e && typeof e === 'object' && 'target' in e,
+          target: e && typeof e === 'object' && e.target,
+          component: 'FormField',
+          fieldName: name || registerProps.name,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // If no value prop is provided and no custom onChange, assume React Hook Form/uncontrolled usage.
       // Pass through the raw event so libraries expecting e.target.name/value work.
-      if (typeof value === 'undefined') {
-        onChange?.(e);
+      if (shouldUseCustomHandlers) {
+        try {
+          // Use the onChange from registerProps (from register) if available
+          const changeHandler = registerProps.onChange || onChange;
+          changeHandler?.(e);
+        } catch (error) {
+          console.error('FormField: Error in uncontrolled onChange handler', {
+            error,
+            event: e,
+            component: 'FormField',
+            fieldName: name || registerProps.name,
+            timestamp: new Date().toISOString(),
+          });
+        }
         return;
       }
 
@@ -83,12 +165,49 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
       if (type === 'number') {
         newValue = e.target.value !== '' ? parseFloat(e.target.value) : undefined;
       }
-      onChange?.(newValue);
+      try {
+        onChange?.(newValue);
+      } catch (error) {
+        console.error('FormField: Error in controlled onChange handler', {
+          error,
+          event: e,
+          component: 'FormField',
+          fieldName: name || registerProps.name,
+          timestamp: new Date().toISOString(),
+        });
+      }
     };
 
     const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      if (onBlur) {
-        onBlur(e);
+      if (disabled) return;
+
+      // Safety check: ensure event and target exist
+      if (!e || !e.target) {
+        console.error('FormField: Invalid event object passed to handleBlur', {
+          event: e,
+          eventType: typeof e,
+          hasTarget: e && typeof e === 'object' && 'target' in e,
+          target: e && typeof e === 'object' && e.target,
+          component: 'FormField',
+          fieldName: name || registerProps.name,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      if (onBlur || registerProps.onBlur) {
+        try {
+          const blurHandler = registerProps.onBlur || onBlur;
+          blurHandler?.(e);
+        } catch (error) {
+          console.error('FormField: Error in onBlur handler', {
+            error,
+            event: e,
+            component: 'FormField',
+            fieldName: name || registerProps.name,
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
     };
 
@@ -121,13 +240,26 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
           {/* Input/Textarea */}
           {type === 'textarea' ? (
             <textarea
+              {...restProps}
               ref={ref as React.RefObject<HTMLTextAreaElement>}
               id={fieldId}
-              name={name}
+              name={name || registerProps.name}
               // Avoid forcing controlled mode when value is undefined (RHF compatibility)
               value={value !== undefined ? value : undefined}
-              onChange={handleChange}
-              onBlur={handleBlur}
+              onChange={
+                shouldUseRegisterHandlers
+                  ? registerProps.onChange
+                  : shouldUseCustomHandlers
+                    ? handleChange
+                    : undefined
+              }
+              onBlur={
+                shouldUseRegisterHandlers
+                  ? registerProps.onBlur
+                  : shouldUseCustomHandlers
+                    ? handleBlur
+                    : undefined
+              }
               placeholder={placeholder}
               disabled={disabled}
               className={cn(baseInputClasses, 'resize-none min-h-[80px]', { 'pl-8': icon })}
@@ -135,14 +267,27 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
             />
           ) : (
             <input
+              {...restProps}
               ref={ref as React.RefObject<HTMLInputElement>}
               id={fieldId}
-              name={name}
+              name={name || registerProps.name}
               type={type}
               // Avoid forcing controlled mode when value is undefined (RHF compatibility)
               value={value !== undefined ? value : undefined}
-              onChange={handleChange}
-              onBlur={handleBlur}
+              onChange={
+                shouldUseRegisterHandlers
+                  ? registerProps.onChange
+                  : shouldUseCustomHandlers
+                    ? handleChange
+                    : undefined
+              }
+              onBlur={
+                shouldUseRegisterHandlers
+                  ? registerProps.onBlur
+                  : shouldUseCustomHandlers
+                    ? handleBlur
+                    : undefined
+              }
               placeholder={placeholder}
               disabled={disabled}
               className={cn(baseInputClasses, { 'pl-8': icon })}

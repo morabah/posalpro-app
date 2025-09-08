@@ -25,6 +25,7 @@
    - Entity Operations: customers create/list, products create/list, proposals create/list/update/cache
    - Version Management: versions list, versions show <id>
    - RBAC Testing: rbac try <method> <endpoint> [role]
+   - Entitlements Testing: entitlements test, entitlements check
 
  ⚡ ENHANCED FEATURES:
    - Automatic .env file loading
@@ -651,6 +652,10 @@ function printHelp() {
   troubleshoot auth                          # Diagnose auth/session/roles issues
   troubleshoot dashboard                     # Diagnose dashboard RBAC/entitlements & fallbacks
   cookies show                               # Show CLI Cookie header and server debug cookie presence
+
+🔒 ENTITLEMENTS TESTING
+  entitlements test                          # Run comprehensive entitlement test suite
+  entitlements check                         # Check current user entitlements and access
 
 🧰 REDIS (CACHE) DIAGNOSTICS
   redis status                               # Show Redis enablement and connection status
@@ -1622,6 +1627,106 @@ async function handleTroubleshootDashboard(api: ApiClient) {
   } catch (e) {
     console.log('Entitlement check failed:', (e as Error)?.message);
   }
+}
+
+async function handleEntitlementsTest(api: ApiClient) {
+  console.log('🧪 Entitlements Test Suite\n');
+
+  const tests = [
+    {
+      name: 'Product Update (feature.products.advanced)',
+      endpoint: 'PUT',
+      path: '/api/products/cmfaeoz2q0014x3gy6gyjlm30',
+      data: { name: 'Test Product' },
+    },
+    {
+      name: 'Product Create (feature.products.create)',
+      endpoint: 'POST',
+      path: '/api/products',
+      data: { name: 'Test Product', price: 100 },
+    },
+    {
+      name: 'Dashboard Enhanced Stats (feature.analytics.enhanced)',
+      endpoint: 'GET',
+      path: '/api/dashboard/enhanced-stats',
+    },
+    {
+      name: 'User Analytics (feature.analytics.users)',
+      endpoint: 'GET',
+      path: '/api/analytics/users',
+    },
+  ];
+
+  for (const test of tests) {
+    console.log(`\n🔍 Testing: ${test.name}`);
+    try {
+      const response = await api.request(
+        test.endpoint as HttpMethod,
+        test.path,
+        test.data ? { body: JSON.stringify(test.data) } : undefined
+      );
+      console.log(
+        `   ${test.endpoint} ${test.path} → ${response.status}${response.ok ? ' ✅' : ' ❌'}`
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`   Error: ${errorText}`);
+      }
+    } catch (error) {
+      console.log(`   Failed: ${(error as Error)?.message}`);
+    }
+  }
+
+  console.log('\n📋 Legend:');
+  console.log('   ✅ = Entitlement granted');
+  console.log('   ❌ = Entitlement denied (Missing entitlements)');
+}
+
+async function handleEntitlementsCheck(api: ApiClient) {
+  console.log('🔍 Entitlements Status Check\n');
+
+  // Check current user info
+  try {
+    const userResponse = await api.request('GET', '/api/profile');
+    if (userResponse.ok) {
+      const userData = await userResponse.json();
+      console.log('👤 Current User:', {
+        email: userData.data?.email,
+        roles: userData.data?.roles,
+        tenantId: userData.data?.tenantId,
+        permissions: userData.data?.permissions?.length || 0,
+      });
+    }
+  } catch (error) {
+    console.log('❌ Failed to get user profile:', (error as Error)?.message);
+  }
+
+  // Test basic entitlement check
+  console.log('\n🔐 Testing Entitlement Access:');
+  try {
+    const testResponse = await api.request(
+      'PUT' as HttpMethod,
+      '/api/products/cmfaeoz2q0014x3gy6gyjlm30',
+      {
+        body: JSON.stringify({ name: 'Entitlement Test' }),
+      }
+    );
+    console.log(`Product Update → ${testResponse.status}${testResponse.ok ? ' ✅' : ' ❌'}`);
+
+    if (!testResponse.ok) {
+      const errorText = await testResponse.text();
+      console.log(`Error Details: ${errorText}`);
+    }
+  } catch (error) {
+    console.log('❌ Request failed:', (error as Error)?.message);
+  }
+
+  console.log('\n💡 Next Steps:');
+  console.log('   If entitlement is denied, check:');
+  console.log('   1. User tenant ID matches entitlement tenant ID');
+  console.log('   2. Required entitlement exists and is enabled');
+  console.log('   3. Redis cache may need clearing');
 }
 
 async function runOnceFromArg(command: string, api: ApiClient) {
@@ -2866,6 +2971,17 @@ async function execute(tokens: string[], api: ApiClient) {
     }
     case '':
       break;
+    case 'entitlements': {
+      const action = (tokens[1] || '').toLowerCase();
+      if (action === 'test') {
+        await handleEntitlementsTest(api);
+      } else if (action === 'check') {
+        await handleEntitlementsCheck(api);
+      } else {
+        console.log('Usage:\n  entitlements test\n  entitlements check');
+      }
+      break;
+    }
     default:
       console.log(`Unknown command: ${cmd}`);
       printHelp();
@@ -6314,12 +6430,15 @@ function generateClassificationSummary(frontendFields: Record<string, any>): any
     }>,
   };
 
-  const classificationToSummaryKey: Record<string, keyof Omit<typeof summary, 'total' | 'skipped' | 'details'>> = {
+  const classificationToSummaryKey: Record<
+    string,
+    keyof Omit<typeof summary, 'total' | 'skipped' | 'details'>
+  > = {
     'api-data-fetching': 'apiDataFetching',
     'form-component': 'formComponents',
     'ui-display': 'uiDisplay',
-    'mixed': 'mixed',
-    'unknown': 'unknown',
+    mixed: 'mixed',
+    unknown: 'unknown',
   };
 
   for (const [componentName, componentData] of Object.entries(frontendFields)) {

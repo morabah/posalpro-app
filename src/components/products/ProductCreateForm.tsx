@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/forms/Button';
 import { SearchableDropdown } from '@/components/ui/SearchableDropdown';
 import type { ProductCreate } from '@/features/products';
 import { useCreateProduct, useProductCategories, useProductTags } from '@/features/products';
+import { ProductCreateSchema } from '@/features/products/schemas';
 import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { analytics } from '@/lib/analytics';
 import { logError, logInfo } from '@/lib/logger';
-import { ProductCreateSchema } from '@/features/products/schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
@@ -176,16 +176,21 @@ export function ProductCreateForm() {
 
             {/* SKU */}
             <FormField
-              {...register('sku')}
+              {...register('sku', {
+                onChange: e => {
+                  if (!e || !e.target) {
+                    console.error('ProductCreateForm: Invalid event object for SKU onChange', {
+                      event: e,
+                    });
+                    return;
+                  }
+                  handleSkuChange(e.target.value);
+                },
+              })}
               name="sku"
               label="SKU"
               placeholder="PROD-001"
               value={watchedSku || ''}
-              onChange={e => {
-                register('sku').onChange(e);
-                handleSkuChange(e.target.value);
-              }}
-              onBlur={() => register('sku').onBlur}
               error={errors.sku?.message || skuValidation.error || undefined}
               touched={!!touchedFields.sku}
               required

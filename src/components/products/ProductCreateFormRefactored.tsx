@@ -12,8 +12,8 @@ import { FormActions, FormErrorSummary } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import type { ProductCreate } from '@/features/products';
 import { useCreateProduct } from '@/features/products/hooks/useProducts';
-import { analytics } from '@/lib/analytics';
 import { ProductCreateSchema } from '@/features/products/schemas';
+import { analytics } from '@/lib/analytics';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -126,7 +126,16 @@ export function ProductCreateFormRefactored() {
                   id="sku"
                   type="text"
                   value={watch('sku') || ''}
-                  onChange={e => handleSkuChange(e.target.value)}
+                  onChange={e => {
+                    if (!e || !e.target) {
+                      console.error(
+                        'ProductCreateFormRefactored: Invalid event object for SKU onChange',
+                        { event: e }
+                      );
+                      return;
+                    }
+                    handleSkuChange(e.target.value);
+                  }}
                   placeholder="PROD-001"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />

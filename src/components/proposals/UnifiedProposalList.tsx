@@ -545,7 +545,15 @@ export default function UnifiedProposalList() {
               <Input
                 placeholder="Search proposals..."
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={e => {
+                  if (!e || !e.target) {
+                    console.error('UnifiedProposalList: Invalid event object for search onChange', {
+                      event: e,
+                    });
+                    return;
+                  }
+                  setSearchQuery(e.target.value);
+                }}
                 className="pl-10"
               />
             </div>

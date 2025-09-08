@@ -4,6 +4,43 @@
 
 ---
 
+## 🔧 **Missing Entitlements Error Fix (Latest)**
+
+**Problem**: `403 Forbidden "Missing entitlements"` when updating products.
+
+**Root Cause**: `feature.products.advanced` entitlement existed in database but
+was disabled (`enabled: false`).
+
+**Solution**:
+
+```typescript
+// ❌ BEFORE: Entitlement disabled
+{
+  id: 'cmf8nditc0003jbpbnsz2cwge',
+  key: 'feature.products.advanced',
+  enabled: false  // ❌ Disabled
+}
+
+// ✅ AFTER: Entitlement enabled
+{
+  id: 'cmf8nditc0003jbpbnsz2cwge',
+  key: 'feature.products.advanced',
+  enabled: true   // ✅ Enabled
+}
+```
+
+**Apply to**: Any entitlement-protected API endpoints returning 403 errors.
+
+**Prevention**: Ensure entitlements are enabled in database seeding, verify
+with:
+
+```bash
+npm run db:seed
+node test-entitlement-direct.js
+```
+
+---
+
 ## 🔧 **Zod Parsing Error Fix (Latest)**
 
 **Problem**: `o["sync"===s.mode?"parse":"parseAsync"] is not a function` when
@@ -30,45 +67,42 @@ objects.
 
 ---
 
-## 🔧 **Form Target Error Fix (Latest)**
+## 🔧 **Form Field Errors Fix (Latest)**
 
-**Problem**: `TypeError: undefined is not an object (evaluating 'target.name')`
-when using FormField with React Hook Form.
+**Problem**: Multiple FormField errors:
 
-**Root Cause**: FormField was calling onChange(newValue) with a primitive, but
-React Hook Form's register expects the raw event (e) with e.target.name.
-FormField also forced controlled mode by setting value='' when undefined,
-fighting RHF's uncontrolled registration.
+1. `TypeError: undefined is not an object (evaluating 'target.name')`
+2. `You provided a 'value' prop to a form field without an 'onChange' handler`
+
+**Root Cause**:
+
+1. Unsafe `e.target.value` access without checking if `e` and `e.target` exist
+2. FormField component logic flaw - setting `onChange={undefined}` when `value`
+   prop present
+3. Malformed events (sometimes `e` was a string instead of event object)
 
 **Solution**:
 
 ```typescript
-// ✅ Event compatibility: Pass raw event for RHF uncontrolled usage
+// ✅ 1. Safe event handling with validation
 const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-  if (disabled) return;
-
-  // For uncontrolled/RHF usage (value undefined), pass raw event
-  if (value === undefined && onChange) {
-    onChange(e); // ✅ RHF can read e.target.name
-    return;
-  }
-
-  // For controlled usage, derive and pass new value
-  let newValue: any = e.target.value;
-  if (type === 'number') {
-    newValue = e.target.value ? parseFloat(e.target.value) : undefined;
-  }
-  if (onChange) {
-    onChange(newValue);
-  }
+  if (!e || !e.target) return; // ✅ Prevent undefined access
+  // ... rest of handler
 };
 
-// ✅ Avoid forced controlled mode: Only set value when provided
-<input
-  value={value} // ✅ Only sets value when actually provided
-  onChange={handleChange}
-  // ... other props
-/>
+// ✅ 2. Handler priority system for RHF compatibility
+const hasRegisterHandlers = registerProps.onChange || registerProps.onBlur;
+const hasValue = value !== undefined;
+const shouldUseRegisterHandlers = hasRegisterHandlers;
+const shouldUseCustomHandlers = !hasRegisterHandlers && hasValue;
+
+// ✅ 3. Correct onChange assignment
+onChange={shouldUseRegisterHandlers ? registerProps.onChange :
+          shouldUseCustomHandlers ? handleChange : undefined}
+
+// ✅ 4. Safe access in all components
+if (!e || !e.target) return; // ✅ Check before e.target.value access
+const value = e.target.value; // ✅ Safe access
 ```
 
 **Component Usage**:
@@ -94,10 +128,14 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElemen
 />
 ```
 
-**Apply to**: Any FormField component used with React Hook Form register.
+**Apply to**: All FormField components and form event handlers with:
 
-**Prevention**: Use uncontrolled mode with RHF register, pass raw events for
-custom handlers, avoid forced controlled mode.
+- React Hook Form integration
+- Direct `e.target.value` access
+- Controlled component patterns
+
+**Prevention**: Always validate event objects (`if (!e || !e.target) return`)
+before access, use proper handler priority system for RHF compatibility.
 
 **Enhancement**: Added forwardRef for complete RHF compatibility - enables focus
 management, validation, and native element parity.

@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /**
  * EcoChic - Advanced Product List with PDP Features
@@ -13,11 +13,11 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
-import Link from 'next/link';
 import type { HybridProduct } from '@/hooks/useHybridProducts';
 import { useHybridProducts } from '@/hooks/useHybridProducts';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logError } from '@/lib/logger';
+import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 
 interface AdvancedProductListProps {
@@ -55,7 +55,9 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
 
   // Mock product data for PDP features
   const sizes = product.isMockData ? ['XS', 'S', 'M', 'L', 'XL'] : [];
-  const colors = product.isMockData ? ['Natural Beige', 'Forest Green', 'Earth Brown', 'Sage Gray'] : [];
+  const colors = product.isMockData
+    ? ['Natural Beige', 'Forest Green', 'Earth Brown', 'Sage Gray']
+    : [];
   const sustainableFeatures = product.isMockData ? ['organic', 'fairTrade', 'carbonNeutral'] : [];
   const reviews = product.isMockData ? { count: 24, average: 4.8 } : { count: 0, average: 0 };
 
@@ -270,7 +272,10 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
                   {sustainableFeatures.map(feature => {
                     const badge = SUSTAINABLE_BADGES[feature as keyof typeof SUSTAINABLE_BADGES];
                     return (
-                      <Badge key={feature} className={`${badge.color} text-xs font-semibold px-2 py-1 border-0`}>
+                      <Badge
+                        key={feature}
+                        className={`${badge.color} text-xs font-semibold px-2 py-1 border-0`}
+                      >
                         <span className="mr-1">{badge.icon}</span>
                         {badge.label}
                       </Badge>
@@ -286,7 +291,10 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1">
                     {[...Array(5)].map((_, i) => (
-                      <span key={i} className={`text-xs ${i < Math.floor(reviews.average) ? 'text-yellow-400' : 'text-gray-300'}`}>
+                      <span
+                        key={i}
+                        className={`text-xs ${i < Math.floor(reviews.average) ? 'text-yellow-400' : 'text-gray-300'}`}
+                      >
                         ⭐
                       </span>
                     ))}
@@ -309,12 +317,23 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
                     <label className="text-xs text-gray-600 mb-2 block">Size</label>
                     <select
                       value={selectedSize}
-                      onChange={(e) => setSelectedSize(e.target.value)}
+                      onChange={e => {
+                        if (!e || !e.target) {
+                          console.error(
+                            'AdvancedProductList: Invalid event object for size onChange',
+                            { event: e }
+                          );
+                          return;
+                        }
+                        setSelectedSize(e.target.value);
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
                     >
                       <option value="">Select Size</option>
                       {sizes.map(size => (
-                        <option key={size} value={size}>{size}</option>
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -326,12 +345,23 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
                     <label className="text-xs text-gray-600 mb-2 block">Color</label>
                     <select
                       value={selectedColor}
-                      onChange={(e) => setSelectedColor(e.target.value)}
+                      onChange={e => {
+                        if (!e || !e.target) {
+                          console.error(
+                            'AdvancedProductList: Invalid event object for color onChange',
+                            { event: e }
+                          );
+                          return;
+                        }
+                        setSelectedColor(e.target.value);
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
                     >
                       <option value="">Select Color</option>
                       {colors.map(color => (
-                        <option key={color} value={color}>{color}</option>
+                        <option key={color} value={color}>
+                          {color}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -411,9 +441,7 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
                       Adding...
                     </span>
                   ) : (
-                    <span className="flex items-center gap-2">
-                      🛒 Add to Cart
-                    </span>
+                    <span className="flex items-center gap-2">🛒 Add to Cart</span>
                   )}
                 </Button>
               )}
@@ -485,7 +513,15 @@ function AdvancedFilterPanel({
               <Input
                 placeholder="Search by name, SKU, or description..."
                 value={filters.searchQuery}
-                onChange={e => onFiltersChange({ ...filters, searchQuery: e.target.value })}
+                onChange={e => {
+                  if (!e || !e.target) {
+                    console.error('AdvancedProductList: Invalid event object for search onChange', {
+                      event: e,
+                    });
+                    return;
+                  }
+                  onFiltersChange({ ...filters, searchQuery: e.target.value });
+                }}
                 className="w-full pl-4 pr-10 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all duration-200 bg-white shadow-sm"
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -511,7 +547,15 @@ function AdvancedFilterPanel({
             </label>
             <select
               value={filters.category}
-              onChange={e => onFiltersChange({ ...filters, category: e.target.value })}
+              onChange={e => {
+                if (!e || !e.target) {
+                  console.error('AdvancedProductList: Invalid event object for category onChange', {
+                    event: e,
+                  });
+                  return;
+                }
+                onFiltersChange({ ...filters, category: e.target.value });
+              }}
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-400 focus:ring-2 focus:ring-green-100 transition-all duration-200 bg-white shadow-sm appearance-none"
               style={{
                 backgroundImage:
@@ -540,7 +584,15 @@ function AdvancedFilterPanel({
             </label>
             <select
               value={filters.status}
-              onChange={e => onFiltersChange({ ...filters, status: e.target.value as any })}
+              onChange={e => {
+                if (!e || !e.target) {
+                  console.error('AdvancedProductList: Invalid event object for status onChange', {
+                    event: e,
+                  });
+                  return;
+                }
+                onFiltersChange({ ...filters, status: e.target.value as any });
+              }}
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 transition-all duration-200 bg-white shadow-sm appearance-none"
               style={{
                 backgroundImage:
@@ -568,9 +620,16 @@ function AdvancedFilterPanel({
             </label>
             <select
               value={filters.showMockData ? 'mock' : 'all'}
-              onChange={e =>
-                onFiltersChange({ ...filters, showMockData: e.target.value === 'mock' })
-              }
+              onChange={e => {
+                if (!e || !e.target) {
+                  console.error(
+                    'AdvancedProductList: Invalid event object for showMockData onChange',
+                    { event: e }
+                  );
+                  return;
+                }
+                onFiltersChange({ ...filters, showMockData: e.target.value === 'mock' });
+              }}
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all duration-200 bg-white shadow-sm appearance-none"
               style={{
                 backgroundImage:
@@ -646,7 +705,10 @@ function AdvancedFilterPanel({
 }
 
 // Main component
-export default function AdvancedProductList({ onAddProduct, hideBreadcrumbs }: AdvancedProductListProps) {
+export default function AdvancedProductList({
+  onAddProduct,
+  hideBreadcrumbs,
+}: AdvancedProductListProps) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
 
   // Use hybrid products hook
@@ -738,7 +800,10 @@ export default function AdvancedProductList({ onAddProduct, hideBreadcrumbs }: A
       <div className="max-w-7xl mx-auto p-8 space-y-8">
         {/* Breadcrumb Navigation (optional if page already renders breadcrumbs) */}
         {!hideBreadcrumbs && (
-          <nav className="flex items-center space-x-2 text-sm text-gray-600 mb-4" aria-label="Breadcrumb">
+          <nav
+            className="flex items-center space-x-2 text-sm text-gray-600 mb-4"
+            aria-label="Breadcrumb"
+          >
             <Link
               href="/"
               className="hover:text-emerald-600 transition-colors duration-200 flex items-center gap-1"

@@ -341,6 +341,12 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
                 <input
                   name={register('email').name}
                   onChange={e => {
+                    if (!e || !e.target) {
+                      console.error('LoginForm: Invalid event object for email onChange', {
+                        event: e,
+                      });
+                      return;
+                    }
                     register('email').onChange(e);
                     setAuthError(null);
                     trackFieldInteraction('email', 'change');
@@ -382,12 +388,24 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
                   <input
                     name={register('password').name}
                     onChange={e => {
+                      if (!e || !e.target) {
+                        console.error('LoginForm: Invalid event object for password onChange', {
+                          event: e,
+                        });
+                        return;
+                      }
                       register('password').onChange(e);
                       setAuthError(null);
                       trackFieldInteraction('password', 'change');
                       setPasswordValue((e.target as HTMLInputElement).value);
                     }}
                     onBlur={e => {
+                      if (!e || !e.target) {
+                        console.error('LoginForm: Invalid event object for password onBlur', {
+                          event: e,
+                        });
+                        return;
+                      }
                       register('password').onBlur(e);
                       trackFieldInteraction('password', 'blur');
                       setPasswordValue((e.target as HTMLInputElement).value);
