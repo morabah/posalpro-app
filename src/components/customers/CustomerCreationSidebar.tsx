@@ -1,15 +1,16 @@
 'use client';
 
+import type { Customer } from '@/features/customers';
+import { CustomerCreateSchema } from '@/features/customers/schemas';
+import { SearchableCountrySelect } from '@/components/ui/SearchableCountrySelect';
 import { apiClient } from '@/lib/api/client';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import type { Customer } from '@/features/customers';
-import { CustomerCreateSchema } from '@/features/customers/schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Building, DollarSign, Globe, Loader2, Mail, MapPin, Save, Tag, X } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 type CustomerFormData = z.infer<typeof CustomerCreateSchema>;
 
@@ -80,6 +81,7 @@ export function CustomerCreationSidebar({
       phone: '',
       website: '',
       address: '',
+      country: '',
       industry: undefined,
       companySize: '',
       revenue: undefined,
@@ -392,6 +394,18 @@ export function CustomerCreationSidebar({
                   )}
                 </div>
               </div>
+
+              {/* Country */}
+              <SearchableCountrySelect
+                name="country"
+                label="Country"
+                placeholder="Search countries..."
+                size="md"
+                register={register}
+                setValue={setValue}
+                watch={watch}
+                formErrors={errors}
+              />
 
               {/* Address */}
               <div>

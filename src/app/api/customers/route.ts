@@ -35,6 +35,7 @@ export const POST = createRoute(
       website: z.string().optional(),
       phone: z.string().optional(),
       address: z.string().optional(),
+      country: z.string().optional(),
       preferences: z.record(z.any()).optional(),
       notes: z.string().optional(),
     }),

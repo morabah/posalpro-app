@@ -2,10 +2,10 @@
 
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
+import { SearchableCountrySelect } from '@/components/ui/SearchableCountrySelect';
 import { useCustomer, useUpdateCustomer } from '@/features/customers/hooks';
-import { CustomerUpdate } from '@/features/customers/schemas';
+import { CustomerUpdate, CustomerUpdateSchema } from '@/features/customers/schemas';
 import { logError } from '@/lib/logger';
-import { CustomerUpdateSchema } from '@/features/customers/schemas';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
@@ -41,6 +41,7 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
       phone: '',
       website: '',
       address: '',
+      country: '',
       industry: undefined,
       companySize: '',
       revenue: undefined,
@@ -58,6 +59,7 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
         phone: customerData.phone || '',
         website: customerData.website || '',
         address: customerData.address || '',
+        country: customerData.country || '',
         industry: customerData.industry || undefined,
         companySize: customerData.companySize || '',
         revenue: customerData.revenue ?? undefined,
@@ -220,6 +222,22 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                     value={watch('industry') || ''}
                     placeholder="Technology, Healthcare, Finance, etc."
                     className="min-h-[44px]"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="country" className="block text-sm font-medium text-gray-700">
+                    Country
+                  </label>
+                  <SearchableCountrySelect
+                    name="country"
+                    label=""
+                    placeholder="Search countries..."
+                    size="md"
+                    register={register}
+                    setValue={setValue}
+                    watch={watch}
+                    formErrors={errors}
                   />
                 </div>
 

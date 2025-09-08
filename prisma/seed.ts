@@ -3,6 +3,7 @@
  * Initializes production-ready data with comprehensive sample data
  */
 
+import { PLAN_TIER_ENTITLEMENTS } from '@/lib/billing/entitlementMapping';
 import { toPrismaJson } from '@/lib/utils/prismaUtils';
 import {
   AccessType,
@@ -10,6 +11,7 @@ import {
   EntityType,
   HypothesisType,
   PermissionScope,
+  PlanTier,
   Priority,
   PrismaClient,
   ProposalStatus,
@@ -18,12 +20,10 @@ import {
   RuleStatus,
   SectionType,
   Severity,
-  ValidationRuleType,
-  PlanTier,
   SubscriptionStatus,
+  ValidationRuleType,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { PLAN_TIER_ENTITLEMENTS } from '@/lib/billing/entitlementMapping';
 
 // Platform compatibility: Using bcryptjs (pure JS) instead of bcrypt (native)
 // This ensures consistent behavior across all environments (dev, CI, production)
@@ -1785,6 +1785,7 @@ async function main() {
       industry: 'Technology',
       tier: 'ENTERPRISE',
       status: 'ACTIVE',
+      country: 'United Arab Emirates',
       description: 'Leading technology solutions provider',
       contacts: [
         {
@@ -1809,6 +1810,7 @@ async function main() {
       industry: 'Financial Services',
       tier: 'ENTERPRISE',
       status: 'ACTIVE',
+      country: 'Jordan',
       description: 'International banking and financial services',
       contacts: [
         {
@@ -1826,6 +1828,7 @@ async function main() {
       industry: 'Healthcare',
       tier: 'PREMIUM',
       status: 'ACTIVE',
+      country: 'Saudi Arabia',
       description: 'Healthcare technology and innovation',
       contacts: [
         {
@@ -1843,6 +1846,7 @@ async function main() {
       industry: 'Manufacturing',
       tier: 'STANDARD',
       status: 'ACTIVE',
+      country: 'Egypt',
       description: 'Advanced manufacturing solutions',
       contacts: [
         {
@@ -1860,6 +1864,7 @@ async function main() {
       industry: 'Education',
       tier: 'STANDARD',
       status: 'ACTIVE',
+      country: 'Kuwait',
       description: 'Educational technology solutions',
       contacts: [
         {
@@ -1883,6 +1888,7 @@ async function main() {
         industry: customerData.industry,
         tier: customerData.tier as 'STANDARD' | 'PREMIUM' | 'ENTERPRISE' | 'VIP',
         status: customerData.status as 'ACTIVE' | 'INACTIVE' | 'PROSPECT' | 'CHURNED',
+        country: customerData.country,
         tags: [customerData.industry],
         metadata: {
           description: customerData.description,

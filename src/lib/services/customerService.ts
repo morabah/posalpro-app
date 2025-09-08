@@ -105,6 +105,7 @@ export class CustomerService {
           phone: data.phone,
           website: data.website,
           address: data.address,
+          country: data.country,
           industry: data.industry,
           companySize: data.companySize,
           revenue: data.revenue,
@@ -966,6 +967,7 @@ export class CustomerService {
           website: data.website,
           phone: data.phone,
           address: data.address || null,
+          country: data.country || null,
           metadata: data.metadata ? toPrismaJson(data.metadata) : undefined,
         },
         select: {

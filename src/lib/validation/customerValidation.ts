@@ -11,6 +11,7 @@ export interface CustomerEditData {
   phone?: string;
   website?: string;
   address?: string;
+  country?: string;
   industry?: string;
   tags: string[];
   tier: string;
@@ -50,6 +51,12 @@ export const customerValidationSchema = createValidationSchema({
     required: false,
     maxLength: 200,
     message: 'Address must be less than 200 characters',
+  },
+
+  country: {
+    required: false,
+    maxLength: 100,
+    message: 'Country must be less than 100 characters',
   },
 
   industry: {
@@ -113,6 +120,12 @@ export const customerCreateValidationSchema = createValidationSchema({
     required: false,
     maxLength: 200,
     message: 'Address must be less than 200 characters',
+  },
+
+  country: {
+    required: false,
+    maxLength: 100,
+    message: 'Country must be less than 100 characters',
   },
 
   industry: {
@@ -191,6 +204,10 @@ export function validateCustomerData(data: Partial<CustomerEditData>): string[] 
 
   if (data.address && data.address.length > 200) {
     errors.push('Address must be less than 200 characters');
+  }
+
+  if (data.country && data.country.length > 100) {
+    errors.push('Country must be less than 100 characters');
   }
 
   if (data.industry && data.industry.length > 50) {

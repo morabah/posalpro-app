@@ -7,7 +7,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import React, { forwardRef, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 
 export interface SelectOption {
   /**
@@ -156,6 +156,17 @@ export const Select = forwardRef<HTMLDivElement, SelectProps>(function Select(
 
   // Generate unique ID if not provided
   const selectId = id || `select-${Math.random().toString(36).substr(2, 9)}`;
+
+  // Auto-focus search input when dropdown opens
+  useEffect(() => {
+    if (isOpen && searchable && searchInputRef.current) {
+      // Use setTimeout to ensure the dropdown is rendered before focusing
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, searchable]);
 
   // Filter options based on search query
   const filteredOptions = useMemo(() => {

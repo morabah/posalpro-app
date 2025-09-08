@@ -24,6 +24,7 @@ export function CustomerFormExample() {
     phone: '',
     website: '',
     address: '',
+    country: '',
     industry: '',
     annualRevenue: undefined as number | undefined,
     employeeCount: undefined as number | undefined,
@@ -140,6 +141,19 @@ export function CustomerFormExample() {
               error={validation.getFieldError('address')}
               touched={validation.isFieldTouched('address')}
               icon={<MapPinIcon className="w-5 h-5" />}
+            />
+
+            {/* Country */}
+            <FormField
+              name="country"
+              label="Country"
+              placeholder="Enter country"
+              value={validation.formData.country}
+              onChange={value => validation.handleFieldChange('country', value)}
+              onBlur={() => validation.handleFieldBlur('country')}
+              error={validation.getFieldError('country')}
+              touched={validation.isFieldTouched('country')}
+              icon={<GlobeAltIcon className="w-5 h-5" />}
             />
           </div>
 

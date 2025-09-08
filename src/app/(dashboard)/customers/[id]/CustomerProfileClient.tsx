@@ -15,6 +15,7 @@ import { Breadcrumbs } from '@/components/layout';
 import { Card } from '@/components/ui/Card';
 import { FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
+import { SearchableCountrySelect } from '@/components/ui/SearchableCountrySelect';
 import { useCustomer } from '@/features/customers/hooks';
 import type { Customer } from '@/features/customers/schemas';
 import { CustomerUpdateSchema } from '@/features/customers/schemas';
@@ -89,6 +90,7 @@ interface CustomerApiResponse {
   syncStatus?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  country?: string | null;
   [key: string]: unknown;
 }
 
@@ -121,6 +123,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       phone: '',
       website: '',
       address: '',
+      country: '',
       industry: undefined,
       revenue: undefined,
       companySize: '',
@@ -147,6 +150,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       phone: raw.phone ?? previous?.phone ?? undefined,
       website: raw.website ?? previous?.website ?? undefined,
       address: raw.address ?? previous?.address ?? undefined,
+      country: raw.country ?? previous?.country ?? undefined,
       industry: raw.industry ?? previous?.industry ?? undefined,
       companySize: raw.companySize ?? previous?.companySize ?? null,
       revenue: typeof raw.revenue === 'number' ? raw.revenue : (previous?.revenue ?? null),
@@ -187,6 +191,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         phone: customer.phone ?? '',
         website: customer.website ?? '',
         address: customer.address ?? '',
+        country: customer.country ?? '',
         industry: customer.industry ?? undefined,
         revenue: customer.revenue ?? undefined,
         companySize: customer.companySize ?? '',
@@ -203,6 +208,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         name: customer.name,
         industry: customer.industry ?? undefined,
         address: customer.address ?? undefined,
+        country: customer.country ?? undefined,
         phone: customer.phone ?? undefined,
         website: customer.website ?? undefined,
         email: customer.email as string,
@@ -221,6 +227,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         phone: '',
         website: '',
         address: '',
+        country: '',
         industry: undefined,
         revenue: undefined,
         companySize: '',
@@ -249,6 +256,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         phone: data.phone,
         website: data.website,
         address: data.address,
+        country: data.country,
         industry: data.industry,
         tags: data.tags,
         metadata: {
@@ -342,6 +350,10 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
   // ✅ FORM SUBMISSION HANDLER
   const onSubmit = async (data: z.infer<typeof CustomerUpdateSchema>) => {
     try {
+      // Debug log to see what data is being submitted
+      console.log('Form submission data:', data);
+      console.log('Country field value:', data.country);
+
       await saveCustomer(data);
       setIsEditing(false);
 
@@ -645,6 +657,30 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                       />
                     ) : (
                       <span className="text-gray-700">{customer.address}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center">
+                    <GlobeAltIcon className="w-5 h-5 text-gray-400 mr-3" />
+                    {isEditing ? (
+                      <div className="flex-1">
+                        <SearchableCountrySelect
+                          name="country"
+                          label=""
+                          placeholder="Search countries..."
+                          size="sm"
+                          register={register}
+                          setValue={setValue}
+                          watch={watch}
+                          formErrors={errors}
+                        />
+                        {errors.country && (
+                          <p className="mt-1 text-sm text-red-600">{errors.country.message}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-700">
+                        {customer.country || 'N/A'}
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center">

@@ -418,6 +418,7 @@ export const PUT = createRoute(
               phone: true,
               website: true,
               address: true,
+              country: true,
               industry: true,
               companySize: true,
               revenue: true,

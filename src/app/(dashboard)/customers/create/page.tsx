@@ -15,6 +15,7 @@
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { FormActions, FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
+import { SearchableCountrySelect } from '@/components/ui/SearchableCountrySelect';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useEmailValidation } from '@/hooks/useEmailValidation';
 import { useErrorHandler } from '@/hooks/useErrorHandler';
@@ -55,6 +56,7 @@ const customerCreationSchema = z.object({
   phone: z.string().min(1, 'Phone number is required'),
   website: z.string().url('Please enter a valid website URL').optional().or(z.literal('')),
   address: z.string().max(200, 'Address must be less than 200 characters').optional(),
+  country: z.string().max(100, 'Country must be less than 100 characters').optional(),
   industry: z
     .enum([
       'technology',
@@ -194,6 +196,7 @@ function CustomerCreationPageComponent() {
       phone: '',
       website: '',
       address: '',
+      country: '',
       industry: 'technology',
       revenue: undefined,
       companySize: 'small',
@@ -503,6 +506,17 @@ function CustomerCreationPageComponent() {
                           touched={!!touchedFields.address}
                           placeholder="Enter full address"
                           className="min-h-[44px]"
+                        />
+
+                        <SearchableCountrySelect
+                          name="country"
+                          label="Country"
+                          placeholder="Search countries..."
+                          size="md"
+                          register={register}
+                          setValue={setValue}
+                          watch={watch}
+                          formErrors={errors}
                         />
 
                         <FormField

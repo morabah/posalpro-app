@@ -26,6 +26,7 @@ export interface Customer {
   phone?: string | null;
   website?: string | null;
   address?: string | null;
+  country?: string | null;
   industry?: string | null;
   companySize?: string | null;
   revenue?: number | null;
@@ -113,6 +114,7 @@ export interface CreateCustomerData {
   phone?: string;
   website?: string;
   address?: string;
+  country?: string;
   industry?: string;
   companySize?: string;
   revenue?: number;
