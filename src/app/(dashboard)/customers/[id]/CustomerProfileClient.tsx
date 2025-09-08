@@ -678,9 +678,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                         )}
                       </div>
                     ) : (
-                      <span className="text-gray-700">
-                        {customer.country || 'N/A'}
-                      </span>
+                      <span className="text-gray-700">{customer.country || 'N/A'}</span>
                     )}
                   </div>
                   <div className="flex items-center">

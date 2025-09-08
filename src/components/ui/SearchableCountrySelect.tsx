@@ -13,10 +13,9 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
-import { useFormContext } from 'react-hook-form';
 import { Select, SelectOption } from '@/components/ui/forms/Select';
 import { countries, countryUtils } from '@/lib/data/countries';
+import { useMemo } from 'react';
 
 interface SearchableCountrySelectProps {
   /**
@@ -86,42 +85,34 @@ export function SearchableCountrySelect({
   watch: directWatch,
   formErrors: directFormErrors,
 }: SearchableCountrySelectProps) {
-  // Try to get form context, fallback to direct props
-  let formContext;
-  try {
-    formContext = useFormContext();
-  } catch {
-    formContext = null;
-  }
-
-  // Use form context if available, otherwise use direct props
-  const {
-    register = directRegister,
-    setValue = directSetValue,
-    watch = directWatch,
-    formState: { errors: contextErrors } = {},
-  } = formContext || {};
-
-  const errors = directFormErrors || contextErrors;
+  // Use direct props - they are provided by the parent components
+  const register = directRegister;
+  const setValue = directSetValue;
+  const watch = directWatch;
+  const errors = directFormErrors;
   const currentValue = watch ? watch(name) : undefined;
-  const fieldError = error || (typeof errors?.[name]?.message === 'string' ? errors[name]?.message : undefined);
+  const fieldError =
+    error || (typeof errors?.[name]?.message === 'string' ? errors[name]?.message : undefined);
 
   // Convert countries to SelectOption format with flag emojis
-  const countryOptions: SelectOption[] = useMemo(() => [
-    { value: '', label: 'Select Country', disabled: true },
-    ...countries
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map(country => ({
-        value: country.name,
-        label: countryUtils.getDisplayName(country),
-        icon: country.flag ? (
-          <span className="text-lg" role="img" aria-label={`${country.name} flag`}>
-            {country.flag}
-          </span>
-        ) : undefined,
-        description: `ISO Code: ${country.code}`,
-      })),
-  ], []);
+  const countryOptions: SelectOption[] = useMemo(
+    () => [
+      { value: '', label: 'Select Country', disabled: true },
+      ...countries
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(country => ({
+          value: country.name,
+          label: countryUtils.getDisplayName(country),
+          icon: country.flag ? (
+            <span className="text-lg" role="img" aria-label={`${country.name} flag`}>
+              {country.flag}
+            </span>
+          ) : undefined,
+          description: `ISO Code: ${country.code}`,
+        })),
+    ],
+    []
+  );
 
   // Handle value changes
   const handleChange = (value: string | string[]) => {
@@ -161,7 +152,7 @@ export function SearchableCountrySelect({
         type="hidden"
         {...registerProps}
         value={currentValue || ''}
-        onChange={(e) => {
+        onChange={e => {
           if (setValue) {
             setValue(name, e.target.value, {
               shouldValidate: true,
