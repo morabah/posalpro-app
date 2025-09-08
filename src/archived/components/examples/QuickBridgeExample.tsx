@@ -9,6 +9,9 @@ import { useProposalBridge } from '@/components/bridges/ProposalManagementBridge
 import { EventEmitters, useEventBridge } from '@/lib/bridges/EventBridge';
 import { useUIState } from '@/lib/bridges/StateBridge';
 
+// Logging imports
+import { logDebug } from '@/lib/logger';
+
 /**
  * Quick Bridge Example - Minimal Integration
  *
@@ -95,7 +98,7 @@ export function QuickBridgeExample() {
     const proposalCreatedListener = eventBridge.subscribe(
       'PROPOSAL_CREATED',
       payload => {
-        console.log('New proposal created:', payload.proposalId);
+        logDebug('New proposal created:', { proposalId: payload.proposalId, component: 'QuickBridgeExample' });
         // Automatically refresh the list
         loadProposals();
       },
