@@ -14,7 +14,7 @@ import { Select } from '@/components/ui/Select';
 import { useInfiniteProposals } from '@/features/proposals/hooks';
 import type { Proposal } from '@/features/proposals/schemas';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { logDebug } from '@/lib/logger';
+import { logDebug, logError } from '@/lib/logger';
 import { useDashboardFilters } from '@/lib/store/dashboardStore';
 import {
   AlertTriangleIcon,
@@ -547,8 +547,10 @@ export default function UnifiedProposalList() {
                 value={searchQuery}
                 onChange={e => {
                   if (!e || !e.target) {
-                    console.error('UnifiedProposalList: Invalid event object for search onChange', {
+                    logError('UnifiedProposalList: Invalid event object for search onChange', {
                       event: e,
+                      component: 'UnifiedProposalList',
+                      operation: 'search_input_change_validation',
                     });
                     return;
                   }

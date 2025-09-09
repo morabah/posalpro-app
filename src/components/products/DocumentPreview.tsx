@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
 import { analytics } from '@/lib/analytics';
-import { logError, logInfo } from '@/lib/logger';
+import { logDebug, logError, logInfo } from '@/lib/logger';
 import { AlertCircle, Download, Eye, FileText, Maximize2 } from 'lucide-react';
 import React, { Suspense, useCallback, useEffect, useState } from 'react';
 
@@ -27,9 +27,11 @@ const PDFViewer = React.lazy(() =>
               const cacheBuster = Date.now();
               const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
               module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-              console.log('[DEBUG] DocumentPreview: PDF worker configured locally', {
+              logDebug('DocumentPreview: PDF worker configured locally', {
                 workerUrl,
                 cacheBuster,
+                component: 'DocumentPreview',
+                operation: 'worker_config',
               });
               resolve();
             }
@@ -40,9 +42,11 @@ const PDFViewer = React.lazy(() =>
 
     await waitForWorker();
 
-    console.log('[DEBUG] DocumentPreview: PDF worker status', {
+    logDebug('DocumentPreview: PDF worker status', {
       workerSrc: module.pdfjs.GlobalWorkerOptions.workerSrc,
       configured: !!module.pdfjs.GlobalWorkerOptions.workerSrc,
+      component: 'DocumentPreview',
+      operation: 'worker_status',
     });
 
     return {
@@ -175,12 +179,14 @@ export function DocumentPreview({
 
   // Debug logging for component initialization
   useEffect(() => {
-    console.log('[DEBUG] DocumentPreview: Component initialized', {
+    logDebug('DocumentPreview: Component initialized', {
       datasheetPath,
       productId,
       productName,
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent,
+      component: 'DocumentPreview',
+      operation: 'component_init',
     });
 
     // Check CSP headers
@@ -188,19 +194,23 @@ export function DocumentPreview({
       .then(response => {
         const csp = response.headers.get('content-security-policy');
         const cacheControl = response.headers.get('cache-control');
-        console.log('[DEBUG] DocumentPreview: CSP headers from server', {
+        logDebug('DocumentPreview: CSP headers from server', {
           csp: csp ? csp.substring(0, 200) + '...' : 'No CSP header found',
           cacheControl,
           allHeaders: Object.fromEntries(response.headers.entries()),
           productId,
           productName,
+          component: 'DocumentPreview',
+          operation: 'csp_check',
         });
       })
       .catch(error => {
-        console.log('[DEBUG] DocumentPreview: Failed to fetch CSP headers', {
+        logDebug('DocumentPreview: Failed to fetch CSP headers', {
           error: error.message,
           productId,
           productName,
+          component: 'DocumentPreview',
+          operation: 'csp_fetch_error',
         });
       });
   }, [datasheetPath, productId, productName]);
@@ -217,11 +227,13 @@ export function DocumentPreview({
 
   // Debug logging for file type detection
   useEffect(() => {
-    console.log('[DEBUG] DocumentPreview: File type detected', {
+    logDebug('DocumentPreview: File type detected', {
       datasheetPath,
       fileType,
       productId,
       productName,
+      component: 'DocumentPreview',
+      operation: 'file_type_detection',
     });
   }, [datasheetPath, fileType, productId, productName]);
 
@@ -264,7 +276,7 @@ export function DocumentPreview({
   // Handle PDF load error
   const handlePdfLoadError = useCallback(
     (error: Error) => {
-      console.log('[DEBUG] DocumentPreview: PDF load error occurred', {
+      logDebug('DocumentPreview: PDF load error occurred', {
         error: error.message,
         errorName: error.name,
         errorStack: error.stack,
@@ -272,6 +284,8 @@ export function DocumentPreview({
         productName,
         datasheetPath,
         timestamp: new Date().toISOString(),
+        component: 'DocumentPreview',
+        operation: 'pdf_load_error',
       });
 
       // Check if this is a messageHandler error and provide specific handling
@@ -279,18 +293,22 @@ export function DocumentPreview({
         error.message.includes('messageHandler') || error.message.includes('sendWithPromise');
 
       if (isMessageHandlerError) {
-        console.log(
-          '[DEBUG] DocumentPreview: MessageHandler error detected - attempting recovery',
-          {
-            productId,
-            productName,
-            datasheetPath,
-          }
-        );
+        logDebug('DocumentPreview: MessageHandler error detected - attempting recovery', {
+          productId,
+          productName,
+          datasheetPath,
+          component: 'DocumentPreview',
+          operation: 'message_handler_recovery',
+        });
 
         // Try to reconfigure the worker and retry
         setTimeout(() => {
-          console.log('[DEBUG] DocumentPreview: Retrying PDF load after messageHandler error');
+          logDebug('DocumentPreview: Retrying PDF load after messageHandler error', {
+            productId,
+            productName,
+            component: 'DocumentPreview',
+            operation: 'pdf_retry',
+          });
           setPdfError(null);
           setLoadStartTime(performance.now());
         }, 1000);
@@ -389,12 +407,14 @@ export function DocumentPreview({
       (path.startsWith('/') && !path.startsWith('//')); // Unix absolute paths without protocol, but allow network paths
 
     const result = !isLocal;
-    console.log('[DEBUG] DocumentPreview: isFileAccessible check', {
+    logDebug('DocumentPreview: isFileAccessible check', {
       path,
       isLocal,
       result,
       productId,
       productName,
+      component: 'DocumentPreview',
+      operation: 'file_accessibility_check',
     });
 
     return result;
@@ -404,10 +424,12 @@ export function DocumentPreview({
   const getProxiedUrl = useCallback(
     (url: string): string => {
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        console.log('[DEBUG] DocumentPreview: getProxiedUrl - Local file, returning as-is', {
+        logDebug('DocumentPreview: getProxiedUrl - Local file, returning as-is', {
           url,
           productId,
           productName,
+          component: 'DocumentPreview',
+          operation: 'proxy_url_local',
         });
         return url; // Local file, return as-is
       }
@@ -419,12 +441,14 @@ export function DocumentPreview({
       });
 
       const proxiedUrl = `${window.location.origin}/api/documents?${params.toString()}`;
-      console.log('[DEBUG] DocumentPreview: getProxiedUrl - Network URL converted to proxied URL', {
+      logDebug('DocumentPreview: getProxiedUrl - Network URL converted to proxied URL', {
         originalUrl: url,
         proxiedUrl,
         filename,
         productId,
         productName,
+        component: 'DocumentPreview',
+        operation: 'proxy_url_conversion',
       });
 
       return proxiedUrl;
@@ -482,7 +506,7 @@ export function DocumentPreview({
         <Suspense fallback={<DocumentLoading />}>
           {(() => {
             const proxiedUrl = getProxiedUrl(datasheetPath);
-            console.log('[DEBUG] DocumentPreview: Rendering decision', {
+            logDebug('DocumentPreview: Rendering decision', {
               fileType,
               fileAccessible,
               proxiedUrl,
@@ -491,21 +515,27 @@ export function DocumentPreview({
               productId,
               productName,
               timestamp: new Date().toISOString(),
+              component: 'DocumentPreview',
+              operation: 'render_decision',
             });
 
             if (fileType === 'pdf' && fileAccessible) {
-              console.log('[DEBUG] DocumentPreview: Rendering PDF viewer', {
+              logDebug('DocumentPreview: Rendering PDF viewer', {
                 proxiedUrl,
                 productId,
                 productName,
+                component: 'DocumentPreview',
+                operation: 'pdf_viewer_render',
               });
-              console.log('[DEBUG] DocumentPreview: About to render PDFViewer component', {
+              logDebug('DocumentPreview: About to render PDFViewer component', {
                 proxiedUrl,
                 fileType,
                 fileAccessible,
                 productId,
                 productName,
                 timestamp: new Date().toISOString(),
+                component: 'DocumentPreview',
+                operation: 'pdf_viewer_component_render',
               });
             }
 
@@ -514,19 +544,23 @@ export function DocumentPreview({
                 <PDFViewer
                   file={proxiedUrl}
                   onLoadSuccess={(data: { numPages: number }) => {
-                    console.log('[DEBUG] DocumentPreview: PDF onLoadSuccess called', {
+                    logDebug('DocumentPreview: PDF onLoadSuccess called', {
                       data,
                       productId,
                       productName,
+                      component: 'DocumentPreview',
+                      operation: 'pdf_load_success',
                     });
                     setLoadStartTime(0); // Reset for next load
                     handlePdfLoadSuccess(data);
                   }}
                   onLoadError={(error: Error) => {
-                    console.log('[DEBUG] DocumentPreview: PDF onLoadError called', {
+                    logDebug('DocumentPreview: PDF onLoadError called', {
                       error: error.message,
                       productId,
                       productName,
+                      component: 'DocumentPreview',
+                      operation: 'pdf_load_error_callback',
                     });
                     setLoadStartTime(0);
                     handlePdfLoadError(error);
@@ -542,11 +576,13 @@ export function DocumentPreview({
                         renderTextLayer={false}
                         renderAnnotationLayer={false}
                         onRenderError={(error: any) => {
-                          console.error('[ERROR] DocumentPreview: PDF page render error', {
+                          logError('DocumentPreview: PDF page render error', {
                             error: error.message,
                             stack: error.stack,
                             productId,
                             productName,
+                            component: 'DocumentPreview',
+                            operation: 'pdf_page_render_error',
                           });
                           handlePdfLoadError(new Error(`PDF rendering failed: ${error.message}`));
                         }}

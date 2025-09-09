@@ -319,10 +319,11 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
                       value={selectedSize}
                       onChange={e => {
                         if (!e || !e.target) {
-                          console.error(
-                            'AdvancedProductList: Invalid event object for size onChange',
-                            { event: e }
-                          );
+                          logError('AdvancedProductList: Invalid event object for size onChange', {
+                            event: e,
+                            component: 'AdvancedProductList',
+                            operation: 'size_filter_change',
+                          });
                           return;
                         }
                         setSelectedSize(e.target.value);
@@ -347,10 +348,11 @@ function AdvancedProductCard({ product }: { product: HybridProduct }) {
                       value={selectedColor}
                       onChange={e => {
                         if (!e || !e.target) {
-                          console.error(
-                            'AdvancedProductList: Invalid event object for color onChange',
-                            { event: e }
-                          );
+                          logError('AdvancedProductList: Invalid event object for color onChange', {
+                            event: e,
+                            component: 'AdvancedProductList',
+                            operation: 'color_filter_change',
+                          });
                           return;
                         }
                         setSelectedColor(e.target.value);
@@ -515,8 +517,10 @@ function AdvancedFilterPanel({
                 value={filters.searchQuery}
                 onChange={e => {
                   if (!e || !e.target) {
-                    console.error('AdvancedProductList: Invalid event object for search onChange', {
+                    logError('AdvancedProductList: Invalid event object for search onChange', {
                       event: e,
+                      component: 'AdvancedProductList',
+                      operation: 'search_input_change',
                     });
                     return;
                   }
@@ -549,8 +553,10 @@ function AdvancedFilterPanel({
               value={filters.category}
               onChange={e => {
                 if (!e || !e.target) {
-                  console.error('AdvancedProductList: Invalid event object for category onChange', {
+                  logError('AdvancedProductList: Invalid event object for category onChange', {
                     event: e,
+                    component: 'AdvancedProductList',
+                    operation: 'category_filter_change',
                   });
                   return;
                 }
@@ -586,8 +592,10 @@ function AdvancedFilterPanel({
               value={filters.status}
               onChange={e => {
                 if (!e || !e.target) {
-                  console.error('AdvancedProductList: Invalid event object for status onChange', {
+                  logError('AdvancedProductList: Invalid event object for status onChange', {
                     event: e,
+                    component: 'AdvancedProductList',
+                    operation: 'status_filter_change',
                   });
                   return;
                 }
@@ -622,10 +630,11 @@ function AdvancedFilterPanel({
               value={filters.showMockData ? 'mock' : 'all'}
               onChange={e => {
                 if (!e || !e.target) {
-                  console.error(
-                    'AdvancedProductList: Invalid event object for showMockData onChange',
-                    { event: e }
-                  );
+                  logError('AdvancedProductList: Invalid event object for showMockData onChange', {
+                    event: e,
+                    component: 'AdvancedProductList',
+                    operation: 'mock_data_toggle_change',
+                  });
                   return;
                 }
                 onFiltersChange({ ...filters, showMockData: e.target.value === 'mock' });

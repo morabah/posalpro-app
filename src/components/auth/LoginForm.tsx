@@ -8,7 +8,7 @@
 
 import { useLoginAnalytics } from '@/hooks/auth/useLoginAnalytics';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logDebug } from '@/lib/logger';
+import { logDebug, logError } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, ChevronDown, CircleAlert, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { signIn } from 'next-auth/react';
@@ -342,8 +342,10 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
                   name={register('email').name}
                   onChange={e => {
                     if (!e || !e.target) {
-                      console.error('LoginForm: Invalid event object for email onChange', {
+                      logError('LoginForm: Invalid event object for email onChange', {
                         event: e,
+                        component: 'LoginForm',
+                        operation: 'email_input_change_validation',
                       });
                       return;
                     }
@@ -389,8 +391,10 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
                     name={register('password').name}
                     onChange={e => {
                       if (!e || !e.target) {
-                        console.error('LoginForm: Invalid event object for password onChange', {
+                        logError('LoginForm: Invalid event object for password onChange', {
                           event: e,
+                          component: 'LoginForm',
+                          operation: 'password_input_change_validation',
                         });
                         return;
                       }
@@ -401,8 +405,10 @@ export function LoginForm({ callbackUrl, className = '' }: LoginFormProps) {
                     }}
                     onBlur={e => {
                       if (!e || !e.target) {
-                        console.error('LoginForm: Invalid event object for password onBlur', {
+                        logError('LoginForm: Invalid event object for password onBlur', {
                           event: e,
+                          component: 'LoginForm',
+                          operation: 'password_input_blur_validation',
                         });
                         return;
                       }

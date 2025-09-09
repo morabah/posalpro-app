@@ -411,7 +411,7 @@ function CustomerTable() {
 // ====================
 // Optimized Customer List Header Component
 // ====================
-function CustomerListHeaderOptimized({ stats }: { stats: any }) {
+function CustomerListHeaderOptimized({ stats, deleteBulk }: { stats: any; deleteBulk: any }) {
   const router = useRouter();
   const selectedIds: string[] = []; // We'll manage this locally for now
 
@@ -729,6 +729,7 @@ export function CustomerListOptimized() {
   });
 
   const { customers, stats } = useUnifiedCustomerData();
+  const deleteBulk = useDeleteCustomersBulk();
 
   const handleFilterChange = useCallback((key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -804,7 +805,7 @@ export function CustomerListOptimized() {
 
   return (
     <div className="space-y-6">
-      <CustomerListHeaderOptimized stats={stats} />
+      <CustomerListHeaderOptimized stats={stats} deleteBulk={deleteBulk} />
       <CustomerFiltersOptimized
         onFilterChange={handleFilterChange}
         onClearFilters={handleClearFilters}

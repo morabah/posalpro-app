@@ -13,6 +13,7 @@
 
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { logError, logInfo } from '@/lib/logger';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
@@ -30,14 +31,21 @@ if (typeof window !== 'undefined') {
     .then(module => {
       module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
-      console.log('[INFO] QueryProvider: PDF.js worker configured globally', {
+      logInfo('QueryProvider: PDF.js worker configured globally', {
         workerUrl,
         cacheBuster,
         configuredAt: new Date().toISOString(),
+        component: 'QueryProvider',
+        operation: 'pdf_worker_config',
       });
     })
     .catch(error => {
-      console.error('[ERROR] QueryProvider: Failed to configure PDF.js worker', error);
+      logError('QueryProvider: Failed to configure PDF.js worker', {
+        error: error.message,
+        stack: error.stack,
+        component: 'QueryProvider',
+        operation: 'pdf_worker_config_error',
+      });
     });
 
   // Add global error handlers for PDF worker issues
@@ -48,19 +56,24 @@ if (typeof window !== 'undefined') {
       event.message?.includes('messageHandler') ||
       event.message?.includes('sendWithPromise')
     ) {
-      console.error('[ERROR] QueryProvider: PDF worker error detected', {
+      logError('QueryProvider: PDF worker error detected', {
         message: event.message,
         filename: event.filename,
         lineno: event.lineno,
         colno: event.colno,
         isMessageHandlerError:
           event.message?.includes('messageHandler') || event.message?.includes('sendWithPromise'),
+        component: 'QueryProvider',
+        operation: 'pdf_worker_error_handler',
       });
 
       // Prevent the error from propagating to avoid console spam
       if (event.message?.includes('messageHandler') || event.message?.includes('sendWithPromise')) {
         event.preventDefault();
-        console.log('[INFO] QueryProvider: MessageHandler error prevented from propagating');
+        logInfo('QueryProvider: MessageHandler error prevented from propagating', {
+          component: 'QueryProvider',
+          operation: 'message_handler_error_prevented',
+        });
       }
     }
   });
@@ -73,11 +86,13 @@ if (typeof window !== 'undefined') {
       event.reason?.message?.includes('messageHandler') ||
       event.reason?.message?.includes('sendWithPromise')
     ) {
-      console.error('[ERROR] QueryProvider: PDF worker promise rejection', {
+      logError('QueryProvider: PDF worker promise rejection', {
         reason: event.reason,
         isMessageHandlerError:
           event.reason?.message?.includes('messageHandler') ||
           event.reason?.message?.includes('sendWithPromise'),
+        component: 'QueryProvider',
+        operation: 'pdf_worker_promise_rejection',
       });
       event.preventDefault(); // Prevent the default handler
     }

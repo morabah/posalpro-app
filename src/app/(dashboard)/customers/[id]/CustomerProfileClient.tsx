@@ -351,8 +351,16 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
   const onSubmit = async (data: z.infer<typeof CustomerUpdateSchema>) => {
     try {
       // Debug log to see what data is being submitted
-      console.log('Form submission data:', data);
-      console.log('Country field value:', data.country);
+      logDebug('CustomerProfileClient: Form submission data', {
+        data,
+        component: 'CustomerProfileClient',
+        operation: 'form_submission',
+      });
+      logDebug('CustomerProfileClient: Country field value', {
+        country: data.country,
+        component: 'CustomerProfileClient',
+        operation: 'country_field_validation',
+      });
 
       await saveCustomer(data);
       setIsEditing(false);

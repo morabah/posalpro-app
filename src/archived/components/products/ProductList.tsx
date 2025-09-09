@@ -10,6 +10,7 @@ import { useProductManagementBridge } from '@/components/bridges/ProductManageme
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { logError } from '@/lib/logger';
 import type { Product } from '@/lib/bridges/ProductApiBridge';
 import { debounce } from '@/lib/utils';
 import { EyeIcon, PencilIcon } from '@heroicons/react/24/outline';
@@ -143,7 +144,11 @@ const ProductList = memo((props: ProductListProps = {}) => {
         setProductsData(null);
       }
     } catch (error) {
-      console.error('Failed to fetch products:', error);
+      logError('ProductList: Failed to fetch products', {
+        error: error.message,
+        component: 'ProductList',
+        operation: 'fetch_products',
+      });
       setIsError(true);
       setProductsData(null);
     } finally {
@@ -254,7 +259,11 @@ const ProductList = memo((props: ProductListProps = {}) => {
         setHasMore(Boolean(result.pagination?.hasNextPage));
       }
     } catch (error) {
-      console.error('Failed to load more products:', error);
+      logError('ProductList: Failed to load more products', {
+        error: error.message,
+        component: 'ProductList',
+        operation: 'load_more_products',
+      });
     }
   }, [
     bridge,

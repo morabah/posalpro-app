@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { logError, logDebug } from '@/lib/logger';
 import React, { forwardRef } from 'react';
 
 // Type definitions for form field values
@@ -87,7 +88,7 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
     const shouldUseCustomHandlers = !hasRegisterHandlers && hasValue;
 
     // Debug logging for component initialization
-    console.log('FormField initialized:', {
+    logDebug('FormField initialized:', {
       fieldName: name || registerProps.name,
       hasValue,
       hasCustomHandlers,
@@ -95,6 +96,7 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
       shouldUseRegisterHandlers,
       shouldUseCustomHandlers,
       component: 'FormField',
+      operation: 'component_init',
       timestamp: new Date().toISOString(),
     });
 
@@ -117,25 +119,27 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
       if (disabled) return;
 
       // Debug: Log all change events
-      console.log('FormField handleChange called:', {
+      logDebug('FormField handleChange called:', {
         event: e,
         eventType: typeof e,
         hasTarget: e && typeof e === 'object' && 'target' in e,
         targetValue: e && typeof e === 'object' && e.target ? (e.target as any).value : 'no target',
         fieldName: name || registerProps.name,
         component: 'FormField',
+        operation: 'handle_change',
         timestamp: new Date().toISOString(),
       });
 
       // Safety check: ensure event and target exist
       if (!e || !e.target) {
-        console.error('FormField: Invalid event object passed to handleChange', {
+        logError('FormField: Invalid event object passed to handleChange', {
           event: e,
           eventType: typeof e,
           hasTarget: e && typeof e === 'object' && 'target' in e,
           target: e && typeof e === 'object' && e.target,
-          component: 'FormField',
           fieldName: name || registerProps.name,
+          component: 'FormField',
+          operation: 'handle_change_validation',
           timestamp: new Date().toISOString(),
         });
         return;
@@ -149,11 +153,12 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
           const changeHandler = registerProps.onChange || onChange;
           changeHandler?.(e);
         } catch (error) {
-          console.error('FormField: Error in uncontrolled onChange handler', {
+          logError('FormField: Error in uncontrolled onChange handler', {
             error,
             event: e,
-            component: 'FormField',
             fieldName: name || registerProps.name,
+            component: 'FormField',
+            operation: 'uncontrolled_onchange_error',
             timestamp: new Date().toISOString(),
           });
         }
@@ -168,11 +173,12 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
       try {
         onChange?.(newValue);
       } catch (error) {
-        console.error('FormField: Error in controlled onChange handler', {
+        logError('FormField: Error in controlled onChange handler', {
           error,
           event: e,
-          component: 'FormField',
           fieldName: name || registerProps.name,
+          component: 'FormField',
+          operation: 'controlled_onchange_error',
           timestamp: new Date().toISOString(),
         });
       }
@@ -183,13 +189,14 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
 
       // Safety check: ensure event and target exist
       if (!e || !e.target) {
-        console.error('FormField: Invalid event object passed to handleBlur', {
+        logError('FormField: Invalid event object passed to handleBlur', {
           event: e,
           eventType: typeof e,
           hasTarget: e && typeof e === 'object' && 'target' in e,
           target: e && typeof e === 'object' && e.target,
-          component: 'FormField',
           fieldName: name || registerProps.name,
+          component: 'FormField',
+          operation: 'handle_blur_validation',
           timestamp: new Date().toISOString(),
         });
         return;
@@ -200,11 +207,12 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
           const blurHandler = registerProps.onBlur || onBlur;
           blurHandler?.(e);
         } catch (error) {
-          console.error('FormField: Error in onBlur handler', {
+          logError('FormField: Error in onBlur handler', {
             error,
             event: e,
-            component: 'FormField',
             fieldName: name || registerProps.name,
+            component: 'FormField',
+            operation: 'onblur_handler_error',
             timestamp: new Date().toISOString(),
           });
         }

@@ -50,9 +50,11 @@ import { z } from 'zod';
 function ProposalListHeader({
   selectedIds,
   setSelectedIds,
+  deleteProposalsBulk,
 }: {
   selectedIds: string[];
   setSelectedIds: (ids: string[]) => void;
+  deleteProposalsBulk: any;
 }) {
   const router = useRouter();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
@@ -1309,6 +1311,7 @@ function ProposalCard({ proposal }: { proposal: any }) {
 
 export function ProposalListOptimized() {
   const { proposals: proposalsResult, stats: statsResult } = useUnifiedProposalData();
+  const deleteProposalsBulk = useDeleteProposalsBulk();
 
   // Local state for filters and selections
   const [localFilters, setLocalFilters] = useState({
@@ -1364,7 +1367,11 @@ export function ProposalListOptimized() {
 
   return (
     <div className="space-y-6">
-      <ProposalListHeader selectedIds={selectedIds} setSelectedIds={setSelectedIds} />
+      <ProposalListHeader
+        selectedIds={selectedIds}
+        setSelectedIds={setSelectedIds}
+        deleteProposalsBulk={deleteProposalsBulk}
+      />
       <ProposalStatsOptimized statsResult={statsResult} />
       <ProposalFiltersOptimized
         filters={localFilters}
