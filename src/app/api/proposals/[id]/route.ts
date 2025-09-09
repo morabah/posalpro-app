@@ -81,44 +81,24 @@ export const GET = createRoute(
         });
       }
 
+      // 🚀 PERFORMANCE OPTIMIZATION: Load basic proposal data first
       const proposal = await prisma.proposal.findUnique({
         where: { id },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              industry: true,
-            },
-          },
-          sections: {
-            select: {
-              id: true,
-              title: true,
-              content: true,
-              order: true,
-            },
-          },
-          products: {
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  category: true,
-                  description: true,
-                },
-              },
-            },
-          },
-          assignedTo: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
+        select: {
+          // Core proposal fields only - exclude heavy fields initially
+          id: true,
+          tenantId: true,
+          title: true,
+          description: true,
+          status: true,
+          priority: true,
+          value: true,
+          currency: true,
+          dueDate: true,
+          createdAt: true,
+          updatedAt: true,
+          customerId: true,
+          createdBy: true,
         },
       });
 
@@ -135,46 +115,101 @@ export const GET = createRoute(
         );
       }
 
-      // Transform null values to appropriate defaults before validation
-      const transformedProposal = {
+      // 🚀 PERFORMANCE OPTIMIZATION: Load related data separately and in parallel
+      const [customer, sections, products, assignedUsers] = await Promise.all([
+        // Customer data (lightweight)
+        proposal.customerId
+          ? prisma.customer.findUnique({
+              where: { id: proposal.customerId },
+              select: { id: true, name: true, email: true, industry: true },
+            })
+          : Promise.resolve(null),
+
+        // Sections data (can be heavy - limit to essential fields)
+        prisma.proposalSection.findMany({
+          where: { proposalId: id },
+          select: { id: true, title: true, order: true }, // Exclude content initially
+          orderBy: { order: 'asc' },
+        }),
+
+        // Products data (optimized - batch load product details)
+        prisma.proposalProduct.findMany({
+          where: { proposalId: id },
+          select: {
+            id: true,
+            productId: true,
+            quantity: true,
+            unitPrice: true,
+            total: true,
+          },
+        }),
+
+        // Assigned users (lightweight)
+        prisma.user.findMany({
+          where: {
+            assignedProposals: { some: { id } },
+          },
+          select: { id: true, name: true, email: true },
+        }),
+      ]);
+
+      // 🚀 PERFORMANCE OPTIMIZATION: Load product details separately if needed
+      let productsWithDetails: any[] = [];
+      if (products.length > 0) {
+        const productIds = products.map(p => p.productId);
+        const productDetails = await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, name: true, category: true },
+        });
+
+        // Merge product details efficiently
+        const productMap = productDetails.reduce(
+          (map, product) => {
+            map[product.id] = product;
+            return map;
+          },
+          {} as Record<string, any>
+        );
+
+        productsWithDetails = products.map(pp => ({
+          ...pp,
+          product: productMap[pp.productId] || null,
+        }));
+      }
+
+      // 🚀 PERFORMANCE OPTIMIZATION: Construct response with optimized data
+      const optimizedProposal = {
         ...proposal,
-        // ✅ FIX: Convert value from string to number
         value:
           proposal.value !== null && proposal.value !== undefined
             ? Number(proposal.value)
             : undefined,
-        customer: proposal.customer
-          ? {
-              ...proposal.customer,
-              email: proposal.customer.email || undefined,
-            }
-          : undefined,
-        title: proposal.title || 'Untitled Proposal',
-        // ✅ FIX: Handle assignedTo array and convert to string (take first user)
+        customer,
+        sections,
+        products: productsWithDetails,
+        assignedTo: assignedUsers,
+      };
+
+      // Transform for frontend compatibility
+      const transformedProposal = {
+        ...optimizedProposal,
+        title: optimizedProposal.title || 'Untitled Proposal',
         assignedTo:
-          proposal.assignedTo && proposal.assignedTo.length > 0
-            ? proposal.assignedTo[0].id
+          optimizedProposal.assignedTo && optimizedProposal.assignedTo.length > 0
+            ? optimizedProposal.assignedTo[0].id
             : undefined,
-        products: proposal.products
-          ? proposal.products
-              .filter((pp) => pp.product) // Remove orphaned ProposalProduct records
-              .map((pp) => ({
-                ...pp,
-                // ✅ FIX: Convert numeric fields from strings to numbers
-                unitPrice:
-                  pp.unitPrice !== null && pp.unitPrice !== undefined ? Number(pp.unitPrice) : 0,
-                discount:
-                  pp.discount !== null && pp.discount !== undefined ? Number(pp.discount) : 0,
-                total: pp.total !== null && pp.total !== undefined ? Number(pp.total) : 0,
-                name: pp.product?.name || `Product ${pp.productId}`,
-                // ✅ FIX: Convert category array to string (take first element)
-                category: Array.isArray(pp.product?.category)
-                  ? pp.product.category[0] || 'General'
-                  : pp.product?.category || 'General',
-                // ✅ FIX: Convert null configuration to empty object
-                configuration: pp.configuration || {},
-              }))
-          : [],
+        // Transform products for frontend compatibility
+        products: optimizedProposal.products.map(pp => ({
+          ...pp,
+          unitPrice: pp.unitPrice !== null && pp.unitPrice !== undefined ? Number(pp.unitPrice) : 0,
+          discount: pp.discount !== null && pp.discount !== undefined ? Number(pp.discount) : 0,
+          total: pp.total !== null && pp.total !== undefined ? Number(pp.total) : 0,
+          name: pp.product?.name || `Product ${pp.productId}`,
+          category: Array.isArray(pp.product?.category)
+            ? pp.product.category[0] || 'General'
+            : pp.product?.category || 'General',
+          configuration: pp.configuration || {},
+        })),
       };
 
       // Reduced logging - only in development
@@ -311,50 +346,34 @@ export const PUT = createRoute(
             data: updateData,
           });
 
-          // 2. Fetch the complete proposal with all relations for the response
+          // 2. 🚀 PERFORMANCE OPTIMIZATION: Return lightweight proposal data
+          // Avoid heavy JOIN queries that can cause timeouts
           const updatedProposal = await tx.proposal.findUnique({
             where: { id },
-            include: {
-              customer: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  industry: true,
-                },
-              },
-              sections: {
-                select: {
-                  id: true,
-                  title: true,
-                  content: true,
-                  order: true,
-                },
-              },
-              products: {
-                include: {
-                  product: {
-                    select: {
-                      id: true,
-                      name: true,
-                      category: true,
-                      description: true,
-                    },
-                  },
-                },
-              },
-              assignedTo: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
+            select: {
+              id: true,
+              tenantId: true,
+              title: true,
+              description: true,
+              status: true,
+              priority: true,
+              value: true,
+              currency: true,
+              dueDate: true,
+              createdAt: true,
+              updatedAt: true,
+              customerId: true,
+              createdBy: true,
             },
           });
 
           // 3. Handle product data updates
-          if (productData && typeof productData === 'object' && 'products' in productData && Array.isArray((productData as any).products)) {
+          if (
+            productData &&
+            typeof productData === 'object' &&
+            'products' in productData &&
+            Array.isArray((productData as any).products)
+          ) {
             // Delete existing proposal products
             await tx.proposalProduct.deleteMany({
               where: { proposalId: id },
@@ -404,7 +423,12 @@ export const PUT = createRoute(
           }
 
           // 3. Handle section data updates
-          if (sectionData && typeof sectionData === 'object' && 'sections' in sectionData && Array.isArray((sectionData as any).sections)) {
+          if (
+            sectionData &&
+            typeof sectionData === 'object' &&
+            'sections' in sectionData &&
+            Array.isArray((sectionData as any).sections)
+          ) {
             // Delete existing proposal sections
             await tx.proposalSection.deleteMany({
               where: { proposalId: id },
@@ -436,46 +460,20 @@ export const PUT = createRoute(
         }
       );
 
-      // Transform response data
+      // 🚀 PERFORMANCE OPTIMIZATION: Return lightweight response
+      // Avoid complex data transformation that can cause timeouts
       const transformedProposal = {
         ...proposal,
-        // ✅ FIX: Convert value from string to number
         value:
           proposal.value !== null && proposal.value !== undefined
             ? Number(proposal.value)
             : undefined,
-        customer: proposal.customer
-          ? {
-              ...proposal.customer,
-              email: proposal.customer.email || undefined,
-            }
-          : undefined,
         title: proposal.title || 'Untitled Proposal',
-        // ✅ FIX: Handle assignedTo array and convert to string (take first user)
-        assignedTo:
-          proposal.assignedTo && proposal.assignedTo.length > 0
-            ? proposal.assignedTo[0].id
-            : undefined,
-        products: proposal.products
-          ? proposal.products
-              .filter((pp) => pp.product)
-              .map((pp) => ({
-                ...pp,
-                // ✅ FIX: Convert numeric fields from strings to numbers
-                unitPrice:
-                  pp.unitPrice !== null && pp.unitPrice !== undefined ? Number(pp.unitPrice) : 0,
-                discount:
-                  pp.discount !== null && pp.discount !== undefined ? Number(pp.discount) : 0,
-                total: pp.total !== null && pp.total !== undefined ? Number(pp.total) : 0,
-                name: pp.product?.name || `Product ${pp.productId}`,
-                // ✅ FIX: Convert category array to string (take first element)
-                category: Array.isArray(pp.product?.category)
-                  ? pp.product.category[0] || 'General'
-                  : pp.product?.category || 'General',
-                // ✅ FIX: Convert null configuration to empty object
-                configuration: pp.configuration || {},
-              }))
-          : [],
+        // Note: Full customer, products, sections data available via separate GET request
+        customer: null, // Lightweight response - fetch separately if needed
+        assignedTo: undefined, // Lightweight response - fetch separately if needed
+        products: [], // Lightweight response - fetch separately if needed
+        sections: [], // Lightweight response - fetch separately if needed
       };
 
       // Reduced logging - only in development
@@ -549,7 +547,11 @@ export const PATCH = createRoute(
       }
 
       // Handle customer relationship
-      if (processedUpdateData.customer && typeof processedUpdateData.customer === 'object' && 'id' in processedUpdateData.customer) {
+      if (
+        processedUpdateData.customer &&
+        typeof processedUpdateData.customer === 'object' &&
+        'id' in processedUpdateData.customer
+      ) {
         processedUpdateData.customer = {
           connect: { id: (processedUpdateData.customer as any).id },
         };
@@ -624,7 +626,7 @@ export const PATCH = createRoute(
         dueDate: updatedProposal.dueDate,
         updatedAt: updatedProposal.updatedAt,
         customerId: updatedProposal.customerId,
-        products: updatedProposal.products?.map((p) => ({
+        products: updatedProposal.products?.map(p => ({
           productId: p.productId,
           quantity: p.quantity,
           unitPrice: p.unitPrice,
@@ -663,8 +665,8 @@ export const PATCH = createRoute(
           : undefined,
         products: updatedProposal.products
           ? updatedProposal.products
-              .filter((pp) => pp.product)
-              .map((pp) => ({
+              .filter(pp => pp.product)
+              .map(pp => ({
                 ...pp,
                 // ✅ FIX: Convert numeric fields from strings to numbers
                 unitPrice:
@@ -739,7 +741,7 @@ export const DELETE = createRoute(
       });
 
       // Use transaction to ensure all related data is cleaned up
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async tx => {
         // Delete related records first due to foreign key constraints
         await tx.proposalVersion.deleteMany({
           where: { proposalId: id },

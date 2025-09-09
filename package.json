@@ -11,6 +11,7 @@
     "dev": "next dev",
     "dev:clean": "npm run dev:smart",
     "dev:smart": "./scripts/dev-clean.sh",
+    "dev:services": "./scripts/dev-clean.sh --services-only",
     "dev:demo": "./scripts/demo-port-management.sh",
     "kill:dev": "pkill -f 'next dev' || true",
     "build": "NODE_OPTIONS=\"--max-old-space-size=8192\" next build",

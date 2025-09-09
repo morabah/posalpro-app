@@ -1,5 +1,10 @@
 // Dashboard hooks from feature location
-export { useDashboardAnalytics, useDashboardData, useExecutiveDashboard } from './useDashboard';
+export {
+  useDashboardAnalytics,
+  useDashboardData,
+  useExecutiveDashboard,
+  useUnifiedDashboardData,
+} from './useDashboard';
 export type {
   ChartDataPoint,
   DashboardAnalyticsData,

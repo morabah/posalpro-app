@@ -36,6 +36,10 @@ WARNINGS_COUNT=0
 CHECKS_PASSED=0
 TOTAL_CHECKS=0
 
+# Project root detection
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 # Function to print section headers
 print_header() {
     echo ""
@@ -606,71 +610,189 @@ check_schema_consistency() {
     # Run schema consistency check
     echo -e "  ${INFO} ${BLUE}Running advanced schema consistency validation...${NC}"
 
-    if npm run schema:check --silent 2>/dev/null | grep -q "NO INCONSISTENCIES FOUND"; then
+    # Ensure we're in the correct directory for npm commands
+    if (cd "$PROJECT_ROOT" && npm run schema:check --silent 2>/dev/null | grep -q "NO INCONSISTENCIES FOUND"); then
         print_check "pass" "Schema consistency verified" "All layers properly aligned"
     else
         print_check "warn" "Schema inconsistencies detected" "Run: npm run schema:all for details"
     fi
 
     # Run data integrity check
-    if npm run schema:integrity --silent 2>/dev/null | grep -q "ALL DATA INTEGRITY CHECKS PASSED"; then
+    if (cd "$PROJECT_ROOT" && npm run schema:integrity --silent 2>/dev/null | grep -q "ALL DATA INTEGRITY CHECKS PASSED"); then
         print_check "pass" "Data integrity verified" "No orphaned records or constraint violations"
     else
         print_check "warn" "Data integrity issues detected" "Run: npm run schema:integrity for details"
     fi
 
     # Run Zod validation check
-    if npm run schema:validate --silent 2>/dev/null | grep -q "ALL ZOD VALIDATIONS PASSED"; then
+    if (cd "$PROJECT_ROOT" && npm run schema:validate --silent 2>/dev/null | grep -q "ALL ZOD VALIDATIONS PASSED"); then
         print_check "pass" "Zod validation verified" "All schemas match live data"
     else
         print_check "warn" "Zod validation issues detected" "Run: npm run schema:validate for details"
     fi
 }
 
-# Function to offer database seeding and schema testing
-offer_database_seeding() {
-    if [ $WARNINGS_COUNT -gt 0 ]; then
-        echo ""
-        echo -e "${YELLOW}Would you like to seed the database now? This will add sample users and data. (y/N) [5s timeout]${NC}"
-        if read -t 5 -r seed_response; then
-            if [[ "$seed_response" =~ ^[Yy]$ ]]; then
-                echo -e "${INFO} ${BLUE}Seeding database...${NC}"
-                if npm run db:seed >/dev/null 2>&1; then
-                    echo -e "${CHECK_MARK} ${GREEN}Database seeded successfully${NC}"
-                    # Re-check user count
-                    local user_count=$(psql -U mohamedrabah -d posalpro_mvp2 -t -c "SELECT count(*) FROM users;" 2>/dev/null | xargs)
-                    if [ -n "$user_count" ] && [ "$user_count" -gt 0 ]; then
-                        echo -e "${CHECK_MARK} ${GREEN}Verified: $user_count users now available${NC}"
-                    fi
-                else
-                    echo -e "${CROSS_MARK} ${RED}Database seeding failed${NC}"
-                    echo -e "${DIM}You can run manually: npm run db:seed${NC}"
-                fi
-            fi
-        else
-            echo -e "${DIM}Timeout reached, skipping database seeding...${NC}"
-        fi
+# Function to start Redis server
+start_redis() {
+    print_header "${DATABASE} Starting Redis Server"
 
-        # Offer schema testing (5 second timeout)
-        echo ""
-        echo -e "${YELLOW}Would you like to run comprehensive schema testing now? (y/N) [5s timeout]${NC}"
-        if read -t 5 -r schema_response; then
-            if [[ "$schema_response" =~ ^[Yy]$ ]]; then
-                echo -e "${INFO} ${BLUE}Running comprehensive schema tests...${NC}"
-                npm run schema:all
+    # Check if Redis is already running
+    if redis-cli ping >/dev/null 2>&1; then
+        print_check "pass" "Redis server is already running"
+        return 0
+    fi
+
+    # Try to start Redis using brew services
+    if command -v brew >/dev/null 2>&1; then
+        echo -e "  ${INFO} ${BLUE}Starting Redis via brew services...${NC}"
+        if brew services start redis >/dev/null 2>&1; then
+            sleep 2
+            if redis-cli ping >/dev/null 2>&1; then
+                print_check "pass" "Redis server started successfully"
+                return 0
+            fi
+        fi
+    fi
+
+    # Try to start Redis directly
+    echo -e "  ${INFO} ${BLUE}Attempting to start Redis directly...${NC}"
+    if command -v redis-server >/dev/null 2>&1; then
+        redis-server --daemonize yes >/dev/null 2>&1
+        sleep 2
+        if redis-cli ping >/dev/null 2>&1; then
+            print_check "pass" "Redis server started successfully"
+            return 0
+        fi
+    fi
+
+    print_check "warn" "Could not start Redis server" "Redis will use in-memory fallback"
+    return 1
+}
+
+# Function to start Python CORS server
+start_python_server() {
+    print_header "${GLOBE} Starting Python CORS Server"
+
+    # Check if Python is available
+    if ! command -v python3 >/dev/null 2>&1 && ! command -v python >/dev/null 2>&1; then
+        print_check "warn" "Python not found" "CORS server for PDF testing will not be available"
+        return 1
+    fi
+
+    local python_cmd="python3"
+    if ! command -v python3 >/dev/null 2>&1; then
+        python_cmd="python"
+    fi
+
+    # Check if CORS server script exists
+    if [ ! -f "public/docs/cors_server.py" ]; then
+        print_check "warn" "CORS server script not found" "Expected: public/docs/cors_server.py"
+        return 1
+    fi
+
+    # Find available port for Python server (starting from 8080)
+    local python_port=8080
+    while lsof -Pi :$python_port -sTCP:LISTEN -t >/dev/null 2>&1; do
+        python_port=$((python_port + 1))
+    done
+
+    echo -e "  ${INFO} ${BLUE}Starting Python CORS server on port $python_port...${NC}"
+
+    # Start Python server in background
+    cd public/docs && $python_cmd cors_server.py $python_port >/dev/null 2>&1 &
+    PYTHON_PID=$!
+    cd ../..
+
+    sleep 2
+
+    # Verify server is running
+    if kill -0 $PYTHON_PID 2>/dev/null; then
+        print_check "pass" "Python CORS server started" "Available at: http://localhost:$python_port/"
+        return 0
+    else
+        print_check "fail" "Python CORS server failed to start"
+        return 1
+    fi
+}
+
+# Function to offer database seeding and schema testing (called after server startup)
+offer_database_operations() {
+    print_header "${DATABASE} Database Operations"
+
+    echo -e "${YELLOW}Would you like to seed the database now? This will add sample users and data. (y/N) [10s timeout]${NC}"
+    if read -t 10 -r seed_response; then
+        if [[ "$seed_response" =~ ^[Yy]$ ]]; then
+            echo -e "${INFO} ${BLUE}Seeding database...${NC}"
+            if (cd "$PROJECT_ROOT" && npm run db:seed >/dev/null 2>&1); then
+                echo -e "${CHECK_MARK} ${GREEN}Database seeded successfully${NC}"
+                # Re-check user count
+                local user_count=$(psql -U mohamedrabah -d posalpro_mvp2 -t -c "SELECT count(*) FROM users;" 2>/dev/null | xargs)
+                if [ -n "$user_count" ] && [ "$user_count" -gt 0 ]; then
+                    echo -e "${CHECK_MARK} ${GREEN}Verified: $user_count users now available${NC}"
+                fi
+            else
+                echo -e "${CROSS_MARK} ${RED}Database seeding failed${NC}"
+                echo -e "${DIM}You can run manually: npm run db:seed${NC}"
             fi
         else
-            echo -e "${DIM}Timeout reached, skipping schema testing...${NC}"
+            echo -e "${DIM}Database seeding skipped${NC}"
         fi
+    else
+        echo -e "${DIM}Timeout reached, skipping database seeding...${NC}"
+    fi
+
+    # Offer schema synchronization (5 second timeout)
+    echo ""
+    echo -e "${YELLOW}Would you like to synchronize database schema now? (y/N) [10s timeout]${NC}"
+    if read -t 10 -r schema_response; then
+        if [[ "$schema_response" =~ ^[Yy]$ ]]; then
+            echo -e "${INFO} ${BLUE}Synchronizing database schema...${NC}"
+            if (cd "$PROJECT_ROOT" && npm run db:push >/dev/null 2>&1); then
+                echo -e "${CHECK_MARK} ${GREEN}Database schema synchronized successfully${NC}"
+            else
+                echo -e "${CROSS_MARK} ${RED}Database schema sync failed${NC}"
+                echo -e "${DIM}You can run manually: npm run db:push${NC}"
+            fi
+        else
+            echo -e "${DIM}Schema synchronization skipped${NC}"
+        fi
+    else
+        echo -e "${DIM}Timeout reached, skipping schema synchronization...${NC}"
     fi
 }
 
 # Main execution function
 main() {
-    clear
-    echo -e "${BOLD}${PURPLE}${ROCKET} PosalPro MVP2 - Smart Development Health Check${NC}"
-    echo -e "${DIM}Comprehensive system validation and startup${NC}"
-    echo ""
+    # Check for services-only flag
+    SERVICES_ONLY=false
+    if [ "$1" = "--services-only" ]; then
+        SERVICES_ONLY=true
+    fi
+    if [ "$SERVICES_ONLY" = true ]; then
+        echo -e "${BOLD}${PURPLE}${ROCKET} PosalPro MVP2 - Services Only Mode${NC}"
+        echo -e "${DIM}Starting Redis and Python servers only${NC}"
+        echo ""
+
+        # Start Redis server
+        start_redis
+
+        # Start Python CORS server
+        start_python_server
+
+        echo ""
+        echo -e "${BOLD}${GREEN}${CHECK_MARK} Services started successfully!${NC}"
+        echo -e "${DIM}Press Ctrl+C to stop all services${NC}"
+
+        # Keep services running
+        while true; do
+            sleep 1
+        done
+    else
+        clear
+        echo -e "${BOLD}${PURPLE}${ROCKET} PosalPro MVP2 - Smart Development Health Check${NC}"
+        echo -e "${DIM}Comprehensive system validation and startup${NC}"
+        echo ""
+    fi
 
     # Kill existing processes
     kill_nextjs_processes
@@ -692,9 +814,6 @@ main() {
     # Display preliminary summary
     display_health_summary
 
-    # Offer database seeding if there are warnings
-    offer_database_seeding
-
     # If critical issues found, ask user to continue (5 second timeout)
     if [ $HEALTH_ISSUES -gt 0 ]; then
         echo -e "${YELLOW}Critical issues detected. Continue anyway? (y/N) [5s timeout]${NC}"
@@ -708,6 +827,12 @@ main() {
             echo -e "${DIM}Note: Server may not function properly with unresolved issues${NC}"
         fi
     fi
+
+    # Start Redis server
+    start_redis
+
+    # Start Python CORS server
+    start_python_server
 
     # Find available port
     echo -e "${INFO} ${BLUE}Finding available port...${NC}"
@@ -743,19 +868,46 @@ main() {
     echo ""
 
     # Start the server in background to run post-startup checks
-    npm run dev &
+    (cd "$PROJECT_ROOT" && npm run dev) &
     SERVER_PID=$!
 
     # Wait a moment then run API health checks
     sleep 3
     check_api_health $available_port
 
+    # Wait a bit more for server to fully initialize
+    echo -e "${INFO} ${BLUE}Waiting for server to fully initialize...${NC}"
+    sleep 5
+
+    # Now offer database operations after server is running
+    offer_database_operations
+
     # Keep the server running
     wait $SERVER_PID
 }
 
 # Handle script interruption
-trap 'echo -e "\n${WARNING} ${YELLOW}Development server stopped${NC}"; exit 0' INT TERM
+cleanup_processes() {
+    echo -e "\n${WARNING} ${YELLOW}Development server stopped${NC}"
+
+    # Kill Python server if it's running
+    if [ -n "$PYTHON_PID" ] && kill -0 $PYTHON_PID 2>/dev/null; then
+        echo -e "${INFO} ${BLUE}Stopping Python CORS server...${NC}"
+        kill $PYTHON_PID 2>/dev/null || true
+        sleep 1
+    fi
+
+    # Kill Next.js server if it's running
+    if [ -n "$SERVER_PID" ] && kill -0 $SERVER_PID 2>/dev/null; then
+        echo -e "${INFO} ${BLUE}Stopping Next.js server...${NC}"
+        kill $SERVER_PID 2>/dev/null || true
+        sleep 1
+    fi
+
+    exit 0
+}
+
+trap cleanup_processes INT TERM
 
 # Run main function
 main "$@"

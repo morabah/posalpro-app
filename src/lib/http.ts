@@ -225,22 +225,67 @@ export class HttpClient {
     } catch (error) {
       const duration = Date.now() - startTime;
 
+      // Handle different types of fetch errors
+      let errorMessage = 'Unknown error';
+      let isRetryable = false;
+
+      if (error instanceof TypeError) {
+        // Network errors, DNS failures, etc.
+        if (error.message.includes('fetch')) {
+          errorMessage = 'Network connection failed';
+          isRetryable = true;
+        } else if (error.message.includes('Load failed')) {
+          errorMessage = 'Resource load failed - possible CORS or network issue';
+          isRetryable = true;
+        } else {
+          errorMessage = `Type error: ${error.message}`;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+        // Consider timeout and network errors as retryable
+        isRetryable =
+          error.message.includes('timeout') ||
+          error.message.includes('network') ||
+          error.message.includes('connection');
+      }
+
       logError('HTTP request failed', {
         component: 'HttpClient',
         operation: 'makeRequest',
         url,
         method: options.method || 'GET',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
+        originalError: error instanceof Error ? error.message : String(error),
+        errorType: error?.constructor?.name,
         duration,
         requestId,
         attempt,
+        isRetryable,
       });
 
-      // Retry logic for network errors
-      if (attempt < (this.config.retries || 1) && this.isRetryableError(error)) {
+      // Retry logic for retryable errors
+      if (attempt < (this.config.retries || 1) && isRetryable) {
         const delay = (this.config.retryDelay || 1000) * attempt;
+        logDebug('Retrying HTTP request', {
+          component: 'HttpClient',
+          operation: 'makeRequest',
+          url,
+          attempt: attempt + 1,
+          delay,
+          requestId,
+        });
         await this.delay(delay);
         return this.makeRequest(url, options, requestId, startTime, attempt + 1);
+      }
+
+      // Create appropriate error for different scenarios
+      if (errorMessage.includes('Load failed')) {
+        throw new HttpClientError(
+          'Service temporarily unavailable - please try again',
+          503,
+          'SERVICE_UNAVAILABLE',
+          requestId
+        );
       }
 
       throw error;

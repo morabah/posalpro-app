@@ -1,799 +1,308 @@
 /**
- * PosalPro MVP2 - Advanced Performance Optimizer
- * Addresses critical performance issues identified in analysis:
- * - setInterval violations from excessive analytics collection
- * - Message handler timeout violations
- * - Memory pressure from continuous monitoring
- * - Authentication session refresh errors
+ * PosalPro MVP2 - Performance Optimizer
+ * Advanced caching and optimization utilities
+ * Addresses TTFB regression and admin API slowness
  */
 
-import { ErrorCodes } from '@/lib/errors/ErrorCodes';
-import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { logger } from '@/lib/logger';
+import { logDebug, logError, logInfo } from '@/lib/logger';
 
-// Type definitions for browser APIs
-interface WindowWithGC extends Window {
-  gc?: () => void;
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+  ttl: number;
 }
 
-interface PerformanceWithMemory extends Performance {
-  memory?: {
-    usedJSHeapSize: number;
-    jsHeapSizeLimit: number;
-  };
-}
-
-interface PerformanceEntryWithInput extends PerformanceEntry {
-  processingStart?: number;
-}
-
-interface PerformanceEntryWithLayoutShift extends PerformanceEntry {
-  hadRecentInput?: boolean;
-  value?: number;
-}
-
-interface PerformanceOptimizationMetrics {
-  // Web Vitals
-  lcp: number; // Largest Contentful Paint
-  fid: number; // First Input Delay
-  cls: number; // Cumulative Layout Shift
-  fcp: number; // First Contentful Paint
-  ttfb: number; // Time to First Byte
-
-  // System Performance
-  memoryUsage: number;
-  renderTime: number;
-  bundleSize: number;
-  apiResponseTime: number;
-
-  // Error Metrics
-  errorRate: number;
-  authErrors: number;
-  timeoutViolations: number;
-
-  // Optimization Score
-  overallScore: number;
-}
-
-interface OptimizationRecommendation {
-  type: 'memory' | 'network' | 'rendering' | 'authentication' | 'monitoring';
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  description: string;
-  implementation: string;
-  expectedImprovement: number;
+interface QueryMetrics {
+  query: string;
+  duration: number;
+  timestamp: number;
+  slow: boolean;
 }
 
 export class PerformanceOptimizer {
-  private static instance: PerformanceOptimizer | null = null;
-  private errorHandlingService: ErrorHandlingService;
-  private isOptimizing = false;
-  private lastOptimization = 0;
-  private metricsBuffer: PerformanceOptimizationMetrics[] = [];
-  private intervalHandles: Map<string, NodeJS.Timeout> = new Map();
+  private static instance: PerformanceOptimizer;
+  private cache = new Map<string, CacheEntry<any>>();
+  private queryMetrics: QueryMetrics[] = [];
+  private readonly SLOW_QUERY_THRESHOLD = 500; // ms
+  private readonly DEFAULT_CACHE_TTL = 30000; // 30 seconds
 
-  // Throttling configuration to prevent violations
-  private readonly throttleConfig = {
-    metricsCollection: 60000, // 1 minute instead of 30 seconds
-    analyticsReporting: 120000, // 2 minutes instead of 30 seconds
-    errorTracking: 30000, // 30 seconds for errors
-    authRetry: 300000, // 5 minutes for auth retry
-    maxBatchSize: 10, // Maximum batched operations
-  };
-
-  private constructor() {
-    this.errorHandlingService = ErrorHandlingService.getInstance();
-    this.initializeOptimizer();
-  }
-
-  public static getInstance(): PerformanceOptimizer {
-    if (PerformanceOptimizer.instance === null) {
+  static getInstance(): PerformanceOptimizer {
+    if (!PerformanceOptimizer.instance) {
       PerformanceOptimizer.instance = new PerformanceOptimizer();
     }
     return PerformanceOptimizer.instance;
   }
 
   /**
-   * Initialize optimizer with throttled monitoring
+   * Cache expensive operations with TTL
    */
-  private initializeOptimizer(): void {
-    try {
-      // Start throttled metrics collection
-      this.startThrottledMonitoring();
+  async withCache<T>(
+    key: string,
+    operation: () => Promise<T>,
+    ttl: number = this.DEFAULT_CACHE_TTL
+  ): Promise<T> {
+    const cached = this.cache.get(key);
 
-      // Setup cleanup intervals
-      this.setupCleanupIntervals();
-
-      logger.info('Performance optimizer initialized with throttling', {
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      logDebug('Cache hit', {
         component: 'PerformanceOptimizer',
-        throttleConfig: this.throttleConfig,
-        timestamp: Date.now(),
+        operation: 'withCache',
+        key,
+        age: Date.now() - cached.timestamp,
       });
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error,
-        'Failed to initialize performance optimizer',
-        ErrorCodes.SYSTEM.INITIALIZATION_FAILED,
-        {
-          component: 'PerformanceOptimizer',
-          operation: 'initializeOptimizer',
-        }
-      );
+      return cached.data;
     }
-  }
 
-  /**
-   * Start throttled monitoring to prevent performance violations
-   */
-  private startThrottledMonitoring(): void {
-    // Metrics collection with longer interval
-    const metricsInterval = setInterval(() => {
-      this.collectMetricsThrottled();
-    }, this.throttleConfig.metricsCollection);
-    this.intervalHandles.set('metrics', metricsInterval);
+    const startTime = Date.now();
+    const result = await operation();
+    const duration = Date.now() - startTime;
 
-    // Analytics reporting with batching
-    const analyticsInterval = setInterval(() => {
-      this.reportAnalyticsBatched();
-    }, this.throttleConfig.analyticsReporting);
-    this.intervalHandles.set('analytics', analyticsInterval);
-
-    // Error monitoring (shorter interval for critical issues)
-    const errorInterval = setInterval(() => {
-      this.monitorErrors();
-    }, this.throttleConfig.errorTracking);
-    this.intervalHandles.set('errors', errorInterval);
-  }
-
-  /**
-   * Collect metrics with intelligent throttling
-   */
-  private async collectMetricsThrottled(): Promise<void> {
-    try {
-      const startTime = performance.now();
-
-      const metrics: PerformanceOptimizationMetrics = {
-        lcp: this.getLCP(),
-        fid: this.getFID(),
-        cls: this.getCLS(),
-        fcp: this.getFCP(),
-        ttfb: this.getTTFB(),
-        memoryUsage: this.getMemoryUsage(),
-        renderTime: this.getRenderTime(),
-        bundleSize: this.getBundleSize(),
-        apiResponseTime: this.getApiResponseTime(),
-        errorRate: this.getErrorRate(),
-        authErrors: this.getAuthErrors(),
-        timeoutViolations: this.getTimeoutViolations(),
-        overallScore: 0, // Will be calculated
-      };
-
-      // Calculate overall optimization score
-      metrics.overallScore = this.calculateOptimizationScore(metrics);
-
-      // Add to buffer for batched processing
-      this.metricsBuffer.push(metrics);
-
-      // Limit buffer size to prevent memory issues
-      if (this.metricsBuffer.length > this.throttleConfig.maxBatchSize) {
-        this.metricsBuffer.shift();
-      }
-
-      const duration = performance.now() - startTime;
-
-      // Only log if collection takes too long
-      if (duration > 50) {
-        logger.warn('Performance metrics collection exceeded 50ms', {
-          duration,
-          component: 'PerformanceOptimizer',
-          operation: 'collectMetricsThrottled',
-        });
-      }
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error,
-        'Failed to collect performance metrics',
-        ErrorCodes.SYSTEM.METRICS_COLLECTION_FAILED,
-        {
-          component: 'PerformanceOptimizer',
-          operation: 'collectMetricsThrottled',
-        }
-      );
-    }
-  }
-
-  /**
-   * Report analytics in batches to reduce frequency
-   */
-  private reportAnalyticsBatched(): void {
-    if (this.metricsBuffer.length === 0) return;
-
-    try {
-      const batchStartTime = performance.now();
-
-      // Calculate averages from buffer
-      const avgMetrics = this.calculateAverageMetrics();
-
-      // Generate optimizations if score is below threshold
-      if (avgMetrics.overallScore < 75) {
-        this.triggerOptimization(avgMetrics);
-      }
-
-      // Clear buffer after processing
-      this.metricsBuffer = [];
-
-      const batchDuration = performance.now() - batchStartTime;
-
-      // Track batch processing performance
-      if (batchDuration > 100) {
-        logger.warn('Analytics batch processing exceeded 100ms', {
-          duration: batchDuration,
-          metricsProcessed: this.metricsBuffer.length,
-          component: 'PerformanceOptimizer',
-        });
-      }
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error,
-        'Failed to report analytics batch',
-        ErrorCodes.ANALYTICS.ANALYTICS_FAILED,
-        {
-          component: 'PerformanceOptimizer',
-          operation: 'reportAnalyticsBatched',
-          bufferSize: this.metricsBuffer.length,
-        }
-      );
-    }
-  }
-
-  /**
-   * Monitor for critical errors that need immediate attention
-   */
-  private monitorErrors(): void {
-    try {
-      const authErrors = this.getAuthErrors();
-      const timeoutViolations = this.getTimeoutViolations();
-
-      // Critical: Authentication errors causing 405 loops
-      if (authErrors > 5) {
-        this.handleAuthenticationLoop();
-      }
-
-      // Critical: Timeout violations causing browser warnings
-      if (timeoutViolations > 3) {
-        this.handleTimeoutViolations();
-      }
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error,
-        'Failed to monitor errors',
-        ErrorCodes.SYSTEM.INTERNAL_ERROR,
-        {
-          component: 'PerformanceOptimizer',
-          operation: 'monitorErrors',
-        }
-      );
-    }
-  }
-
-  /**
-   * Handle authentication session loop issues
-   */
-  private handleAuthenticationLoop(): void {
-    try {
-      logger.warn('Authentication loop detected, implementing cooldown', {
-        component: 'PerformanceOptimizer',
-        operation: 'handleAuthenticationLoop',
-        recommendation: 'Increase session refresh interval',
-      });
-
-      // Implement authentication retry cooldown
-      if (typeof window !== 'undefined') {
-        const authCooldownKey = 'posalpro_auth_cooldown';
-        const lastCooldown = localStorage.getItem(authCooldownKey);
-        const now = Date.now();
-
-        if (!lastCooldown || now - parseInt(lastCooldown) > this.throttleConfig.authRetry) {
-          localStorage.setItem(authCooldownKey, now.toString());
-
-          // Dispatch custom event to pause authentication attempts
-          window.dispatchEvent(
-            new CustomEvent('auth-cooldown-activated', {
-              detail: { duration: this.throttleConfig.authRetry },
-            })
-          );
-        }
-      }
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error,
-        'Failed to handle authentication loop',
-        ErrorCodes.AUTH.SESSION_EXPIRED,
-        {
-          component: 'PerformanceOptimizer',
-          operation: 'handleAuthenticationLoop',
-        }
-      );
-    }
-  }
-
-  /**
-   * Handle timeout violations
-   */
-  private handleTimeoutViolations(): void {
-    try {
-      logger.warn('Timeout violations detected, optimizing intervals', {
-        component: 'PerformanceOptimizer',
-        operation: 'handleTimeoutViolations',
-        recommendation: 'Increase polling intervals',
-      });
-
-      // Dynamically increase intervals to reduce violations
-      this.throttleConfig.metricsCollection = Math.min(
-        this.throttleConfig.metricsCollection * 1.5,
-        300000 // Max 5 minutes
-      );
-
-      this.throttleConfig.analyticsReporting = Math.min(
-        this.throttleConfig.analyticsReporting * 1.5,
-        600000 // Max 10 minutes
-      );
-
-      // Restart monitoring with new intervals
-      this.restartThrottledMonitoring();
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error,
-        'Failed to handle timeout violations',
-        ErrorCodes.SYSTEM.TIMEOUT,
-        {
-          component: 'PerformanceOptimizer',
-          operation: 'handleTimeoutViolations',
-        }
-      );
-    }
-  }
-
-  /**
-   * Restart monitoring with updated intervals
-   */
-  private restartThrottledMonitoring(): void {
-    // Clear existing intervals
-    this.intervalHandles.forEach(handle => {
-      clearInterval(handle);
+    // Cache the result
+    this.cache.set(key, {
+      data: result,
+      timestamp: Date.now(),
+      ttl,
     });
-    this.intervalHandles.clear();
 
-    // Restart with new configuration
-    this.startThrottledMonitoring();
+    // Track performance metrics
+    this.recordQueryMetrics(`cache:${key}`, duration);
+
+    logDebug('Cache miss - operation completed', {
+      component: 'PerformanceOptimizer',
+      operation: 'withCache',
+      key,
+      duration,
+      cached: true,
+    });
+
+    return result;
   }
 
   /**
-   * Trigger comprehensive optimization
+   * Invalidate cache entries
    */
-  private async triggerOptimization(metrics: PerformanceOptimizationMetrics): Promise<void> {
-    if (this.isOptimizing || Date.now() - this.lastOptimization < 60000) {
-      return; // Prevent optimization spam
+  invalidateCache(pattern: string | RegExp): void {
+    if (typeof pattern === 'string') {
+      // Exact match
+      this.cache.delete(pattern);
+    } else {
+      // Regex pattern match
+      for (const key of this.cache.keys()) {
+        if (pattern.test(key)) {
+          this.cache.delete(key);
+        }
+      }
     }
 
-    this.isOptimizing = true;
-    this.lastOptimization = Date.now();
+    logDebug('Cache invalidated', {
+      component: 'PerformanceOptimizer',
+      operation: 'invalidateCache',
+      pattern: typeof pattern === 'string' ? pattern : pattern.toString(),
+    });
+  }
 
-    try {
-      const recommendations = this.generateRecommendations(metrics);
-      await this.implementOptimizations(recommendations);
+  /**
+   * Record query performance metrics
+   */
+  recordQueryMetrics(query: string, duration: number): void {
+    const metrics: QueryMetrics = {
+      query,
+      duration,
+      timestamp: Date.now(),
+      slow: duration > this.SLOW_QUERY_THRESHOLD,
+    };
 
-      logger.info('Performance optimization completed', {
+    this.queryMetrics.push(metrics);
+
+    // Keep only last 100 metrics
+    if (this.queryMetrics.length > 100) {
+      this.queryMetrics.shift();
+    }
+
+    if (metrics.slow) {
+      logInfo('Slow query detected', {
         component: 'PerformanceOptimizer',
-        operation: 'triggerOptimization',
-        score: metrics.overallScore,
-        recommendationsCount: recommendations.length,
+        operation: 'recordQueryMetrics',
+        query,
+        duration,
+        threshold: this.SLOW_QUERY_THRESHOLD,
       });
-    } catch (error) {
-      this.errorHandlingService.processError(
-        error,
-        'Failed to trigger optimization',
-        ErrorCodes.SYSTEM.OPTIMIZATION_FAILED,
-        {
-          component: 'PerformanceOptimizer',
-          operation: 'triggerOptimization',
-          metrics,
-        }
-      );
-    } finally {
-      this.isOptimizing = false;
     }
   }
 
   /**
-   * Generate optimization recommendations
+   * Get performance statistics
    */
-  private generateRecommendations(
-    metrics: PerformanceOptimizationMetrics
-  ): OptimizationRecommendation[] {
-    const recommendations: OptimizationRecommendation[] = [];
+  getPerformanceStats(): {
+    cacheSize: number;
+    slowQueries: QueryMetrics[];
+    averageQueryTime: number;
+    cacheHitRate: number;
+  } {
+    const slowQueries = this.queryMetrics.filter(m => m.slow);
+    const totalQueries = this.queryMetrics.length;
+    const averageQueryTime =
+      totalQueries > 0
+        ? this.queryMetrics.reduce((sum, m) => sum + m.duration, 0) / totalQueries
+        : 0;
 
-    // Memory optimization
-    if (metrics.memoryUsage > 80) {
-      recommendations.push({
-        type: 'memory',
-        severity: 'critical',
-        description: 'High memory usage detected',
-        implementation: 'Implement memory cleanup and reduce buffer sizes',
-        expectedImprovement: 25,
-      });
-    }
+    // Simple cache hit rate estimation (this would need more sophisticated tracking)
+    const cacheHitRate = 0.75; // Placeholder - implement proper tracking
 
-    // Authentication optimization
-    if (metrics.authErrors > 3) {
-      recommendations.push({
-        type: 'authentication',
-        severity: 'high',
-        description: 'Authentication errors causing performance issues',
-        implementation: 'Implement session refresh cooldown and retry logic',
-        expectedImprovement: 30,
-      });
-    }
-
-    // Monitoring optimization
-    if (metrics.timeoutViolations > 2) {
-      recommendations.push({
-        type: 'monitoring',
-        severity: 'high',
-        description: 'Excessive monitoring causing timeout violations',
-        implementation: 'Increase polling intervals and implement batching',
-        expectedImprovement: 40,
-      });
-    }
-
-    // Rendering optimization
-    if (metrics.renderTime > 50) {
-      recommendations.push({
-        type: 'rendering',
-        severity: 'medium',
-        description: 'Slow rendering performance',
-        implementation: 'Optimize component re-renders and memoization',
-        expectedImprovement: 20,
-      });
-    }
-
-    // Network optimization
-    if (metrics.apiResponseTime > 1000) {
-      recommendations.push({
-        type: 'network',
-        severity: 'medium',
-        description: 'Slow API response times',
-        implementation: 'Implement request batching and caching',
-        expectedImprovement: 35,
-      });
-    }
-
-    return recommendations;
+    return {
+      cacheSize: this.cache.size,
+      slowQueries,
+      averageQueryTime,
+      cacheHitRate,
+    };
   }
 
   /**
-   * Implement optimization recommendations
+   * Optimize database queries with connection pooling hints
    */
-  private async implementOptimizations(
-    recommendations: OptimizationRecommendation[]
-  ): Promise<void> {
-    for (const recommendation of recommendations) {
-      try {
-        switch (recommendation.type) {
-          case 'memory':
-            await this.optimizeMemory();
-            break;
-          case 'authentication':
-            await this.optimizeAuthentication();
-            break;
-          case 'monitoring':
-            await this.optimizeMonitoring();
-            break;
-          case 'rendering':
-            await this.optimizeRendering();
-            break;
-          case 'network':
-            await this.optimizeNetwork();
-            break;
-        }
-      } catch (error) {
-        this.errorHandlingService.processError(
-          error,
-          `Failed to implement ${recommendation.type} optimization`,
-          ErrorCodes.SYSTEM.OPTIMIZATION_FAILED,
-          {
+  async optimizeQuery<T>(
+    operation: () => Promise<T>,
+    queryName: string,
+    options: {
+      useCache?: boolean;
+      cacheKey?: string;
+      cacheTtl?: number;
+      priority?: 'low' | 'medium' | 'high';
+    } = {}
+  ): Promise<T> {
+    const {
+      useCache = false,
+      cacheKey = queryName,
+      cacheTtl = this.DEFAULT_CACHE_TTL,
+      priority = 'medium',
+    } = options;
+
+    if (useCache) {
+      return this.withCache(cacheKey, operation, cacheTtl);
+    }
+
+    const startTime = Date.now();
+    const result = await operation();
+    const duration = Date.now() - startTime;
+
+    this.recordQueryMetrics(queryName, duration);
+
+    logDebug('Query executed', {
+      component: 'PerformanceOptimizer',
+      operation: 'optimizeQuery',
+      queryName,
+      duration,
+      priority,
+      slow: duration > this.SLOW_QUERY_THRESHOLD,
+    });
+
+    return result;
+  }
+
+  /**
+   * Batch multiple database operations
+   */
+  async batchOperations<T>(
+    operations: Array<{
+      operation: () => Promise<any>;
+      name: string;
+      priority?: 'low' | 'medium' | 'high';
+    }>
+  ): Promise<T[]> {
+    const startTime = Date.now();
+
+    // Execute operations in parallel with error handling
+    const results = await Promise.allSettled(
+      operations.map(async ({ operation, name }) => {
+        const opStartTime = Date.now();
+        try {
+          const result = await operation();
+          const duration = Date.now() - opStartTime;
+          this.recordQueryMetrics(name, duration);
+          return result;
+        } catch (error) {
+          const duration = Date.now() - opStartTime;
+          logError('Batch operation failed', {
             component: 'PerformanceOptimizer',
-            operation: 'implementOptimizations',
-            recommendationType: recommendation.type,
-          }
-        );
-      }
-    }
-  }
-
-  /**
-   * Memory optimization implementation
-   */
-  private async optimizeMemory(): Promise<void> {
-    // Reduce buffer sizes
-    this.throttleConfig.maxBatchSize = Math.max(5, this.throttleConfig.maxBatchSize - 2);
-
-    // Clear metrics buffer
-    this.metricsBuffer = this.metricsBuffer.slice(-3);
-
-    // Force garbage collection if available
-    if (typeof window !== 'undefined' && 'gc' in window) {
-      (window as WindowWithGC).gc?.();
-    }
-  }
-
-  /**
-   * Authentication optimization implementation
-   */
-  private async optimizeAuthentication(): Promise<void> {
-    // Increase auth retry interval
-    this.throttleConfig.authRetry = Math.min(
-      this.throttleConfig.authRetry * 1.5,
-      900000 // Max 15 minutes
+            operation: 'batchOperations',
+            operationName: name,
+            duration,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          throw error;
+        }
+      })
     );
 
-    // Implement session validation before refresh
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('auth-optimization-applied', {
-          detail: { newInterval: this.throttleConfig.authRetry },
-        })
-      );
-    }
-  }
+    const totalDuration = Date.now() - startTime;
 
-  /**
-   * Monitoring optimization implementation
-   */
-  private async optimizeMonitoring(): Promise<void> {
-    // Increase monitoring intervals
-    this.throttleConfig.metricsCollection *= 1.3;
-    this.throttleConfig.analyticsReporting *= 1.3;
+    // Extract successful results
+    const successfulResults: T[] = [];
+    const failures: any[] = [];
 
-    // Restart with optimized intervals
-    this.restartThrottledMonitoring();
-  }
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        successfulResults.push(result.value);
+      } else {
+        failures.push({
+          operation: operations[index].name,
+          error: result.reason,
+        });
+      }
+    });
 
-  /**
-   * Rendering optimization implementation
-   */
-  private async optimizeRendering(): Promise<void> {
-    // Dispatch event for components to optimize
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('rendering-optimization-requested', {
-          detail: { enableMemoization: true, reduceUpdates: true },
-        })
-      );
-    }
-  }
+    logInfo('Batch operations completed', {
+      component: 'PerformanceOptimizer',
+      operation: 'batchOperations',
+      totalOperations: operations.length,
+      successfulOperations: successfulResults.length,
+      failedOperations: failures.length,
+      totalDuration,
+      averageDuration: totalDuration / operations.length,
+    });
 
-  /**
-   * Network optimization implementation
-   */
-  private async optimizeNetwork(): Promise<void> {
-    // Dispatch event for API client optimization
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('network-optimization-requested', {
-          detail: { enableBatching: true, increaseCaching: true },
-        })
-      );
-    }
-  }
-
-  // Metrics calculation methods
-  private calculateAverageMetrics(): PerformanceOptimizationMetrics {
-    if (this.metricsBuffer.length === 0) {
-      return this.getDefaultMetrics();
-    }
-
-    const avg = (arr: number[]) => arr.reduce((sum, val) => sum + val, 0) / arr.length;
-
-    return {
-      lcp: avg(this.metricsBuffer.map(m => m.lcp)),
-      fid: avg(this.metricsBuffer.map(m => m.fid)),
-      cls: avg(this.metricsBuffer.map(m => m.cls)),
-      fcp: avg(this.metricsBuffer.map(m => m.fcp)),
-      ttfb: avg(this.metricsBuffer.map(m => m.ttfb)),
-      memoryUsage: avg(this.metricsBuffer.map(m => m.memoryUsage)),
-      renderTime: avg(this.metricsBuffer.map(m => m.renderTime)),
-      bundleSize: avg(this.metricsBuffer.map(m => m.bundleSize)),
-      apiResponseTime: avg(this.metricsBuffer.map(m => m.apiResponseTime)),
-      errorRate: avg(this.metricsBuffer.map(m => m.errorRate)),
-      authErrors: avg(this.metricsBuffer.map(m => m.authErrors)),
-      timeoutViolations: avg(this.metricsBuffer.map(m => m.timeoutViolations)),
-      overallScore: avg(this.metricsBuffer.map(m => m.overallScore)),
-    };
-  }
-
-  private calculateOptimizationScore(metrics: PerformanceOptimizationMetrics): number {
-    const weights = {
-      lcp: 0.15,
-      fid: 0.15,
-      cls: 0.1,
-      memory: 0.2,
-      errors: 0.25,
-      rendering: 0.15,
-    };
-
-    const scores = {
-      lcp: Math.max(0, 100 - (metrics.lcp / 2500) * 100),
-      fid: Math.max(0, 100 - (metrics.fid / 100) * 100),
-      cls: Math.max(0, 100 - metrics.cls * 1000),
-      memory: Math.max(0, 100 - metrics.memoryUsage),
-      errors: Math.max(0, 100 - (metrics.errorRate + metrics.authErrors) * 10),
-      rendering: Math.max(0, 100 - (metrics.renderTime / 16) * 100),
-    };
-
-    return Object.entries(weights).reduce((total, [key, weight]) => {
-      return total + scores[key as keyof typeof scores] * weight;
-    }, 0);
-  }
-
-  private setupCleanupIntervals(): void {
-    // Cleanup old data every 5 minutes
-    const cleanupInterval = setInterval(() => {
-      this.cleanupOldData();
-    }, 300000);
-    this.intervalHandles.set('cleanup', cleanupInterval);
-  }
-
-  private cleanupOldData(): void {
-    // Keep only recent metrics
-    this.metricsBuffer = this.metricsBuffer.slice(-5);
-
-    // Clear old localStorage entries
-    if (typeof window !== 'undefined') {
-      const keys = Object.keys(localStorage);
-      keys.forEach(key => {
-        if (key.startsWith('posalpro_perf_') || key.startsWith('posalpro_auth_cooldown')) {
-          const timestamp = localStorage.getItem(key);
-          if (timestamp && Date.now() - parseInt(timestamp) > 3600000) {
-            // 1 hour
-            localStorage.removeItem(key);
-          }
-        }
+    if (failures.length > 0) {
+      logError('Some batch operations failed', {
+        component: 'PerformanceOptimizer',
+        operation: 'batchOperations',
+        failures,
       });
     }
-  }
 
-  // Web Vitals metrics getters
-  private getLCP(): number {
-    return this.getPerformanceEntry('largest-contentful-paint')?.startTime ?? 0;
-  }
-
-  private getFID(): number {
-    const entry = this.getPerformanceEntry('first-input') as PerformanceEntryWithInput;
-    return entry?.processingStart ?? 0;
-  }
-
-  private getCLS(): number {
-    const entries = this.getPerformanceEntries('layout-shift');
-    return entries.reduce((cls, entry) => {
-      const layoutShiftEntry = entry as PerformanceEntryWithLayoutShift;
-      if (!layoutShiftEntry.hadRecentInput) {
-        cls += layoutShiftEntry.value ?? 0;
-      }
-      return cls;
-    }, 0);
-  }
-
-  private getFCP(): number {
-    return this.getPerformanceEntry('first-contentful-paint')?.startTime ?? 0;
-  }
-
-  private getTTFB(): number {
-    const navigation = this.getPerformanceEntry('navigation') as
-      | PerformanceNavigationTiming
-      | undefined;
-    return navigation !== undefined ? navigation.responseStart - navigation.fetchStart : 0;
-  }
-
-  private getMemoryUsage(): number {
-    if (typeof window !== 'undefined' && 'memory' in performance) {
-      const memory = (performance as PerformanceWithMemory).memory;
-      if (memory) {
-        return (memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100;
-      }
-    }
-    return 0;
-  }
-
-  private getRenderTime(): number {
-    const entries = this.getPerformanceEntries('measure');
-    return entries.length > 0 ? entries[entries.length - 1].duration : 0;
-  }
-
-  private getBundleSize(): number {
-    // This would be calculated based on actual bundle analysis
-    return 0;
-  }
-
-  private getApiResponseTime(): number {
-    const apiEntries = this.getPerformanceEntries('resource').filter(entry =>
-      entry.name.includes('/api/')
-    );
-    return apiEntries.length > 0
-      ? apiEntries.reduce((sum, entry) => sum + entry.duration, 0) / apiEntries.length
-      : 0;
-  }
-
-  private getErrorRate(): number {
-    // This would be calculated from error tracking
-    return 0;
-  }
-
-  private getAuthErrors(): number {
-    // Count recent 405 auth errors
-    const entries = this.getPerformanceEntries('resource').filter(entry =>
-      entry.name.includes('/api/auth/session')
-    );
-    return entries.length;
-  }
-
-  private getTimeoutViolations(): number {
-    // This would be tracked from timeout violations
-    return 0;
-  }
-
-  private getPerformanceEntry(type: string): PerformanceEntry | undefined {
-    if (typeof window === 'undefined') return undefined;
-    const entries = performance.getEntriesByType(type);
-    return entries[entries.length - 1];
-  }
-
-  private getPerformanceEntries(type: string): PerformanceEntry[] {
-    if (typeof window === 'undefined') return [];
-    return performance.getEntriesByType(type);
-  }
-
-  private getDefaultMetrics(): PerformanceOptimizationMetrics {
-    return {
-      lcp: 0,
-      fid: 0,
-      cls: 0,
-      fcp: 0,
-      ttfb: 0,
-      memoryUsage: 0,
-      renderTime: 0,
-      bundleSize: 0,
-      apiResponseTime: 0,
-      errorRate: 0,
-      authErrors: 0,
-      timeoutViolations: 0,
-      overallScore: 100,
-    };
+    return successfulResults;
   }
 
   /**
-   * Public API for getting current performance state
+   * Clear all caches (useful for testing or cache invalidation)
    */
-  public getPerformanceMetrics(): PerformanceOptimizationMetrics {
-    return this.calculateAverageMetrics();
-  }
+  clearCache(): void {
+    const cacheSize = this.cache.size;
+    this.cache.clear();
 
-  /**
-   * Public API for manual optimization trigger
-   */
-  public async optimize(): Promise<void> {
-    const metrics = this.getPerformanceMetrics();
-    await this.triggerOptimization(metrics);
-  }
-
-  /**
-   * Cleanup on destroy
-   */
-  public destroy(): void {
-    this.intervalHandles.forEach(handle => {
-      clearInterval(handle);
+    logInfo('Cache cleared', {
+      component: 'PerformanceOptimizer',
+      operation: 'clearCache',
+      previousCacheSize: cacheSize,
     });
-    this.intervalHandles.clear();
-    this.metricsBuffer = [];
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): {
+    size: number;
+    entries: Array<{ key: string; age: number; ttl: number }>;
+  } {
+    const entries = Array.from(this.cache.entries()).map(([key, entry]) => ({
+      key,
+      age: Date.now() - entry.timestamp,
+      ttl: entry.ttl,
+    }));
+
+    return {
+      size: this.cache.size,
+      entries,
+    };
   }
 }
 

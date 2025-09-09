@@ -67,57 +67,55 @@ async function main() {
   }
 
   // ========================================
-  // ENTITLEMENTS: Seed dev entitlements for default tenant
+  // ENTITLEMENTS: Seed all entitlements for default tenant based on plan tiers
   // ========================================
-  console.log('🔐 Ensuring default entitlements for tenant_default...');
+  console.log('🔐 Setting up entitlements for tenant_default...');
   const devTenantId = 'tenant_default';
-  const entitlementKeys: Array<{ key: string; value?: string | null }> = [
-    { key: 'feature.products.create' },
-    { key: 'feature.products.advanced' },
-    { key: 'feature.products.analytics' },
-    { key: 'feature.analytics.dashboard' },
-    { key: 'feature.analytics.enhanced' },
-    { key: 'feature.analytics.insights' },
-    { key: 'feature.analytics.users' },
-    { key: 'feature.search.suggestions' },
-    { key: 'feature.users.activity' },
-  ];
 
-  for (const ent of entitlementKeys) {
-    const exists = await prisma.entitlement.findFirst({
-      where: { tenantId: devTenantId, key: ent.key },
-      select: { id: true },
-    });
-    if (!exists) {
-      await prisma.entitlement.create({
-        data: {
-          tenantId: devTenantId,
-          key: ent.key,
-          enabled: true,
-          value: ent.value ?? null,
-        },
-      });
-      console.log(`  ✅ Entitlement created: ${ent.key}`);
-    }
-  }
-  console.log('✅ Default entitlements ensured');
+  // Get all unique entitlement keys from all plan tiers
+  const allEntitlementKeys = new Set<string>();
+  Object.values(PLAN_TIER_ENTITLEMENTS).forEach(keys => {
+    keys.forEach(key => allEntitlementKeys.add(key));
+  });
 
-  // Align enabled entitlements exactly to FREE plan mapping
-  const freeEntitlements = new Set(PLAN_TIER_ENTITLEMENTS['FREE'] || []);
-  // Ensure all FREE entitlements exist and are enabled
-  for (const key of freeEntitlements) {
+  // Create all entitlements (initially disabled)
+  for (const key of allEntitlementKeys) {
     await prisma.entitlement.upsert({
       where: { tenantId_key: { tenantId: devTenantId, key } },
-      update: { enabled: true, value: null },
-      create: { tenantId: devTenantId, key, enabled: true },
+      update: { enabled: false, value: null },
+      create: { tenantId: devTenantId, key, enabled: false, value: null },
     });
   }
-  // Disable any entitlement not part of FREE
-  await prisma.entitlement.updateMany({
-    where: { tenantId: devTenantId, key: { notIn: Array.from(freeEntitlements) } },
-    data: { enabled: false, value: null },
+
+  // Enable entitlements for FREE plan
+  const freeEntitlements = PLAN_TIER_ENTITLEMENTS['FREE'] || [];
+  for (const key of freeEntitlements) {
+    await prisma.entitlement.updateMany({
+      where: { tenantId: devTenantId, key },
+      data: { enabled: true },
+    });
+    console.log(`  ✅ FREE entitlement enabled: ${key}`);
+  }
+
+  console.log(`✅ All entitlements set up (${allEntitlementKeys.size} total, ${freeEntitlements.length} enabled for FREE plan)`);
+
+  // Verify entitlement setup
+  const finalEntitlements = await prisma.entitlement.findMany({
+    where: { tenantId: devTenantId },
+    select: { key: true, enabled: true },
   });
-  console.log('✅ Entitlements aligned to FREE plan mapping');
+
+  const enabledCount = finalEntitlements.filter(e => e.enabled).length;
+  const disabledCount = finalEntitlements.filter(e => !e.enabled).length;
+
+  console.log(`📊 Entitlement verification: ${enabledCount} enabled, ${disabledCount} disabled`);
+
+  // Log entitlement status summary
+  const enabledEntitlements = finalEntitlements.filter(e => e.enabled).map(e => e.key);
+  const disabledEntitlements = finalEntitlements.filter(e => !e.enabled).map(e => e.key);
+
+  console.log(`✅ Enabled entitlements: ${enabledEntitlements.join(', ')}`);
+  console.log(`❌ Disabled entitlements: ${disabledEntitlements.join(', ')}`);
 
   // ========================================
   // BILLING: Ensure FREE plan + active subscription for default tenant
@@ -1930,6 +1928,7 @@ async function main() {
       category: ['Cloud Infrastructure'],
       isActive: true,
       tags: ['cloud', 'infrastructure', 'enterprise', 'scalable'],
+      datasheetPath: 'https://www.example.com/datasheets/sahab-cloud-platform.pdf',
     },
     {
       name: 'Bayan Analytics Suite',
@@ -1939,6 +1938,7 @@ async function main() {
       category: ['Analytics'],
       isActive: true,
       tags: ['ai', 'analytics', 'business-intelligence', 'machine-learning'],
+      datasheetPath: '/docs/sample.pdf',
     },
     {
       name: 'Amn Security Monitoring',
@@ -1948,6 +1948,7 @@ async function main() {
       category: ['Security'],
       isActive: true,
       tags: ['security', 'monitoring', 'threat-detection', 'compliance'],
+      datasheetPath: 'https://www.example.com/datasheets/security-monitoring-guide.pdf',
     },
     {
       name: 'Rabt Data Integration',
@@ -1957,6 +1958,7 @@ async function main() {
       category: ['Data Management'],
       isActive: true,
       tags: ['data-integration', 'etl', 'data-warehouse', 'enterprise'],
+      datasheetPath: '/docs/cors_server.py',
     },
     {
       name: 'Jawwal Mobile Framework',
@@ -1966,6 +1968,7 @@ async function main() {
       category: ['Development Tools'],
       isActive: true,
       tags: ['mobile', 'development', 'cross-platform', 'framework'],
+      datasheetPath: 'https://www.example.com/datasheets/mobile-framework-doc.pdf',
     },
     {
       name: 'Raqib IoT Management',
@@ -1975,6 +1978,7 @@ async function main() {
       category: ['IoT'],
       isActive: true,
       tags: ['iot', 'device-management', 'analytics', 'connectivity'],
+      datasheetPath: '/docs/UL-2BIR40M4-IP.pdf',
     },
   ];
 
@@ -1992,6 +1996,7 @@ async function main() {
         category: productData.category,
         tags: productData.tags,
         isActive: productData.isActive,
+        datasheetPath: productData.datasheetPath || null,
       },
     });
 

@@ -147,6 +147,53 @@ npm run app:cli db proposal count '{"where":{"status":"ACCEPTED"}}'
 npm run app:cli db user count '{"where":{"department":"Quality Assurance"}}'
 ```
 
+## 🔐 **Entitlement System**
+
+The seed data creates a comprehensive entitlement system with 9 features across 3 plan tiers:
+
+### **Plan Tiers & Features**
+
+| Feature | FREE | PRO | ENTERPRISE |
+|---------|------|-----|------------|
+| Analytics Dashboard | ✅ | ✅ | ✅ |
+| Analytics Insights | ❌ | ✅ | ✅ |
+| Analytics Enhanced | ❌ | ❌ | ✅ |
+| Analytics Users | ❌ | ✅ | ✅ |
+| Products Create | ❌ | ✅ | ✅ |
+| Products Advanced | ❌ | ✅ | ✅ |
+| Products Analytics | ❌ | ✅ | ✅ |
+| Search Suggestions | ❌ | ✅ | ✅ |
+| Users Activity | ❌ | ✅ | ✅ |
+
+### **Default Configuration**
+
+- **FREE Plan**: Only `feature.analytics.dashboard` enabled
+- **PRO Plan**: 8 features enabled (all except enhanced analytics)
+- **ENTERPRISE Plan**: All 9 features enabled
+
+### **Entitlement Management**
+
+```typescript
+import {
+  hasEntitlement,
+  getEntitlementsForPlan,
+  getMinimumTierForEntitlement,
+  getUpgradeEntitlements
+} from '@/lib/billing/entitlementMapping';
+
+// Check if FREE plan has analytics dashboard
+hasEntitlement('FREE', 'feature.analytics.dashboard'); // true
+
+// Get all entitlements for PRO plan
+getEntitlementsForPlan('PRO'); // ['feature.analytics.dashboard', ...]
+
+// Find minimum tier needed for enhanced analytics
+getMinimumTierForEntitlement('feature.analytics.enhanced'); // 'ENTERPRISE'
+
+// Get features available in higher tiers
+getUpgradeEntitlements('FREE'); // All PRO/ENTERPRISE features
+```
+
 ## 📈 **Analytics & Reporting**
 
 ### **Proposal Funnel**

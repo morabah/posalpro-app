@@ -50,6 +50,12 @@ import {
 // Role Management Component
 import RoleManager from '@/features/admin/components/RoleManager';
 
+// Service Status Monitor Component
+import ServiceStatusMonitor from '@/features/admin/components/ServiceStatusMonitor';
+
+// Performance Monitor Component
+import PerformanceMonitor from '@/features/admin/components/PerformanceMonitor';
+
 // Types
 type AdminTabType =
   | 'overview'
@@ -367,76 +373,86 @@ export function AdminSystemClient() {
       {/* Content Area */}
       <div className="space-y-6">
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="space-y-6">
             {/* System Metrics Cards */}
-            {metricsLoading ? (
-              <div className="col-span-full flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-gray-600">Loading metrics...</span>
-              </div>
-            ) : metricsError ? (
-              <div className="col-span-full">
-                <Card className="p-6">
-                  <div className="flex items-center">
-                    <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mr-2" />
-                    <div>
-                      <h3 className="text-sm font-medium text-red-800">Error Loading Metrics</h3>
-                      <p className="text-sm text-red-600 mt-1">
-                        {metricsError.message || 'Failed to load system metrics'}
-                      </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {metricsLoading ? (
+                <div className="col-span-full flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-2 text-gray-600">Loading metrics...</span>
+                </div>
+              ) : metricsError ? (
+                <div className="col-span-full">
+                  <Card className="p-6">
+                    <div className="flex items-center">
+                      <ExclamationTriangleIcon className="h-5 w-5 text-red-500 mr-2" />
+                      <div>
+                        <h3 className="text-sm font-medium text-red-800">Error Loading Metrics</h3>
+                        <p className="text-sm text-red-600 mt-1">
+                          {metricsError.message || 'Failed to load system metrics'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              </div>
-            ) : (
-              <>
-                <Card className="p-6">
-                  <div className="flex items-center">
-                    <UsersIcon className="h-8 w-8 text-blue-600" />
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">Total Users</p>
-                      <p className="text-2xl font-bold text-gray-900">{metrics?.totalUsers || 0}</p>
+                  </Card>
+                </div>
+              ) : (
+                <>
+                  <Card className="p-6">
+                    <div className="flex items-center">
+                      <UsersIcon className="h-8 w-8 text-blue-600" />
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Total Users</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {metrics?.totalUsers || 0}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
 
-                <Card className="p-6">
-                  <div className="flex items-center">
-                    <CheckCircleIcon className="h-8 w-8 text-green-600" />
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">Active Users</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {metrics?.activeUsers || 0}
-                      </p>
+                  <Card className="p-6">
+                    <div className="flex items-center">
+                      <CheckCircleIcon className="h-8 w-8 text-green-600" />
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Active Users</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {metrics?.activeUsers || 0}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
 
-                <Card className="p-6">
-                  <div className="flex items-center">
-                    <ShieldCheckIcon className="h-8 w-8 text-purple-600" />
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">Total Roles</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {metrics?.totalProposals || 0}
-                      </p>
+                  <Card className="p-6">
+                    <div className="flex items-center">
+                      <ShieldCheckIcon className="h-8 w-8 text-purple-600" />
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Total Roles</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {metrics?.totalProposals || 0}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
 
-                <Card className="p-6">
-                  <div className="flex items-center">
-                    <CogIcon className="h-8 w-8 text-orange-600" />
-                    <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">Response Time</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {metrics?.responseTime ? `${metrics.responseTime}ms` : 'N/A'}
-                      </p>
+                  <Card className="p-6">
+                    <div className="flex items-center">
+                      <CogIcon className="h-8 w-8 text-orange-600" />
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Response Time</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {metrics?.responseTime ? `${metrics.responseTime}ms` : 'N/A'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              </>
-            )}
+                  </Card>
+                </>
+              )}
+            </div>
+
+            {/* Service Status Monitor */}
+            <ServiceStatusMonitor />
+
+            {/* Performance Monitor */}
+            <PerformanceMonitor />
           </div>
         )}
 

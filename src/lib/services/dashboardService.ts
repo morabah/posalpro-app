@@ -93,32 +93,54 @@ export class DashboardService {
       const tenantFilter =
         tenant.tenantId !== 'tenant_default' ? { tenantId: tenant.tenantId } : {};
 
-      // Individual queries to isolate issues
-      const proposalStats = await prisma.proposal.groupBy({
-        by: ['status'],
-        _count: { id: true },
-        _sum: { totalValue: true },
-        where: tenantFilter,
-      });
+      // 🚀 PERFORMANCE OPTIMIZATION: Single SQL aggregation query
+      // Replace 3 separate queries with 1 efficient SQL query
+      const aggregatedData = await prisma.$queryRaw`
+        SELECT
+          json_build_object(
+            'total_proposals', (SELECT COUNT(*) FROM proposals WHERE ${tenant.tenantId}::text = 'tenant_default' OR "tenantId" = ${tenant.tenantId}),
+            'total_customers', (SELECT COUNT(*) FROM customers WHERE ${tenant.tenantId}::text = 'tenant_default' OR "tenantId" = ${tenant.tenantId}),
+            'accepted_proposals', (SELECT COUNT(*) FROM proposals WHERE status = 'ACCEPTED' AND (${tenant.tenantId}::text = 'tenant_default' OR "tenantId" = ${tenant.tenantId})),
+            'total_revenue', (SELECT COALESCE(SUM("totalValue"), 0) FROM proposals WHERE status = 'ACCEPTED' AND (${tenant.tenantId}::text = 'tenant_default' OR "tenantId" = ${tenant.tenantId})),
+            'proposal_status_breakdown', (
+              SELECT json_agg(
+                json_build_object(
+                  'status', status,
+                  'count', count,
+                  'total_value', total_value
+                )
+              )
+              FROM (
+                SELECT
+                  status,
+                  COUNT(*) as count,
+                  COALESCE(SUM("totalValue"), 0) as total_value
+                FROM proposals
+                WHERE ${tenant.tenantId}::text = 'tenant_default' OR "tenantId" = ${tenant.tenantId}
+                GROUP BY status
+              ) status_data
+            )
+          ) as aggregated_metrics
+      `;
 
-      const customerStats = await prisma.customer.aggregate({
-        where: tenantFilter,
-        _count: { id: true },
-      });
+      const aggregatedMetrics =
+        Array.isArray(aggregatedData) && aggregatedData.length > 0
+          ? aggregatedData[0].aggregated_metrics
+          : {
+              total_proposals: 0,
+              total_customers: 0,
+              accepted_proposals: 0,
+              total_revenue: 0,
+              proposal_status_breakdown: [],
+            };
 
-      const revenueData = await prisma.proposal.aggregate({
-        where: {
-          ...tenantFilter,
-          status: 'ACCEPTED',
-        },
-        _sum: { totalValue: true },
-        _count: { id: true },
-      });
+      // Extract values from aggregated data
+      const totalProposals = Number(aggregatedMetrics.total_proposals) || 0;
+      const totalCustomers = Number(aggregatedMetrics.total_customers) || 0;
+      const acceptedProposals = Number(aggregatedMetrics.accepted_proposals) || 0;
+      const totalRevenue = Number(aggregatedMetrics.total_revenue) || 0;
 
-      // Calculate metrics
-      const totalProposals = proposalStats.reduce((sum, stat) => sum + stat._count.id, 0);
-      const totalRevenue = Number(revenueData._sum.totalValue) || 0;
-      const acceptedProposals = revenueData._count.id;
+      // Calculate derived metrics
       const conversionRate = totalProposals > 0 ? (acceptedProposals / totalProposals) * 100 : 0;
       const averageDealSize = acceptedProposals > 0 ? totalRevenue / acceptedProposals : 0;
 
@@ -127,13 +149,15 @@ export class DashboardService {
         totalProposals,
         conversionRate,
         averageDealSize: Number(averageDealSize),
-        activeCustomers: customerStats._count.id,
-        newCustomersThisMonth: customerStats._count.id, // Simplified - should calculate properly
-        proposalStatusBreakdown: proposalStats.map(stat => ({
-          status: stat.status,
-          count: stat._count.id,
-          totalValue: Number(stat._sum.totalValue || 0),
-        })),
+        activeCustomers: totalCustomers,
+        newCustomersThisMonth: totalCustomers, // Simplified - should calculate properly
+        proposalStatusBreakdown: Array.isArray(aggregatedMetrics.proposal_status_breakdown)
+          ? aggregatedMetrics.proposal_status_breakdown.map((stat: any) => ({
+              status: stat.status,
+              count: Number(stat.count) || 0,
+              totalValue: Number(stat.total_value) || 0,
+            }))
+          : [],
       };
 
       logInfo('Dashboard Service: Executive metrics calculated', {
@@ -381,13 +405,13 @@ export class DashboardService {
       });
 
       // Get dashboard data sequentially to isolate issues
-      const metrics = await this.getExecutiveMetrics(filters);
+      const executiveMetrics = await this.getExecutiveMetrics(filters);
       const revenueChart = await this.getRevenueChart(filters);
       const teamPerformance = await this.getTeamPerformance(filters);
       const pipelineStages = await this.getPipelineStages(filters);
 
       const dashboardData = {
-        metrics,
+        metrics: executiveMetrics,
         revenueChart,
         teamPerformance,
         pipelineStages,
@@ -396,7 +420,7 @@ export class DashboardService {
       logInfo('Dashboard Service: Executive dashboard data retrieved', {
         component: 'DashboardService',
         operation: 'getExecutiveDashboard',
-        metricsCount: Object.keys(metrics).length,
+        metricsCount: Object.keys(executiveMetrics).length,
         chartPoints: revenueChart.length,
         teamMembers: teamPerformance.length,
         pipelineStages: pipelineStages.length,
@@ -471,7 +495,9 @@ export class DashboardService {
         approved_proposals: Number(proposalDataRaw?.proposals_with_value ?? 0),
         recent_proposals: Number(proposalDataRaw?.proposals_with_value ?? 0),
         previous_proposals: 0,
-        revenue_sum: proposalDataRaw?.revenue_sum ? parseFloat(String(proposalDataRaw.revenue_sum)) : 0,
+        revenue_sum: proposalDataRaw?.revenue_sum
+          ? parseFloat(String(proposalDataRaw.revenue_sum))
+          : 0,
       };
 
       const customerDataRaw = customersAgg as CustomerAggregationData;
