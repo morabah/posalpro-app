@@ -1,4 +1,4 @@
-import CustomerList_new from '@/components/customers/CustomerList';
+import { CustomerListOptimized } from '@/components/customers/CustomerList';
 import { Metadata } from 'next';
 import { Suspense } from 'react';
 
@@ -13,18 +13,9 @@ export default function CustomersNewPage() {
     <div className="container mx-auto p-6">
       {/* Static shell is server-rendered */}
       <Suspense fallback={<CustomerListSkeleton />}>
-        <CustomerListClient />
+        <CustomerListOptimized />
       </Suspense>
     </div>
-  );
-}
-
-// Client Component wrapper
-function CustomerListClient() {
-  return (
-    <Suspense fallback={<CustomerListSkeleton />}>
-      <CustomerList_new />
-    </Suspense>
   );
 }
 

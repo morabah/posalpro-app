@@ -2,7 +2,7 @@
 import { ApiResponse } from '@/lib/api/response';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { http } from '@/lib/http';
-import { logDebug, logInfo } from '@/lib/logger';
+import { logDebug, logError, logInfo } from '@/lib/logger';
 
 // Import consolidated schemas
 import {
@@ -266,6 +266,60 @@ export class CustomerService {
         }
       );
       throw processed;
+    }
+  }
+
+  // Customer statistics
+  async getCustomerStats(): Promise<{
+    total: number;
+    byStatus: Record<string, number>;
+    byTier: Record<string, number>;
+    totalRevenue: number;
+    averageRevenue: number;
+  }> {
+    logDebug('Fetching customer stats', {
+      component: 'CustomerService',
+      operation: 'getCustomerStats',
+    });
+
+    try {
+      const response = await http.get<{
+        total: number;
+        byStatus: Record<string, number>;
+        byTier: Record<string, number>;
+        totalRevenue: number;
+        averageRevenue: number;
+      }>(`${this.baseUrl}/stats`);
+
+      logInfo('Customer stats fetched successfully', {
+        component: 'CustomerService',
+        operation: 'getCustomerStats',
+        total: response.total,
+      });
+
+      return response;
+    } catch (error) {
+      logError(
+        'Failed to fetch customer stats',
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          component: 'CustomerService',
+          operation: 'getCustomerStats',
+        }
+      );
+
+      const processed = this.errorHandlingService.processError(
+        error,
+        'Failed to fetch customer stats',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'CustomerService',
+          operation: 'getCustomerStats',
+        }
+      );
+      throw processed;
+
+      throw error;
     }
   }
 }

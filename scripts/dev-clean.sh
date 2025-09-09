@@ -690,6 +690,11 @@ start_python_server() {
         return 1
     fi
 
+    # Kill any existing Python CORS servers before starting a new one
+    echo -e "  ${INFO} ${BLUE}Cleaning up existing Python CORS servers...${NC}"
+    pkill -f "cors_server.py" >/dev/null 2>&1 || true
+    sleep 1
+
     # Find available port for Python server (starting from 8080)
     local python_port=8080
     while lsof -Pi :$python_port -sTCP:LISTEN -t >/dev/null 2>&1; do

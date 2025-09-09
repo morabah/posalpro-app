@@ -11,8 +11,35 @@ import React, { Suspense, useCallback, useEffect, useState } from 'react';
 // Dynamic imports for PDF and Word document libraries
 // ✅ NOTE: PDF.js worker is now configured globally in QueryProvider
 const PDFViewer = React.lazy(() =>
-  import('react-pdf').then(module => {
-    // Worker is now configured globally - just log current configuration
+  import('react-pdf').then(async module => {
+    // Wait for worker to be properly configured
+    const waitForWorker = () => {
+      return new Promise<void>(resolve => {
+        if (module.pdfjs.GlobalWorkerOptions.workerSrc) {
+          resolve();
+        } else {
+          // Wait a bit and check again
+          setTimeout(() => {
+            if (module.pdfjs.GlobalWorkerOptions.workerSrc) {
+              resolve();
+            } else {
+              // Configure worker if not already configured
+              const cacheBuster = Date.now();
+              const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
+              module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+              console.log('[DEBUG] DocumentPreview: PDF worker configured locally', {
+                workerUrl,
+                cacheBuster,
+              });
+              resolve();
+            }
+          }, 100);
+        }
+      });
+    };
+
+    await waitForWorker();
+
     console.log('[DEBUG] DocumentPreview: PDF worker status', {
       workerSrc: module.pdfjs.GlobalWorkerOptions.workerSrc,
       configured: !!module.pdfjs.GlobalWorkerOptions.workerSrc,
@@ -141,7 +168,7 @@ export function DocumentPreview({
   className = '',
 }: DocumentPreviewProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [pdfDocument, setPdfDocument] = useState<any>(null);
+  const [, setPdfDocument] = useState<any>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number>(0);
   const [loadStartTime, setLoadStartTime] = useState<number>(0);
@@ -247,7 +274,32 @@ export function DocumentPreview({
         timestamp: new Date().toISOString(),
       });
 
-      setPdfError(error.message);
+      // Check if this is a messageHandler error and provide specific handling
+      const isMessageHandlerError =
+        error.message.includes('messageHandler') || error.message.includes('sendWithPromise');
+
+      if (isMessageHandlerError) {
+        console.log(
+          '[DEBUG] DocumentPreview: MessageHandler error detected - attempting recovery',
+          {
+            productId,
+            productName,
+            datasheetPath,
+          }
+        );
+
+        // Try to reconfigure the worker and retry
+        setTimeout(() => {
+          console.log('[DEBUG] DocumentPreview: Retrying PDF load after messageHandler error');
+          setPdfError(null);
+          setLoadStartTime(performance.now());
+        }, 1000);
+
+        setPdfError('PDF worker communication error. Retrying...');
+      } else {
+        setPdfError(error.message);
+      }
+
       logError('PDF document loading failed', {
         component: 'DocumentPreview',
         operation: 'handlePdfLoadError',
@@ -255,6 +307,7 @@ export function DocumentPreview({
         productName,
         datasheetPath,
         error: error.message,
+        isMessageHandlerError,
       });
 
       analytics.trackOptimized(
@@ -265,6 +318,7 @@ export function DocumentPreview({
           productName,
           fileType: 'pdf',
           error: error.message,
+          isMessageHandlerError,
           userStory: 'US-4.1',
           hypothesis: 'H5',
         },

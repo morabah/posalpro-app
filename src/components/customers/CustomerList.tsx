@@ -7,10 +7,11 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
+import type { Customer } from '@/features/customers';
 import { useDeleteCustomersBulk, useInfiniteCustomers } from '@/features/customers/hooks';
+import { useUnifiedCustomerData } from '@/features/customers/hooks/useCustomers';
 import { analytics } from '@/lib/analytics';
 import { logError } from '@/lib/logger';
-import { toast } from 'sonner';
 import {
   customerSelectors,
   CustomerSortBy,
@@ -20,9 +21,9 @@ import {
   useCustomerSelection,
   useCustomerStore,
 } from '@/lib/store/customerStore';
-import type { Customer } from '@/features/customers';
 import { useRouter } from 'next/navigation';
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 // Customer List Header Component
 function CustomerListHeader() {
@@ -50,11 +51,15 @@ function CustomerListHeader() {
               'H4'
             );
           } catch (error) {
-            logError('Bulk delete failed', error instanceof Error ? error : new Error(String(error)), {
-              component: 'CustomerList',
-              operation: 'bulkDelete',
-              selectedIdsCount: selectedIds.length,
-            });
+            logError(
+              'Bulk delete failed',
+              error instanceof Error ? error : new Error(String(error)),
+              {
+                component: 'CustomerList',
+                operation: 'bulkDelete',
+                selectedIdsCount: selectedIds.length,
+              }
+            );
           }
         },
       },
@@ -403,6 +408,305 @@ function CustomerTable() {
   );
 }
 
+// ====================
+// Optimized Customer List Header Component
+// ====================
+function CustomerListHeaderOptimized({ stats }: { stats: any }) {
+  const router = useRouter();
+  const selectedIds: string[] = []; // We'll manage this locally for now
+
+  const selectedCount = selectedIds.length;
+  const hasSelection = selectedCount > 0;
+
+  const handleCreateCustomer = useCallback(() => {
+    analytics.trackOptimized(
+      'customer_create_initiated',
+      { source: 'customer_list' },
+      'US-2.1',
+      'H3'
+    );
+    router.push('/customers/create');
+  }, [router]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.length === 0) return;
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${selectedIds.length} customer(s)? This action cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      await deleteBulk.mutateAsync(selectedIds);
+      analytics.trackOptimized(
+        'customers_bulk_deleted',
+        {
+          count: selectedIds.length,
+        },
+        'US-2.1',
+        'H3'
+      );
+    } catch (error) {
+      logError('Bulk delete failed', error instanceof Error ? error : new Error(String(error)), {
+        component: 'CustomerListHeaderOptimized',
+        operation: 'bulkDelete',
+        selectedIdsCount: selectedIds.length,
+      });
+    }
+  }, []);
+
+  return (
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">Customers</h1>
+        <p className="text-gray-600">Manage your customer relationships</p>
+        {stats?.data && (
+          <div className="mt-2 text-sm text-gray-500">
+            {stats.data.total} customers • {stats.data.byStatus.ACTIVE || 0} active
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3">
+        {hasSelection && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">{selectedCount} selected</span>
+            <Button variant="danger" size="sm" onClick={handleBulkDelete}>
+              Delete Selected
+            </Button>
+          </div>
+        )}
+
+        <Button variant="primary" onClick={handleCreateCustomer}>
+          Add Customer
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ====================
+// Optimized Customer Filters Component
+// ====================
+function CustomerFiltersOptimized({
+  onFilterChange,
+  onClearFilters,
+  customerCount,
+}: {
+  onFilterChange: (key: string, value: string) => void;
+  onClearFilters: () => void;
+  customerCount: number;
+}) {
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [localFilters, setLocalFilters] = useState({
+    search: '',
+    status: '',
+    tier: '',
+  });
+
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(localFilters.search), 250);
+    return () => clearTimeout(t);
+  }, [localFilters.search]);
+
+  const handleSearchChange = useCallback(
+    (searchVal: string) => {
+      setLocalFilters(prev => ({ ...prev, search: searchVal }));
+      onFilterChange('search', searchVal);
+    },
+    [onFilterChange]
+  );
+
+  const handleStatusChange = useCallback(
+    (value: string) => {
+      setLocalFilters(prev => ({ ...prev, status: value }));
+      onFilterChange('status', value);
+    },
+    [onFilterChange]
+  );
+
+  const handleTierChange = useCallback(
+    (value: string) => {
+      setLocalFilters(prev => ({ ...prev, tier: value }));
+      onFilterChange('tier', value);
+    },
+    [onFilterChange]
+  );
+
+  const hasActiveFilters = localFilters.status || localFilters.tier || localFilters.search;
+
+  return (
+    <Card className="p-4 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-sm text-gray-600">{customerCount} customers found</div>
+        {hasActiveFilters && (
+          <Button variant="secondary" size="sm" onClick={onClearFilters}>
+            Clear Filters
+          </Button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+          <Input
+            placeholder="Search customers..."
+            value={localFilters.search}
+            onChange={e => handleSearchChange(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <Select
+            value={localFilters.status}
+            onChange={value => handleStatusChange(value || '')}
+            options={[
+              { value: '', label: 'All Statuses' },
+              { value: 'ACTIVE', label: 'Active' },
+              { value: 'INACTIVE', label: 'Inactive' },
+              { value: 'PROSPECT', label: 'Prospect' },
+            ]}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tier</label>
+          <Select
+            value={localFilters.tier}
+            onChange={value => handleTierChange(value || '')}
+            options={[
+              { value: '', label: 'All Tiers' },
+              { value: 'STANDARD', label: 'Standard' },
+              { value: 'PREMIUM', label: 'Premium' },
+              { value: 'ENTERPRISE', label: 'Enterprise' },
+            ]}
+          />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ====================
+// Optimized Customer Table Component
+// ====================
+function CustomerTableOptimized({
+  customersResult,
+}: {
+  customersResult: ReturnType<typeof useInfiniteCustomers>;
+}) {
+  const router = useRouter();
+  const { data, error, fetchNextPage, hasNextPage, isFetchingNextPage } = customersResult;
+
+  const customers = useMemo(() => {
+    return data?.pages.flatMap((page: any) => page.items || []).filter(Boolean) ?? [];
+  }, [data]);
+
+  const handleCustomerClick = useCallback(
+    (id: string) => {
+      router.push(`/customers/${id}`);
+    },
+    [router]
+  );
+
+  if (error) {
+    return (
+      <Card className="p-8 text-center">
+        <div className="text-red-500 text-6xl mb-4">⚠️</div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to load customers</h2>
+        <p className="text-gray-600 mb-4">Please try again later</p>
+        <Button variant="secondary" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </Card>
+    );
+  }
+
+  if (customers.length === 0) {
+    return (
+      <Card className="p-8 text-center">
+        <div className="text-gray-400 text-6xl mb-4">👥</div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">No customers found</h2>
+        <p className="text-gray-600 mb-4">Get started by adding your first customer</p>
+        <Button variant="primary">Add Customer</Button>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b">
+              <th className="px-4 py-3 text-left">Name</th>
+              <th className="px-4 py-3 text-left">Status</th>
+              <th className="px-4 py-3 text-left">Email</th>
+              <th className="px-4 py-3 text-left">Industry</th>
+              <th className="px-4 py-3 text-left">Tier</th>
+              <th className="px-4 py-3 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {customers.map((customer: any) => (
+              <tr key={customer.id} className="border-b hover:bg-gray-50">
+                <td className="px-4 py-3">
+                  <div className="font-medium text-gray-900">{customer.name}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <Badge
+                    variant={
+                      customer.status === 'ACTIVE'
+                        ? 'success'
+                        : customer.status === 'PROSPECT'
+                          ? 'warning'
+                          : 'secondary'
+                    }
+                  >
+                    {customer.status}
+                  </Badge>
+                </td>
+                <td className="px-4 py-3 text-gray-600">{customer.email}</td>
+                <td className="px-4 py-3 text-gray-600">{customer.industry || '-'}</td>
+                <td className="px-4 py-3">
+                  {customer.tier && <Badge variant="secondary">{customer.tier}</Badge>}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCustomerClick(customer.id)}
+                    >
+                      View
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {hasNextPage && (
+        <div className="p-4 border-t">
+          <Button
+            variant="secondary"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="w-full"
+          >
+            {isFetchingNextPage ? 'Loading more...' : 'Load More'}
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // Main Customer List Component
 export function CustomerList_new() {
   return (
@@ -410,6 +714,103 @@ export function CustomerList_new() {
       <CustomerListHeader />
       <CustomerFilters />
       <CustomerTable />
+    </div>
+  );
+}
+
+// ====================
+// Optimized Customer List Component (Unified Architecture)
+// ====================
+export function CustomerListOptimized() {
+  const [filters, setFilters] = useState({
+    search: '',
+    status: '',
+    tier: '',
+  });
+
+  const { customers, stats } = useUnifiedCustomerData();
+
+  const handleFilterChange = useCallback((key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setFilters({
+      search: '',
+      status: '',
+      tier: '',
+    });
+  }, []);
+
+  const customerCount = customers.data?.pages.flatMap((page: any) => page.items || []).length || 0;
+
+  // Loading state
+  if (customers.isLoading || stats.isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <div className="h-8 w-48 bg-gray-200 rounded animate-pulse mb-2"></div>
+            <div className="h-4 w-64 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+
+        <Card className="p-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i}>
+                <div className="h-4 w-16 bg-gray-200 rounded animate-pulse mb-2"></div>
+                <div className="h-10 w-full bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <div className="p-8">
+            <div className="flex items-center justify-center">
+              <LoadingSpinner size="lg" />
+              <span className="ml-2">Loading customers...</span>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Error state
+  if (customers.error || stats.error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">Customers</h1>
+            <p className="text-gray-600">Manage your customer relationships</p>
+          </div>
+        </div>
+
+        <Card className="p-8 text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to load customers</h2>
+          <p className="text-gray-600 mb-4">Please try again later</p>
+          <Button variant="secondary" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <CustomerListHeaderOptimized stats={stats} />
+      <CustomerFiltersOptimized
+        onFilterChange={handleFilterChange}
+        onClearFilters={handleClearFilters}
+        customerCount={customerCount}
+      />
+      <CustomerTableOptimized customersResult={customers} />
     </div>
   );
 }

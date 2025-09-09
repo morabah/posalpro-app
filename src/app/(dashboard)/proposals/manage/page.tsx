@@ -8,6 +8,10 @@ import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import ProposalList from '@/components/proposals/ProposalList';
 import { logDebug } from '@/lib/logger';
 
+// ====================
+// Main Page Component
+// ====================
+
 export default function ProposalManagePage() {
   logDebug('Proposal manage page render', {
     component: 'ProposalManagePage',

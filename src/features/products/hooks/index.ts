@@ -23,5 +23,6 @@ export {
   useProductTags,
   useProductWithRelationshipsMigrated,
   useRelationshipTypeOptionsMigrated,
+  useUnifiedProductSelectionData,
   useUpdateProduct,
 } from './useProducts';

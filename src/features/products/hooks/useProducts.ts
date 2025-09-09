@@ -740,3 +740,24 @@ export function useRelationshipTypeOptionsMigrated() {
 // ====================
 
 // All functions are already exported above
+
+// ====================
+// Unified Data Loading Hook for Product Selection
+// ====================
+
+// Unified hook for loading products and categories in parallel
+export function useUnifiedProductSelectionData() {
+  // 🚀 OPTIMIZATION: Load ALL product data in parallel
+  const productsResult = useInfiniteProductsMigrated({
+    limit: 50,
+    sortBy: 'name',
+    sortOrder: 'asc',
+  });
+
+  const categoriesResult = useProductCategories();
+
+  return {
+    products: productsResult,
+    categories: categoriesResult,
+  };
+}

@@ -13,4 +13,6 @@ export {
   useUpdateCustomer,
   useDeleteCustomer,
   useDeleteCustomersBulk,
+  useCustomerStats,
+  useUnifiedCustomerData,
 } from './useCustomers';

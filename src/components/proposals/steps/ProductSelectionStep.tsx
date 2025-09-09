@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { Tooltip } from '@/components/ui/Tooltip';
 import type { Product } from '@/features/products';
-import { useInfiniteProductsMigrated, useProductCategories } from '@/features/products/hooks';
+import { useUnifiedProductSelectionData } from '@/features/products/hooks';
 import { useUpdateProposal, type WizardProposalUpdateData } from '@/features/proposals';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logError, logInfo } from '@/lib/logger';
@@ -162,7 +162,10 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
     };
   }, [search]);
 
-  // Fetch products using React Query with productService
+  // 🚀 OPTIMIZATION: Use unified hook for parallel loading
+  const { products, categories } = useUnifiedProductSelectionData();
+
+  // Extract products data with proper typing
   const {
     data: productsData,
     isLoading: productsLoading,
@@ -170,19 +173,14 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useInfiniteProductsMigrated({
-    search: debouncedSearch,
-    limit: 50,
-    sortBy,
-    sortOrder,
-    filters: {
-      category: category || undefined,
-      isActive: true,
-    },
-  });
+  } = products;
+
+  // Extract categories data
+  const { data: categoryData, isLoading: categoriesLoading } = categories;
 
   // Flatten the paginated data for compatibility
-  const flattenedProductsData: Product[] = productsData?.pages?.flatMap(page => page.items) || [];
+  const flattenedProductsData: Product[] =
+    productsData?.pages?.flatMap((page: any) => page.items) || [];
 
   // Quick lookup sets
   const selectedSet = useMemo(
@@ -193,9 +191,6 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
     () => new Set((selectedProducts || []).map(p => p.category)),
     [selectedProducts]
   );
-
-  // Categories for filter using feature hook
-  const { data: categoryData } = useProductCategories();
 
   // Displayed list supports "selected only"
   const productsMap = useMemo(
@@ -566,7 +561,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
       </Card>
 
       {/* Loading State */}
-      {productsLoading && (
+      {(productsLoading || categoriesLoading) && (
         <div className="text-center py-4">
           <p className="text-gray-500">Loading products...</p>
         </div>

@@ -502,3 +502,23 @@ export function useDeleteProposalsBulk() {
     },
   });
 }
+
+// ====================
+// Unified Data Loading Hook
+// ====================
+
+export function useUnifiedProposalData() {
+  // 🚀 OPTIMIZATION: Load ALL proposal data in parallel
+  const proposalsResult = useInfiniteProposals({
+    limit: 50,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+  });
+
+  const statsResult = useProposalStats();
+
+  return {
+    proposals: proposalsResult,
+    stats: statsResult,
+  };
+}

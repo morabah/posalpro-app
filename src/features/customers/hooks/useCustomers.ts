@@ -38,7 +38,11 @@ export function useInfiniteCustomers({
   industry?: string;
 }) {
   return useInfiniteQuery({
-    queryKey: customerKeys.customers.list(search, limit, sortBy, sortOrder, undefined, { status, tier, industry }),
+    queryKey: customerKeys.customers.list(search, limit, sortBy, sortOrder, undefined, {
+      status,
+      tier,
+      industry,
+    }),
     queryFn: ({ pageParam }) =>
       customerService.getCustomers({
         search,
@@ -280,4 +284,37 @@ export function useDeleteCustomersBulk() {
       });
     },
   });
+}
+
+// ====================
+// Unified Data Loading Hook
+// ====================
+
+// Customer stats hook
+export function useCustomerStats() {
+  return useQuery({
+    queryKey: customerKeys.customers.stats(),
+    queryFn: () => customerService.getCustomerStats(),
+    staleTime: 60_000, // 1 minute
+    gcTime: 120_000, // 2 minutes
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+}
+
+// Unified hook for loading customers and stats in parallel
+export function useUnifiedCustomerData() {
+  // 🚀 OPTIMIZATION: Load ALL customer data in parallel
+  const customersResult = useInfiniteCustomers({
+    limit: 50,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+  });
+
+  const statsResult = useCustomerStats();
+
+  return {
+    customers: customersResult,
+    stats: statsResult,
+  };
 }

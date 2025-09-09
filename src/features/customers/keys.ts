@@ -29,18 +29,17 @@ export const qk = {
       sortOrder: 'asc' | 'desc',
       cursor?: string,
       filters?: Record<string, unknown>
-    ) => [
-      ...qk.customers.lists(),
-      { search, limit, sortBy, sortOrder, cursor, filters }
-    ] as const,
+    ) => [...qk.customers.lists(), { search, limit, sortBy, sortOrder, cursor, filters }] as const,
 
     byId: (id: string) => [...qk.customers.all, 'byId', id] as const,
-    search: (query: string, limit: number) => [...qk.customers.all, 'search', query, limit] as const,
+    search: (query: string, limit: number) =>
+      [...qk.customers.all, 'search', query, limit] as const,
 
     // ====================
     // Feature-Specific Keys
     // ====================
     details: () => [...qk.customers.all, 'detail'] as const,
     detail: (id: string) => [...qk.customers.details(), id] as const,
+    stats: () => [...qk.customers.all, 'stats'] as const,
   },
 } as const;

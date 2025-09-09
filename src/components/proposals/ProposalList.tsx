@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/Input';
+import { SkeletonLoader } from '@/components/ui/LoadingStates';
 import { Select } from '@/components/ui/Select';
 import { ProposalPrioritySchema, ProposalStatusSchema } from '@/features/proposals';
 import {
@@ -18,6 +19,9 @@ import {
   useInfiniteProposals,
   useProposalStats,
 } from '@/features/proposals/hooks';
+import { useUnifiedProposalData } from '@/features/proposals/hooks/useProposals';
+import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { logError } from '@/lib/logger';
 import {
   AlertTriangleIcon,
   ArrowUpDownIcon,
@@ -34,9 +38,107 @@ import {
   UsersIcon,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+
+// ====================
+// Proposal List Header Component
+// ====================
+
+function ProposalListHeader({
+  selectedIds,
+  setSelectedIds,
+}: {
+  selectedIds: string[];
+  setSelectedIds: (ids: string[]) => void;
+}) {
+  const router = useRouter();
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
+
+  const selectedCount = selectedIds.length;
+  const hasSelection = selectedCount > 0;
+
+  const handleCreateProposal = useCallback(() => {
+    analytics('proposal_create_initiated', { source: 'proposal_list' }, 'medium');
+    router.push('/proposals/wizard');
+  }, [analytics, router]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.length === 0) return;
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${selectedIds.length} proposal(s)? This action cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      await deleteProposalsBulk.mutateAsync(selectedIds);
+      setSelectedIds([]); // Clear selection after successful delete
+
+      analytics(
+        'proposal_bulk_delete_initiated',
+        {
+          count: selectedIds.length,
+          proposalIds: selectedIds,
+        },
+        'high'
+      );
+    } catch (error) {
+      logError('Failed to bulk delete proposals', {
+        component: 'ProposalListHeader',
+        operation: 'handleBulkDelete',
+        error,
+        proposalIds: selectedIds,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      });
+    }
+  }, [selectedIds, analytics, setSelectedIds]);
+
+  return (
+    <div className="flex items-center justify-between p-6 border-b">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Proposals</h1>
+        <p className="text-sm text-gray-600 mt-1">
+          Manage and track all proposals in your pipeline
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        {hasSelection && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600" aria-live="polite">
+              {selectedCount} selected
+            </span>
+            <Button
+              onClick={handleBulkDelete}
+              variant="danger"
+              size="sm"
+              aria-label="Delete selected proposals"
+            >
+              Delete Selected
+            </Button>
+            <Button
+              onClick={() => setSelectedIds([])}
+              variant="outline"
+              size="sm"
+              aria-label="Clear selection"
+            >
+              Clear
+            </Button>
+          </div>
+        )}
+        <Link href="/proposals/wizard">
+          <Button onClick={handleCreateProposal} aria-label="Create proposal">
+            Create Proposal
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 // Simple formatter functions since the utils module doesn't exist
 const formatCurrency = (amount: number, currency: string) => {
@@ -111,7 +213,106 @@ function PriorityBadge({ priority }: { priority: z.infer<typeof ProposalPriority
 }
 
 // ====================
-// Dashboard Metrics Component
+// Optimized Proposal Stats Component
+// ====================
+
+function ProposalStatsOptimized({
+  statsResult,
+}: {
+  statsResult: ReturnType<typeof useProposalStats>;
+}) {
+  type ProposalStatsShape = {
+    total: number;
+    byStatus: Record<string, number>;
+    overdue: number;
+    winRate: number;
+    totalValue: number;
+    averageValue: number;
+  };
+
+  const { data, isLoading, isError } = statsResult;
+  const stats = data as ProposalStatsShape | undefined;
+
+  // Calculate derived metrics from stats data
+  const metrics = useMemo(() => {
+    if (!stats) {
+      return {
+        total: 0,
+        inProgress: 0,
+        overdue: 0,
+        winRate: 0,
+        totalValue: 0,
+        averageValue: 0,
+      };
+    }
+
+    // Compute inProgress from byStatus (backend returns byStatus counts)
+    const byStatus = stats.byStatus || {};
+    const inProgress =
+      (byStatus.DRAFT || 0) +
+      (byStatus.IN_REVIEW || 0) +
+      (byStatus.PENDING_APPROVAL || 0) +
+      (byStatus.SUBMITTED || 0) +
+      (byStatus.IN_PROGRESS || 0);
+
+    return {
+      total: stats.total || 0,
+      inProgress,
+      overdue: stats.overdue || 0,
+      winRate: typeof stats.winRate === 'number' ? Math.round(stats.winRate * 100) / 100 : 0,
+      totalValue: stats.totalValue || 0,
+      averageValue: stats.averageValue || 0,
+    };
+  }, [stats]);
+
+  if (isError) return null;
+
+  return (
+    <div
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 p-4"
+      aria-label="Proposal quick stats"
+    >
+      {isLoading ? (
+        <>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i} className="p-4">
+              <SkeletonLoader className="w-24 mb-2" height="h-4" />
+              <SkeletonLoader className="w-16" height="h-6" />
+            </Card>
+          ))}
+        </>
+      ) : (
+        <>
+          <Card className="p-4" data-testid="stat-total">
+            <div className="text-sm text-gray-600">Total</div>
+            <div className="text-2xl font-semibold">{metrics.total}</div>
+          </Card>
+          <Card className="p-4" data-testid="stat-in-progress">
+            <div className="text-sm text-gray-600">In Progress</div>
+            <div className="text-2xl font-semibold text-yellow-600">{metrics.inProgress}</div>
+          </Card>
+          <Card className="p-4" data-testid="stat-overdue">
+            <div className="text-sm text-gray-600">Overdue</div>
+            <div className="text-2xl font-semibold text-red-600">{metrics.overdue}</div>
+          </Card>
+          <Card className="p-4" data-testid="stat-win-rate">
+            <div className="text-sm text-gray-600">Win Rate</div>
+            <div className="text-2xl font-semibold text-green-600">{metrics.winRate}%</div>
+          </Card>
+          <Card className="p-4" data-testid="stat-total-value">
+            <div className="text-sm text-gray-600">Total Value</div>
+            <div className="text-2xl font-semibold">
+              ${((metrics.totalValue || 0) / 1000000).toFixed(1)}M
+            </div>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ====================
+// Legacy Dashboard Metrics Component (for backward compatibility)
 // ====================
 
 function DashboardMetrics() {
@@ -251,7 +452,339 @@ function DashboardMetrics() {
 }
 
 // ====================
-// Enhanced Filters Component
+// Optimized Proposal Filters Component
+// ====================
+
+function ProposalFiltersOptimized({
+  filters,
+  onFilterChange,
+  onClearFilters,
+  proposalCount,
+  totalCount,
+}: {
+  filters: any;
+  onFilterChange: (key: string, value: string) => void;
+  onClearFilters: () => void;
+  proposalCount: number;
+  totalCount: number;
+}) {
+  const { trackOptimized: analytics } = useOptimizedAnalytics();
+  const [debouncedQuery, setDebouncedQuery] = useState(filters.search || '');
+
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(filters.search || ''), 250);
+    return () => clearTimeout(t);
+  }, [filters.search]);
+
+  const handleSearchChange = useCallback(
+    (searchValue: string) => {
+      onFilterChange('search', searchValue);
+      analytics(
+        'proposal_search_applied',
+        {
+          search_length: searchValue.length,
+          has_search: Boolean(searchValue),
+        },
+        'medium'
+      );
+    },
+    [onFilterChange, analytics]
+  );
+
+  const handleStatusChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const statusValue = e.target.value;
+      onFilterChange('status', statusValue);
+      analytics(
+        'proposal_status_filter_applied',
+        {
+          status: statusValue || 'all',
+        },
+        'medium'
+      );
+    },
+    [onFilterChange, analytics]
+  );
+
+  const handlePriorityChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const priorityValue = e.target.value;
+      onFilterChange('priority', priorityValue);
+      analytics(
+        'proposal_priority_filter_applied',
+        {
+          priority: priorityValue || 'all',
+        },
+        'medium'
+      );
+    },
+    [onFilterChange, analytics]
+  );
+
+  const handleSortByChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const sortByValue = e.target.value;
+      onFilterChange('sortBy', sortByValue);
+      analytics(
+        'proposal_sort_applied',
+        {
+          sort_by: sortByValue,
+        },
+        'medium'
+      );
+    },
+    [onFilterChange, analytics]
+  );
+
+  return (
+    <Card className="p-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="relative">
+          <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
+            Search
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <SearchIcon className="w-5 h-5 text-gray-400" />
+            </div>
+            <Input
+              id="search"
+              type="text"
+              placeholder="Search proposals..."
+              value={debouncedQuery}
+              onChange={e => handleSearchChange(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+            Status
+          </label>
+          <select
+            id="status"
+            value={filters.status || ''}
+            onChange={handleStatusChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">All Status</option>
+            <option value="DRAFT">Draft</option>
+            <option value="IN_REVIEW">In Review</option>
+            <option value="PENDING_APPROVAL">Pending Approval</option>
+            <option value="APPROVED">Approved</option>
+            <option value="SUBMITTED">Submitted</option>
+            <option value="ACCEPTED">Accepted</option>
+            <option value="DECLINED">Declined</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">
+            Priority
+          </label>
+          <select
+            id="priority"
+            value={filters.priority || ''}
+            onChange={handlePriorityChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">All Priority</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="sortBy" className="block text-sm font-medium text-gray-700 mb-1">
+            Sort By
+          </label>
+          <select
+            id="sortBy"
+            value={filters.sortBy || 'updatedAt'}
+            onChange={handleSortByChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="updatedAt">Last Updated</option>
+            <option value="dueDate">Due Date</option>
+            <option value="priority">Priority</option>
+            <option value="value">Value</option>
+            <option value="title">Title</option>
+          </select>
+        </div>
+
+        <div className="flex items-end gap-2">
+          <Button variant="outline" onClick={onClearFilters} className="flex-1">
+            Reset
+          </Button>
+          <div className="text-sm text-gray-600">
+            {proposalCount} of {totalCount}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ====================
+// Optimized Proposal Table Component
+// ====================
+
+function ProposalTableOptimized({
+  proposalsResult,
+}: {
+  proposalsResult: ReturnType<typeof useInfiniteProposals>;
+}) {
+  const router = useRouter();
+  const { data, error, fetchNextPage, hasNextPage, isFetchingNextPage } = proposalsResult;
+
+  const proposals = useMemo(() => {
+    return data?.pages.flatMap(page => page.items || []).filter(Boolean) ?? [];
+  }, [data]);
+
+  const handleProposalClick = useCallback(
+    (id: string) => {
+      router.push(`/proposals/${id}`);
+    },
+    [router]
+  );
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-600">
+          Error loading proposals: {error instanceof Error ? error.message : 'Unknown error'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <Card className="overflow-hidden" role="region" aria-label="Proposals list">
+      <div className="overflow-x-auto">
+        <table
+          className="min-w-full divide-y divide-gray-200"
+          role="table"
+          aria-label="Proposals table"
+        >
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Proposal
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Priority
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Value
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Due Date
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Client
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Last Updated
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {proposals.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-6 py-12">
+                  <div className="text-center">
+                    <div className="text-4xl mb-2">📄</div>
+                    <h3 className="text-lg font-medium text-gray-900">No proposals found</h3>
+                    <p className="text-gray-600 mt-1">
+                      Get started by creating your first proposal.
+                    </p>
+                    <div className="mt-4">
+                      <Link href="/proposals/wizard">
+                        <Button>Create Proposal</Button>
+                      </Link>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              proposals.map((proposal: any) => {
+                const isOverdue =
+                  proposal.dueDate &&
+                  new Date(proposal.dueDate) < new Date() &&
+                  !['APPROVED', 'ACCEPTED', 'DECLINED'].includes(proposal.status);
+
+                return (
+                  <tr
+                    key={proposal.id}
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleProposalClick(proposal.id)}
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          <div className="h-10 w-10 rounded-lg bg-gray-200 flex items-center justify-center">
+                            <FileTextIcon className="w-6 h-6 text-gray-500" />
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{proposal.title}</div>
+                          <div className="text-sm text-gray-500">{proposal.id.slice(0, 8)}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <StatusBadge status={proposal.status} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <PriorityBadge priority={proposal.priority} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatCurrency(proposal.value || 0, 'USD')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
+                        {proposal.dueDate ? formatDate(proposal.dueDate) : 'Not set'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {proposal.customer?.name || 'Unknown'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(proposal.updatedAt)}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {hasNextPage && (
+        <div className="px-6 py-4 border-t border-gray-200">
+          <Button
+            variant="outline"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="w-full"
+            aria-label="Load more proposals"
+          >
+            {isFetchingNextPage ? 'Loading more...' : 'Load more proposals'}
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ====================
+// Legacy Enhanced Filters Component (for backward compatibility)
 // ====================
 
 function EnhancedFilters({
@@ -768,6 +1301,85 @@ function ProposalCard({ proposal }: { proposal: any }) {
 
 // ====================
 // Main Component
+// ====================
+
+// ====================
+// Optimized ProposalList Component
+// ====================
+
+export function ProposalListOptimized() {
+  const { proposals: proposalsResult, stats: statsResult } = useUnifiedProposalData();
+
+  // Local state for filters and selections
+  const [localFilters, setLocalFilters] = useState({
+    search: '',
+    status: '',
+    priority: '',
+    sortBy: 'updatedAt',
+  });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const handleFilterChange = useCallback((key: string, value: string) => {
+    setLocalFilters(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setLocalFilters({
+      search: '',
+      status: '',
+      priority: '',
+      sortBy: 'updatedAt',
+    });
+  }, []);
+
+  // Get filtered proposals count
+  const allProposals = useMemo(() => {
+    return (
+      proposalsResult.data?.pages.flatMap((page: any) => page.items || []).filter(Boolean) ?? []
+    );
+  }, [proposalsResult.data]);
+
+  const filteredCount = useMemo(() => {
+    return allProposals.filter((proposal: any) => {
+      if (localFilters.search) {
+        const searchLower = localFilters.search.toLowerCase();
+        const matchesSearch =
+          proposal.title.toLowerCase().includes(searchLower) ||
+          (proposal.customer?.name || '').toLowerCase().includes(searchLower) ||
+          (proposal.description || '').toLowerCase().includes(searchLower);
+        if (!matchesSearch) return false;
+      }
+
+      if (localFilters.status && localFilters.status !== '') {
+        if (proposal.status !== localFilters.status) return false;
+      }
+
+      if (localFilters.priority && localFilters.priority !== '') {
+        if (proposal.priority !== localFilters.priority) return false;
+      }
+
+      return true;
+    }).length;
+  }, [allProposals, localFilters]);
+
+  return (
+    <div className="space-y-6">
+      <ProposalListHeader selectedIds={selectedIds} setSelectedIds={setSelectedIds} />
+      <ProposalStatsOptimized statsResult={statsResult} />
+      <ProposalFiltersOptimized
+        filters={localFilters}
+        onFilterChange={handleFilterChange}
+        onClearFilters={handleClearFilters}
+        proposalCount={filteredCount}
+        totalCount={allProposals.length}
+      />
+      <ProposalTableOptimized proposalsResult={proposalsResult} />
+    </div>
+  );
+}
+
+// ====================
+// Legacy ProposalList Component (for backward compatibility)
 // ====================
 
 export default function ProposalList() {

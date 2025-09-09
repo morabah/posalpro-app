@@ -26,38 +26,59 @@ if (typeof window !== 'undefined') {
   const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
 
   // Dynamic import and configuration
-  import('react-pdf').then((module) => {
-    module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  import('react-pdf')
+    .then(module => {
+      module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
-    console.log('[INFO] QueryProvider: PDF.js worker configured globally', {
-      workerUrl,
-      cacheBuster,
-      configuredAt: new Date().toISOString(),
+      console.log('[INFO] QueryProvider: PDF.js worker configured globally', {
+        workerUrl,
+        cacheBuster,
+        configuredAt: new Date().toISOString(),
+      });
+    })
+    .catch(error => {
+      console.error('[ERROR] QueryProvider: Failed to configure PDF.js worker', error);
     });
-  }).catch((error) => {
-    console.error('[ERROR] QueryProvider: Failed to configure PDF.js worker', error);
-  });
 
   // Add global error handlers for PDF worker issues
-  window.addEventListener('error', (event) => {
-    if (event.message?.includes('pdfjs') ||
-        event.message?.includes('worker') ||
-        event.message?.includes('messageHandler')) {
+  window.addEventListener('error', event => {
+    if (
+      event.message?.includes('pdfjs') ||
+      event.message?.includes('worker') ||
+      event.message?.includes('messageHandler') ||
+      event.message?.includes('sendWithPromise')
+    ) {
       console.error('[ERROR] QueryProvider: PDF worker error detected', {
         message: event.message,
         filename: event.filename,
         lineno: event.lineno,
         colno: event.colno,
+        isMessageHandlerError:
+          event.message?.includes('messageHandler') || event.message?.includes('sendWithPromise'),
       });
+
+      // Prevent the error from propagating to avoid console spam
+      if (event.message?.includes('messageHandler') || event.message?.includes('sendWithPromise')) {
+        event.preventDefault();
+        console.log('[INFO] QueryProvider: MessageHandler error prevented from propagating');
+      }
     }
   });
 
   // Handle unhandled promise rejections from PDF worker
-  window.addEventListener('unhandledrejection', (event) => {
-    if (event.reason?.message?.includes('pdfjs') ||
-        event.reason?.message?.includes('worker') ||
-        event.reason?.message?.includes('messageHandler')) {
-      console.error('[ERROR] QueryProvider: PDF worker promise rejection', event.reason);
+  window.addEventListener('unhandledrejection', event => {
+    if (
+      event.reason?.message?.includes('pdfjs') ||
+      event.reason?.message?.includes('worker') ||
+      event.reason?.message?.includes('messageHandler') ||
+      event.reason?.message?.includes('sendWithPromise')
+    ) {
+      console.error('[ERROR] QueryProvider: PDF worker promise rejection', {
+        reason: event.reason,
+        isMessageHandlerError:
+          event.reason?.message?.includes('messageHandler') ||
+          event.reason?.message?.includes('sendWithPromise'),
+      });
       event.preventDefault(); // Prevent the default handler
     }
   });
