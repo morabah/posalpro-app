@@ -12,42 +12,51 @@ import React, { Suspense, useCallback, useEffect, useState } from 'react';
 // ✅ NOTE: PDF.js worker is now configured globally in QueryProvider
 const PDFViewer = React.lazy(() =>
   import('react-pdf').then(async module => {
-    // Wait for worker to be properly configured
-    const waitForWorker = () => {
-      return new Promise<void>(resolve => {
-        if (module.pdfjs.GlobalWorkerOptions.workerSrc) {
-          resolve();
-        } else {
-          // Wait a bit and check again
-          setTimeout(() => {
-            if (module.pdfjs.GlobalWorkerOptions.workerSrc) {
-              resolve();
-            } else {
-              // Configure worker if not already configured
-              const cacheBuster = Date.now();
-              const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
-              module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-              logDebug('DocumentPreview: PDF worker configured locally', {
-                workerUrl,
-                cacheBuster,
-                component: 'DocumentPreview',
-                operation: 'worker_config',
-              });
-              resolve();
-            }
-          }, 100);
+    // Wait for worker to be properly configured via global promise
+    const waitForWorker = async () => {
+      // Check if global worker promise exists
+      const globalWorkerPromise = (window as any).pdfWorkerPromise;
+
+      if (globalWorkerPromise) {
+        try {
+          await globalWorkerPromise;
+          logDebug('DocumentPreview: PDF worker initialized via global promise', {
+            component: 'DocumentPreview',
+            operation: 'worker_initialization',
+          });
+        } catch (error) {
+          logError('DocumentPreview: Global worker initialization failed', {
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+            component: 'DocumentPreview',
+            operation: 'worker_initialization_error',
+          });
         }
+      }
+
+      // Additional check for worker source
+      if (!module.pdfjs.GlobalWorkerOptions.workerSrc) {
+        // Fallback: Configure worker if not already configured
+        const cacheBuster = Date.now();
+        const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
+        module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+
+        logDebug('DocumentPreview: PDF worker configured as fallback', {
+          workerUrl,
+          cacheBuster,
+          component: 'DocumentPreview',
+          operation: 'worker_fallback_config',
+        });
+      }
+
+      logDebug('DocumentPreview: PDF worker status', {
+        workerSrc: module.pdfjs.GlobalWorkerOptions.workerSrc,
+        configured: !!module.pdfjs.GlobalWorkerOptions.workerSrc,
+        component: 'DocumentPreview',
+        operation: 'worker_status_check',
       });
     };
 
     await waitForWorker();
-
-    logDebug('DocumentPreview: PDF worker status', {
-      workerSrc: module.pdfjs.GlobalWorkerOptions.workerSrc,
-      configured: !!module.pdfjs.GlobalWorkerOptions.workerSrc,
-      component: 'DocumentPreview',
-      operation: 'worker_status',
-    });
 
     return {
       default: ({ file, onLoadSuccess, onLoadError, children }: any) => (
@@ -277,9 +286,8 @@ export function DocumentPreview({
   const handlePdfLoadError = useCallback(
     (error: Error) => {
       logDebug('DocumentPreview: PDF load error occurred', {
-        error: error.message,
-        errorName: error.name,
-        errorStack: error.stack,
+        errorMessage: error.message || 'Unknown error',
+        errorName: error.name || 'UnknownError',
         productId,
         productName,
         datasheetPath,
@@ -324,7 +332,7 @@ export function DocumentPreview({
         productId,
         productName,
         datasheetPath,
-        error: error.message,
+        errorMessage: error.message || 'Unknown error',
         isMessageHandlerError,
       });
 
@@ -577,8 +585,7 @@ export function DocumentPreview({
                         renderAnnotationLayer={false}
                         onRenderError={(error: any) => {
                           logError('DocumentPreview: PDF page render error', {
-                            error: error.message,
-                            stack: error.stack,
+                            errorMessage: error.message || 'Unknown render error',
                             productId,
                             productName,
                             component: 'DocumentPreview',

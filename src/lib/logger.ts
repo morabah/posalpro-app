@@ -32,8 +32,22 @@ function formatLogEntry(
   };
 }
 
+function safeStringify(obj: any): string {
+  const seen = new WeakSet();
+
+  return JSON.stringify(obj, (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return '[Circular]';
+      }
+      seen.add(value);
+    }
+    return value;
+  });
+}
+
 function logToConsole(entry: LogEntry): void {
-  const logString = JSON.stringify(entry);
+  const logString = safeStringify(entry);
 
   switch (entry.level) {
     case 'debug':

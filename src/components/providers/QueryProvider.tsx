@@ -26,26 +26,53 @@ if (typeof window !== 'undefined') {
   const cacheBuster = Date.now();
   const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
 
-  // Dynamic import and configuration
-  import('react-pdf')
-    .then(module => {
+  // Store worker initialization promise globally
+  (window as any).pdfWorkerPromise = import('react-pdf')
+    .then(async module => {
+      // Ensure worker URL is set
       module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
+      // Verify worker is accessible
+      try {
+        const response = await fetch(workerUrl, { method: 'HEAD' });
+        if (!response.ok) {
+          throw new Error(`Worker URL not accessible: ${response.status}`);
+        }
+      } catch (fetchError) {
+        console.warn('[PDF Worker] Worker URL verification failed, using fallback');
+        // Try without cache buster as fallback
+        const fallbackUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs`;
+        module.pdfjs.GlobalWorkerOptions.workerSrc = fallbackUrl;
+      }
+
       logInfo('QueryProvider: PDF.js worker configured globally', {
-        workerUrl,
+        workerUrl: module.pdfjs.GlobalWorkerOptions.workerSrc,
         cacheBuster,
         configuredAt: new Date().toISOString(),
         component: 'QueryProvider',
         operation: 'pdf_worker_config',
       });
+
+      return module;
     })
     .catch(error => {
       logError('QueryProvider: Failed to configure PDF.js worker', {
-        error: error.message,
-        stack: error.stack,
+        errorMessage: error.message || 'Unknown error',
         component: 'QueryProvider',
         operation: 'pdf_worker_config_error',
       });
+
+      // Set a fallback worker URL even if import fails
+      try {
+        import('react-pdf').then(module => {
+          module.pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs`;
+          console.log('[PDF Worker] Fallback worker URL set');
+        });
+      } catch (fallbackError) {
+        console.error('[PDF Worker] Fallback worker configuration failed');
+      }
+
+      throw error;
     });
 
   // Add global error handlers for PDF worker issues
