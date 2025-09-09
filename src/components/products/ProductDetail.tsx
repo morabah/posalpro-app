@@ -1,16 +1,16 @@
 'use client';
 
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
+import { DocumentPreview } from '@/components/products/DocumentPreview';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
-import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
-import { SkeletonLoader } from '@/components/ui/LoadingStates';
 import { Button } from '@/components/ui/forms/Button';
+import { SkeletonLoader } from '@/components/ui/LoadingStates';
 import { useProductMigrated, useUpdateProduct } from '@/features/products/hooks/useProducts';
-import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { analytics } from '@/lib/analytics';
 import { logError, logInfo } from '@/lib/logger';
 import { useRouter } from 'next/navigation';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 interface ProductDetailProps {
   productId: string;
@@ -123,7 +123,11 @@ export function ProductDetail({ productId }: ProductDetailProps) {
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
             {firstImage ? (
-              <img src={firstImage} alt={`${productData.name} image`} className="w-16 h-16 rounded-lg object-cover" />
+              <img
+                src={firstImage}
+                alt={`${productData.name} image`}
+                className="w-16 h-16 rounded-lg object-cover"
+              />
             ) : (
               <div className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center text-xl font-semibold text-gray-600">
                 {productData.name?.charAt(0)?.toUpperCase()}
@@ -132,7 +136,10 @@ export function ProductDetail({ productId }: ProductDetailProps) {
             <div>
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-semibold text-gray-900">{productData.name}</h1>
-                <Badge variant={productData.isActive ? 'success' : 'secondary'} aria-label={`Status ${productData.isActive ? 'active' : 'inactive'}`}>
+                <Badge
+                  variant={productData.isActive ? 'success' : 'secondary'}
+                  aria-label={`Status ${productData.isActive ? 'active' : 'inactive'}`}
+                >
                   {productData.isActive ? 'Active' : 'Inactive'}
                 </Badge>
               </div>
@@ -157,7 +164,10 @@ export function ProductDetail({ productId }: ProductDetailProps) {
                 </Button>
               </div>
               <div className="mt-2 text-gray-800 font-medium">
-                {new Intl.NumberFormat('en-US', { style: 'currency', currency: productData.currency || 'USD' }).format(productData.price || 0)}
+                {new Intl.NumberFormat('en-US', {
+                  style: 'currency',
+                  currency: productData.currency || 'USD',
+                }).format(productData.price || 0)}
               </div>
             </div>
           </div>
@@ -285,6 +295,16 @@ export function ProductDetail({ productId }: ProductDetailProps) {
               ))}
             </div>
           </Card>
+        )}
+
+        {/* Document Preview Section */}
+        {productData.datasheetPath && (
+          <DocumentPreview
+            datasheetPath={productData.datasheetPath}
+            productId={productId}
+            productName={productData.name || 'Unknown Product'}
+            className="col-span-1 lg:col-span-2"
+          />
         )}
       </div>
     </div>

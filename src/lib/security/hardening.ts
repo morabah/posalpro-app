@@ -191,14 +191,16 @@ export class SecurityHeaders {
         // Allow minimal inline script/style needed by Next.js runtime in production.
         // Longer-term: migrate to nonce-based CSP and remove 'unsafe-inline'.
         isProd
-          ? "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com 'report-sample'"
-          : "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com 'report-sample'",
+          ? "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com 'report-sample'"
+          : "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com 'report-sample'",
         isProd
           ? "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com"
           : "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com data:",
         "img-src 'self' data: https:",
-        "connect-src 'self' https://api.posalpro.com",
+        "connect-src 'self' https://api.posalpro.com https://cdnjs.cloudflare.com",
+        // Allow PDF.js worker scripts and blob URLs
+        "worker-src 'self' blob: https://cdnjs.cloudflare.com",
         "frame-ancestors 'none'",
         // CSP violation reporting endpoint
         'report-uri /api/security/csp-report',
@@ -241,6 +243,11 @@ export class SecurityHeaders {
 
       // Remove server information
       Server: 'PosalPro',
+
+      // Force cache invalidation for CSP
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
     };
   }
 

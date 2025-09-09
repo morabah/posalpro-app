@@ -5,6 +5,10 @@
 /* ✅ CRITICAL: Import mobile performance optimizations */
 @import './mobile-performance.css';
 
+/* Document Preview Styles */
+@import 'react-pdf/dist/Page/AnnotationLayer.css';
+@import 'react-pdf/dist/Page/TextLayer.css';
+
 /* Global base styles for the PosalPro application */
 * {
   box-sizing: border-box;

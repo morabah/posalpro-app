@@ -1,4 +1,5 @@
 import { rbacIntegration } from '@/lib/auth/rbacIntegration';
+import { SecurityHeaders } from '@/lib/security/hardening';
 import { logger } from '@/utils/logger';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -19,7 +20,7 @@ export async function middleware(request: NextRequest) {
         status: 200,
         headers: {
           'Access-Control-Allow-Origin': origin,
-          'Vary': 'Origin',
+          Vary: 'Origin',
           'Access-Control-Allow-Credentials': 'true',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
@@ -37,17 +38,23 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/api/')
     ) {
       const response = NextResponse.next();
-      
+
       // Add CORS headers to API responses
       if (pathname.startsWith('/api/')) {
         const origin = request.headers.get('origin') || '*';
         response.headers.set('Access-Control-Allow-Origin', origin);
         response.headers.set('Vary', 'Origin');
         response.headers.set('Access-Control-Allow-Credentials', 'true');
-        response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        response.headers.set(
+          'Access-Control-Allow-Methods',
+          'GET, POST, PUT, DELETE, PATCH, OPTIONS'
+        );
+        response.headers.set(
+          'Access-Control-Allow-Headers',
+          'Content-Type, Authorization, X-Requested-With'
+        );
       }
-      
+
       return response;
     }
 
@@ -71,7 +78,9 @@ export async function middleware(request: NextRequest) {
       });
     }
 
-    return NextResponse.next();
+    // Apply security headers to the response
+    const response = NextResponse.next();
+    return SecurityHeaders.applyToResponse(response);
   } catch (error) {
     logger.error('[Middleware] Unexpected error', {
       pathname,

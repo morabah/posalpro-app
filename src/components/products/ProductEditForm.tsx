@@ -334,56 +334,76 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
             />
 
             {/* Datasheet Path */}
-            <div>
-              <label
-                htmlFor="datasheetPath"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Datasheet Path (Optional)
+            <div className="space-y-4">
+              <label htmlFor="datasheetPath" className="block text-sm font-medium text-gray-700">
+                Datasheet (Optional)
               </label>
-              <div className="flex space-x-2">
+
+              {/* Network URL Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Network URL</label>
                 <FormField
                   {...register('datasheetPath')}
                   name="datasheetPath"
-                  placeholder="Enter datasheet path or select file"
+                  placeholder="https://example.com/document.pdf"
                   value={watch('datasheetPath') || ''}
                   onBlur={() => register('datasheetPath').onBlur}
                   error={errors.datasheetPath?.message}
                   touched={!!touchedFields.datasheetPath}
-                  className="flex-1"
+                  className="w-full"
                 />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = '.pdf,.doc,.docx,.xls,.xlsx,.txt';
-                    input.onchange = e => {
-                      const file = (e.target as HTMLInputElement).files?.[0];
-                      if (file) {
-                        // Get the complete path from the file input
-                        const fullPath = (e.target as HTMLInputElement).value;
-                        if (fullPath) {
-                          // Use the complete path if available
-                          setValue('datasheetPath', fullPath);
-                        } else {
-                          // Fallback to just filename if path is not accessible
-                          setValue('datasheetPath', file.name);
-                        }
-                        trigger('datasheetPath');
-                      }
-                    };
-                    input.click();
-                  }}
-                  className="px-4 py-2"
-                >
-                  Browse...
-                </Button>
+                <p className="mt-1 text-sm text-gray-500">
+                  Enter a network URL for document preview (PDF, DOC, DOCX supported)
+                </p>
               </div>
-              <p className="mt-1 text-sm text-gray-500">
-                Enter network path or select local file (PDF, DOC, DOCX, XLS, XLSX, TXT)
-              </p>
+
+              {/* File Upload Alternative */}
+              <div className="border-t pt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Or Upload File (Development Only)
+                </label>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = '.pdf,.doc,.docx,.xls,.xlsx,.txt';
+                      input.onchange = e => {
+                        const file = (e.target as HTMLInputElement).files?.[0];
+                        if (file) {
+                          // For uploaded files, we'll create a local server URL
+                          // In development, you can serve files from a local directory
+                          const localUrl = `http://localhost:8080/${file.name}`;
+                          setValue('datasheetPath', localUrl);
+                          trigger('datasheetPath');
+
+                          logInfo('File selected for upload', {
+                            component: 'ProductEditForm',
+                            operation: 'fileSelection',
+                            filename: file.name,
+                            size: file.size,
+                            type: file.type,
+                            userStory: 'US-4.1',
+                            hypothesis: 'H5',
+                          });
+                        }
+                      };
+                      input.click();
+                    }}
+                    className="px-4 py-2"
+                  >
+                    Choose File...
+                  </Button>
+                  <span className="text-sm text-gray-500">
+                    Select a file to generate preview URL
+                  </span>
+                </div>
+                <p className="mt-1 text-sm text-amber-600">
+                  ⚠️ File uploads require a local file server. Use network URLs for production.
+                </p>
+              </div>
             </div>
 
             {/* Category */}

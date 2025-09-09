@@ -28,6 +28,14 @@ const securityHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  {
+    key: 'Content-Security-Policy',
+    value:
+      "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com 'report-sample'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://api.posalpro.com https://cdnjs.cloudflare.com https://unpkg.com; worker-src 'self' blob: https://cdnjs.cloudflare.com https://unpkg.com; frame-ancestors 'none'; report-uri /api/security/csp-report",
+  },
+  { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+  { key: 'Pragma', value: 'no-cache' },
+  { key: 'Expires', value: '0' },
 ];
 
 const baseConfig = {
@@ -51,7 +59,8 @@ const baseConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 60,
     dangerouslyAllowSVG: true,
-    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    contentSecurityPolicy:
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; sandbox;",
   },
 
   // Keep strict checks; do not ignore errors during builds

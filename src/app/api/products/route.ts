@@ -117,9 +117,15 @@ export const POST = createRoute(
     });
 
     try {
+      // Handle nullable datasheetPath field
+      const processedBody = {
+        ...body!,
+        datasheetPath: body!.datasheetPath || undefined,
+      };
+
       // Delegate to service layer (business logic belongs here)
       const createdProduct = await withAsyncErrorHandler(
-        () => productService.createProductWithValidation(body!, user.id),
+        () => productService.createProductWithValidation(processedBody, user.id),
         'POST product failed',
         { component: 'ProductAPI', operation: 'POST' }
       );

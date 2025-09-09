@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Preview Test</title>
+    <!-- CSP headers for PDF.js -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline'; worker-src 'self' blob: https://unpkg.com; connect-src 'self' https://unpkg.com http://localhost:8080;">
+    <!-- Use working PDF.js version -->
+    <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        canvas { border: 1px solid #ccc; margin: 10px 0; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .loading { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+    </style>
+</head>
+<body>
+    <h1>PDF Preview Test</h1>
+    <p>This page tests PDF.js loading without service worker interference.</p>
+    <p><strong>Testing with:</strong> UL-2BIR40M4-IP.pdf from your CORS-enabled local file server</p>
+    <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 4px; margin: 10px 0; border: 1px solid #c3e6cb;">
+        <strong>✅ SUCCESS:</strong> Network PDF loaded via proxy! This means your main document preview feature is working in the app.
+    </div>
+    <p><strong>Note:</strong> Network PDF test requires authentication. Use local PDF test first.</p>
+    <p><strong>Server:</strong> CORS-enabled Python server running on http://localhost:8080</p>
+
+    <button onclick="testWorker()">Test Worker Loading</button>
+    <button onclick="loadLocalPDF()">Load UL-2BIR40M4-IP.pdf</button>
+    <button onclick="loadNetworkPDF()">Load Network PDF</button>
+
+    <div id="status" class="status"></div>
+    <div id="pdf-container"></div>
+
+    <script>
+        // Configure PDF.js worker with cache busting
+        const cacheBuster = Date.now();
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js?v=${cacheBuster}`;
+
+        function updateStatus(message, type = 'loading') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        async function testWorker() {
+            try {
+                updateStatus('Testing PDF.js worker loading...', 'loading');
+
+                // Simple test to see if worker loads
+                const pdfjsLib = window.pdfjsLib;
+                if (!pdfjsLib) {
+                    throw new Error('PDF.js library not loaded');
+                }
+
+                // Test worker configuration
+                const workerSrc = pdfjsLib.GlobalWorkerOptions.workerSrc;
+                console.log('Worker source:', workerSrc);
+
+                updateStatus('PDF.js worker configured successfully!', 'success');
+                return true;
+
+            } catch (error) {
+                console.error('Worker test error:', error);
+                updateStatus(`Worker test failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function loadLocalPDF() {
+            try {
+                updateStatus('Loading local PDF...', 'loading');
+
+                // Use the UL-2BIR40M4-IP.pdf file
+                const url = 'http://localhost:8080/UL-2BIR40M4-IP.pdf';
+
+                const loadingTask = pdfjsLib.getDocument({
+                    url: url,
+                    // Disable service worker interference
+                    disableAutoFetch: true,
+                    disableStream: true
+                });
+
+                const pdf = await loadingTask.promise;
+                console.log('UL-2BIR40M4-IP.pdf loaded successfully! Pages:', pdf.numPages);
+
+                await renderPDF(pdf);
+                updateStatus('UL-2BIR40M4-IP.pdf loaded successfully!', 'success');
+
+            } catch (error) {
+                console.error('UL-2BIR40M4-IP.pdf loading error:', error);
+                updateStatus(`UL-2BIR40M4-IP.pdf failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function loadNetworkPDF() {
+            try {
+                updateStatus('Loading network PDF via proxy...', 'loading');
+
+                // Use PosalPro's document proxy API to avoid CORS issues
+                const proxyUrl = 'http://localhost:3000/api/documents?url=https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
+
+                const loadingTask = pdfjsLib.getDocument({
+                    url: proxyUrl,
+                    // Disable service worker interference
+                    disableAutoFetch: true,
+                    disableStream: true,
+                    // Add authorization if needed
+                    httpHeaders: {
+                        'Accept': 'application/pdf,*/*'
+                    }
+                });
+
+                const pdf = await loadingTask.promise;
+                console.log('Network PDF loaded via proxy successfully! Pages:', pdf.numPages);
+
+                await renderPDF(pdf);
+                updateStatus(`Network PDF loaded via PosalPro proxy successfully! (${pdf.numPages} pages)`, 'success');
+
+            } catch (error) {
+                console.error('Network PDF loading error:', error);
+                updateStatus(`Network PDF failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function renderPDF(pdf) {
+            // Clear previous content
+            const container = document.getElementById('pdf-container');
+            container.innerHTML = '';
+
+            // Load first page
+            const page = await pdf.getPage(1);
+            const scale = 1.5;
+            const viewport = page.getViewport({scale});
+
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            canvas.style.maxWidth = '100%';
+
+            const renderContext = {
+                canvasContext: context,
+                viewport: viewport
+            };
+
+            await page.render(renderContext).promise;
+            container.appendChild(canvas);
+        }
+
+        // Auto-test worker on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                console.log('Page loaded, testing PDF.js...');
+                if (typeof pdfjsLib !== 'undefined') {
+                    console.log('✅ PDF.js library loaded successfully');
+                    updateStatus('PDF.js library loaded, testing worker...', 'loading');
+                    setTimeout(testWorker, 500);
+                } else {
+                    console.error('❌ PDF.js library not loaded');
+                    updateStatus('PDF.js library failed to load', 'error');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

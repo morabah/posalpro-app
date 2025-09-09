@@ -102,6 +102,22 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Skip external domains and local file server (PDF files, external resources)
+  if (url.hostname !== location.hostname) {
+    // Skip all localhost:8080 requests (our file server)
+    if (url.hostname === 'localhost' && url.port === '8080') {
+      return;
+    }
+    // Skip PDF files and other external resources to avoid CORS/service worker conflicts
+    if (
+      url.pathname.endsWith('.pdf') ||
+      url.pathname.includes('pdfjs') ||
+      url.hostname.includes('unpkg.com')
+    ) {
+      return;
+    }
+  }
+
   // Handle different types of requests
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(handleApiRequest(request));

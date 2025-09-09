@@ -30,7 +30,28 @@ export const DatasheetPathSchema = z
   .string()
   .max(500, 'Datasheet path must be 500 characters or less')
   .optional()
-  .nullable();
+  .nullable()
+  .refine(
+    value => {
+      if (!value) return true; // Allow empty/null values
+
+      // Check if it's a valid URL
+      try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+      } catch {
+        // If it's not a valid URL, check if it's a local path (for development)
+        return (
+          value.includes('localhost') ||
+          value.includes('127.0.0.1') ||
+          value.match(/^\/[a-zA-Z0-9]/)
+        ); // Relative paths
+      }
+    },
+    {
+      message: 'Must be a valid HTTP/HTTPS URL or local development path',
+    }
+  );
 
 // ====================
 // Core Product Schemas
