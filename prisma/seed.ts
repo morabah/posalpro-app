@@ -2562,33 +2562,19 @@ async function main() {
       },
     });
 
-    // Add products to proposal
-    for (const productName of proposalData.products) {
-      const product = createdProducts[productName];
-      if (product) {
-        await prisma.proposalProduct.create({
-          data: {
-            proposalId: newProposal.id,
-            productId: product.id,
-            quantity: 1,
-            unitPrice: product.price,
-            total: product.price,
-          },
-        });
-      }
-    }
-
-    // Add proposal sections
+    // Add proposal sections first
     const sections = [
       { title: 'Executive Summary', type: SectionType.TEXT, order: 1 },
       { title: 'Technical Requirements', type: SectionType.TEXT, order: 2 },
       { title: 'Product Configuration', type: SectionType.PRODUCTS, order: 3 },
       { title: 'Implementation Plan', type: SectionType.TEXT, order: 4 },
       { title: 'Pricing and Terms', type: SectionType.TERMS, order: 5 },
+      { title: 'Technical Approach', type: SectionType.TEXT, order: 6 },
     ];
 
+    const createdSections: Record<string, any> = {};
     for (const sectionData of sections) {
-      await prisma.proposalSection.create({
+      const section = await prisma.proposalSection.create({
         data: {
           proposalId: newProposal.id,
           title: sectionData.title,
@@ -2597,6 +2583,35 @@ async function main() {
           order: sectionData.order,
         },
       });
+      createdSections[sectionData.title] = section;
+    }
+
+    // Add products to proposal with section assignments
+    const productSectionMapping = {
+      'Sahab Cloud Platform': createdSections['Technical Approach']?.id,
+      'Bayan Analytics Suite': createdSections['Technical Approach']?.id,
+      'Amn Security Monitoring': createdSections['Technical Approach']?.id,
+      'Rabt Data Integration': createdSections['Technical Approach']?.id,
+      'Jawwal Mobile Framework': createdSections['Technical Approach']?.id,
+      'Raqib IoT Management': createdSections['Technical Approach']?.id,
+    };
+
+    for (const productName of proposalData.products) {
+      const product = createdProducts[productName];
+      if (product) {
+        const assignedSectionId = productSectionMapping[productName as keyof typeof productSectionMapping];
+
+        await prisma.proposalProduct.create({
+          data: {
+            proposalId: newProposal.id,
+            productId: product.id,
+            sectionId: assignedSectionId,
+            quantity: 1,
+            unitPrice: product.price,
+            total: product.price,
+          },
+        });
+      }
     }
 
     // Optional: update computed counts

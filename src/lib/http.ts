@@ -87,6 +87,12 @@ export class HttpClient {
       },
     };
 
+    // ✅ CRITICAL: Remove Content-Type header for FormData to let browser set multipart/form-data
+    if (options.body instanceof FormData && requestOptions.headers) {
+      const headers = requestOptions.headers as Record<string, string>;
+      delete headers['Content-Type'];
+    }
+
     // Add timeout support
     const timeoutPromise = this.createTimeoutPromise(options.timeout || this.config.timeout!);
     const fetchPromise = this.makeRequest(url, requestOptions, requestId, startTime);
@@ -117,7 +123,7 @@ export class HttpClient {
     return this.request<T>(input, {
       ...options,
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined,
     });
   }
 
@@ -132,7 +138,7 @@ export class HttpClient {
     return this.request<T>(input, {
       ...options,
       method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined,
     });
   }
 
@@ -147,7 +153,7 @@ export class HttpClient {
     return this.request<T>(input, {
       ...options,
       method: 'PATCH',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ? (data instanceof FormData ? data : JSON.stringify(data)) : undefined,
     });
   }
 

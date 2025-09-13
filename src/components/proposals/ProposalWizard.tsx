@@ -99,6 +99,8 @@ import { WizardHeader } from './wizard/WizardHeader';
 import { WizardSidebar } from './wizard/WizardSidebar';
 // Icons now handled inside extracted components
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useSectionAssignmentStore } from '@/features/proposal-sections/store';
+import { flushPendingSectionCreatesAndUpdates } from '@/features/proposal-sections/publicApi';
 
 // Step components
 import { BasicInformationStep } from './steps/BasicInformationStep';
@@ -192,6 +194,9 @@ export function ProposalWizard({
   // Hook must be called at component level, not inside callbacks
   const createProposal = useCreateProposal();
 
+  // Keep hook order stable: derive finish disabled state at top-level
+  const finishDisabled = useSectionAssignmentStore(s => s.sectionsDirty);
+
   // Prevent duplicate initialization
   const hasInitializedRef = useRef(false);
 
@@ -281,8 +286,17 @@ export function ProposalWizard({
   const handleUpdateCurrent = useCallback(async () => {
     if (!editMode || !proposalId) return;
     try {
+      // Wait for any in-flight section creations/edits to settle
+      try {
+        await flushPendingSectionCreatesAndUpdates();
+      } catch {}
       const payload = buildWizardPayload();
       await http.put(`/api/proposals/${proposalId}`, payload);
+      // After products persisted (ids stable), flush any pending assignments
+      try {
+        const { assignmentsDirty, flushPendingAssignments } = useSectionAssignmentStore.getState();
+        if (assignmentsDirty) await flushPendingAssignments(proposalId);
+      } catch {}
       // ✅ IMPROVED: Add small delay to ensure cache invalidation completes
       await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -341,8 +355,17 @@ export function ProposalWizard({
     // Finish = save then navigate (edit mode)
     if (editMode && proposalId) {
       try {
+        // Wait for any in-flight section creations/edits to settle
+        try {
+          await flushPendingSectionCreatesAndUpdates();
+        } catch {}
         const payload = buildWizardPayload();
         await http.put(`/api/proposals/${proposalId}`, payload);
+        // After products persisted (ids stable), flush any pending assignments
+        try {
+          const { assignmentsDirty, flushPendingAssignments } = useSectionAssignmentStore.getState();
+          if (assignmentsDirty) await flushPendingAssignments(proposalId);
+        } catch {}
 
         // ✅ IMPROVED: Invalidate caches BEFORE verification to ensure fresh data
         try {
@@ -437,7 +460,14 @@ export function ProposalWizard({
 
   const handlePreview = useCallback(() => {
     try {
-      // Build preview from persisted wizard store for BOTH create and edit modes
+      // If we have a proposal ID (edit mode), use the API preview
+      if (editMode && proposalId) {
+        window.open(`/proposals/preview?id=${proposalId}`, '_blank', 'noopener,noreferrer');
+        toast.success('Opening proposal preview...');
+        return;
+      }
+
+      // Build preview from persisted wizard store for create mode
       const { stepData } = useProposalStore.getState();
       const s1: ProposalStepData = stepData[1] || {};
       const s4: ProposalStepData = stepData[4] || {};
@@ -469,7 +499,7 @@ export function ProposalWizard({
     } catch (e) {
       toast.error('Failed to open preview');
     }
-  }, [toast]);
+  }, [toast, editMode, proposalId]);
 
   // Navigation handlers
   const handleNext = useCallback(async () => {
@@ -948,7 +978,7 @@ export function ProposalWizard({
                         Update
                       </Button>
                     )}
-                    <Button variant="outline" onClick={handleFinish}>
+                    <Button variant="outline" onClick={handleFinish} disabled={finishDisabled}>
                       Finish
                     </Button>
                   </div>

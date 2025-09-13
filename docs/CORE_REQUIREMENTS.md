@@ -28,6 +28,15 @@ following items are mandatory moving forward:
   cross-domain/session issues.
   - References: `src/lib/auth.ts`
 
+- PDF preview stability: Use a single `react-pdf` instance and configure a
+  same-origin pdf.js worker via `workerPort` (bundled); fall back to
+  `workerSrc` pinned to `pdfjs-dist@5.3.93` only if needed. Guard `<Page>`
+  rendering (`numPages > 0`), remount on worker messageHandler errors, avoid
+  logging circular objects, and proxy network PDFs through `/api/documents`.
+  - References: `src/components/providers/QueryProvider.tsx`,
+    `src/components/products/DocumentPreview.tsx`,
+    `src/app/api/documents/route.ts`
+
 These practices are now treated as non-negotiable and must be preserved in
 future changes and reviews.
 
@@ -927,6 +936,24 @@ const response = await http.get<{ success: boolean; data: CustomerList }>(
 if (response.success) {
   return { ok: true, data: response.data };
 }
+```
+
+### HTTP Client Unwrapped Data (MANDATORY)
+
+- Do not annotate `http.*` calls with `ApiResponse<T>`; the client returns `T` directly.
+- Never check `res.ok` or `'ok' in res` on results from `@/lib/http`.
+- Hooks and frontend services must type `http.*<T>` and work with `T`.
+- Only rewrap to `{ ok: true, data }` at service boundaries that explicitly return `ApiResponse<T>`.
+
+```typescript
+// ❌ FORBIDDEN: Treating http result as an envelope
+const res = await http.post<ApiResponse<Section>>(`/api/proposals/${id}/sections`, input);
+if (!res.ok) throw new Error(res.message || 'Failed');
+return res.data;
+
+// ✅ REQUIRED: Use unwrapped generics and data directly
+const section = await http.post<Section>(`/api/proposals/${id}/sections`, input);
+return section; // or rewrap once if your method returns ApiResponse
 ```
 
 ## 🧠 **STATE MANAGEMENT** {#state-management}

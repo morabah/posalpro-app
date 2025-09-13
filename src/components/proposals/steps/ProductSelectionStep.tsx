@@ -6,17 +6,22 @@
  * Follows PROPOSAL_MIGRATION_ASSESSMENT.md guidelines
  */
 
+import { useToast } from '@/components/feedback/Toast/ToastProvider';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
 import { Tooltip } from '@/components/ui/Tooltip';
 import type { Product } from '@/features/products';
 import { useUnifiedProductSelectionData } from '@/features/products/hooks';
+import { useCreateSectionMutation, useDeleteSectionMutation, useProposalSections } from '@/features/proposal-sections/hooks';
+import { CreateBomSectionSchema } from '@/features/proposal-sections/schemas';
+import { useSectionAssignmentStore } from '@/features/proposal-sections/store';
 import { useUpdateProposal, type WizardProposalUpdateData } from '@/features/proposals';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { useProposalSetStepData, type ProposalProductData } from '@/lib/store/proposalStore';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Plus, Trash2 } from 'lucide-react';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -51,6 +56,24 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const setStepData = useProposalSetStepData();
   const updateProposalMutation = useUpdateProposal();
+  const { data: sectionsData, refetch: refetchSections } = useProposalSections(proposalId);
+  const createSection = useCreateSectionMutation(proposalId || '');
+  const deleteSection = useDeleteSectionMutation(proposalId || '');
+  const { setAssignment, pendingAssignments, assignmentsDirty, setSectionsPending } =
+    useSectionAssignmentStore();
+  const sectionsPending = useSectionAssignmentStore(s => s.sectionsDirty);
+  const toast = useToast();
+  const sectionsCount = (sectionsData || []).length;
+  const [sectionsLastUpdated, setSectionsLastUpdated] = useState<string | null>(null);
+
+  // Local UI state for creating section
+  const [isAddingSection, setIsAddingSection] = useState(false);
+  const [newSectionTitle, setNewSectionTitle] = useState('');
+  const [newSectionDesc, setNewSectionDesc] = useState('');
+  const creatingRef = useRef(false);
+
+  // ✅ FIX: Removed client-side duplicate validation - API handles it gracefully
+  // The API returns status 200 for existing sections (idempotent behavior)
 
   // Local state for form data
   const [selectedProducts, setSelectedProducts] = useState<ProposalProductData['products']>(() => {
@@ -178,9 +201,11 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   // Extract categories data
   const { data: categoryData, isLoading: categoriesLoading } = categories;
 
-  // Flatten the paginated data for compatibility
-  const flattenedProductsData: Product[] =
-    productsData?.pages?.flatMap((page: any) => page.items) || [];
+  // Flatten the paginated data for compatibility - memoized for performance
+  const flattenedProductsData: Product[] = useMemo(
+    () => productsData?.pages?.flatMap((page: any) => page.items) || [],
+    [productsData?.pages]
+  );
 
   // Quick lookup sets
   const selectedSet = useMemo(
@@ -228,6 +253,92 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         } as unknown as Product)
     );
   }, [showSelectedOnly, selectedProducts, productsMap, flattenedProductsData, selectedSet]);
+
+  // Compute current assignment per selected product (consider pending changes)
+  const currentAssignmentByRow = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    for (const sp of selectedProducts) {
+      const pending = pendingAssignments[sp.id];
+      if (pending !== undefined) map[sp.id] = pending;
+      else map[sp.id] = sp.sectionId ?? null;
+    }
+    return map;
+  }, [selectedProducts, pendingAssignments]);
+
+  // Compute counts per section
+  const sectionCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const sp of selectedProducts) {
+      const sid = currentAssignmentByRow[sp.id];
+      if (!sid) continue;
+      counts[sid] = (counts[sid] || 0) + 1;
+    }
+    return counts;
+  }, [selectedProducts, currentAssignmentByRow]);
+
+  // Group products by sections with totals
+  const groupedProductsBySection = useMemo(() => {
+    const grouped: Record<string, { section: any; products: any[]; total: number }> = {};
+    const unassignedProducts: any[] = [];
+
+    // Initialize sections
+    (sectionsData || []).forEach(section => {
+      grouped[section.id] = {
+        section,
+        products: [],
+        total: 0,
+      };
+    });
+
+    // Group products by section
+    selectedProducts.forEach(product => {
+      const sectionId = currentAssignmentByRow[product.id];
+      if (sectionId && grouped[sectionId]) {
+        grouped[sectionId].products.push(product);
+        grouped[sectionId].total += product.total || 0;
+      } else {
+        unassignedProducts.push(product);
+      }
+    });
+
+    return { grouped, unassignedProducts };
+  }, [selectedProducts, currentAssignmentByRow, sectionsData]);
+
+  // Handle section deletion
+  const handleDeleteSection = useCallback(
+    async (sectionId: string, sectionTitle: string) => {
+      if (!proposalId) return;
+
+      try {
+        // Check if section has products assigned
+        const sectionProducts = groupedProductsBySection.grouped[sectionId]?.products || [];
+        if (sectionProducts.length > 0) {
+          toast.error(
+            `Cannot delete section "${sectionTitle}" because it has ${sectionProducts.length} assigned product(s). Please reassign or remove products first.`
+          );
+          return;
+        }
+
+        await deleteSection.mutateAsync(sectionId);
+
+        analytics('section_deleted', {
+          sectionId,
+          sectionTitle,
+          userStory: 'US-3.1',
+          hypothesis: 'H4',
+        });
+      } catch (error) {
+        logError('ProductSelectionStep: Failed to delete section', {
+          component: 'ProductSelectionStep',
+          operation: 'handleDeleteSection',
+          sectionId,
+          sectionTitle,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    },
+    [proposalId, deleteSection, toast, analytics, groupedProductsBySection]
+  );
 
   // Handle product addition
   const handleAddProduct = useCallback(
@@ -324,11 +435,20 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   const lastSavedDataRef = useRef<string>('');
   const pendingSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Create products with section assignments
+  const productsWithSections = useMemo(() => {
+    return selectedProducts.map(product => ({
+      ...product,
+      sectionId: currentAssignmentByRow[product.id] || null,
+    }));
+  }, [selectedProducts, currentAssignmentByRow]);
+
   // Persist current step data into the store and auto-save to database with proper debouncing
   useEffect(() => {
     const freshTotal = selectedProducts.reduce((sum, p) => sum + p.unitPrice * p.quantity, 0);
+
     const stepData: ProposalProductData = {
-      products: selectedProducts,
+      products: productsWithSections,
       totalValue: freshTotal,
     };
 
@@ -424,26 +544,89 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         }
       };
     }
-  }, [selectedProducts, setStepData, proposalId, updateProposalMutation]);
+  }, [productsWithSections, setStepData, proposalId, updateProposalMutation]);
 
-  const handleNext = useCallback(() => {
+  // Handler: create new section
+  const handleCreateSection = useCallback(async () => {
+    if (!proposalId) return; // cannot create without proposal context
+    try {
+      if (creatingRef.current || createSection.isPending || sectionsPending) return;
+      creatingRef.current = true;
+      setSectionsPending(true);
+      const input = { title: newSectionTitle, description: newSectionDesc };
+      CreateBomSectionSchema.parse(input);
+
+      // Remove client-side duplicate check - let API handle it gracefully
+      // The API returns status 200 for duplicates (idempotent operation)
+
+      const result = await createSection.mutateAsync(input as any);
+
+      // Force refresh and show success toast
+      let newCount = (sectionsData || []).length;
+      try {
+        const refreshed = await refetchSections();
+        newCount = ((refreshed.data as any) || sectionsData || []).length;
+      } catch {}
+
+      // Show success message regardless of whether it was created or already existed
+      toast.success(`Section '${input.title}' ready (${newCount} total)`);
+      setSectionsLastUpdated('just now');
+      setNewSectionTitle('');
+      setNewSectionDesc('');
+      setIsAddingSection(false);
+    } catch (error) {
+      // Only show error for actual failures, not duplicates
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create section';
+      if (!errorMessage.toLowerCase().includes('already exists')) {
+        toast.error(errorMessage);
+      } else {
+        // For duplicate errors, show success instead
+        toast.success(`Section '${newSectionTitle}' already exists and is ready to use`);
+        setNewSectionTitle('');
+        setNewSectionDesc('');
+        setIsAddingSection(false);
+      }
+    } finally {
+      setSectionsPending(false);
+      creatingRef.current = false;
+    }
+  }, [
+    proposalId,
+    newSectionTitle,
+    newSectionDesc,
+    createSection,
+    setSectionsPending,
+    sectionsData,
+    toast,
+    refetchSections,
+    sectionsPending,
+  ]);
+
+  const handleNext = useCallback(async () => {
     // Calculate fresh total to ensure accuracy
     const freshTotal = selectedProducts.reduce((sum, product) => {
       return sum + product.unitPrice * product.quantity;
     }, 0);
 
+    // Include section assignments in step data
+    const productsWithSections = selectedProducts.map(product => ({
+      ...product,
+      sectionId: currentAssignmentByRow[product.id] || null,
+    }));
+
     const stepData: ProposalProductData = {
-      products: selectedProducts,
-      totalValue: freshTotal, // ✅ FIXED: Use freshly calculated total
+      products: productsWithSections,
+      totalValue: freshTotal,
     };
 
     // Reduced logging for step navigation
     if (process.env.NODE_ENV === 'development') {
-      logDebug('ProductSelectionStep: Step data saved', {
+      logDebug('ProductSelectionStep: Step data saved with sections', {
         component: 'ProductSelectionStep',
         operation: 'handleNext',
         productsCount: selectedProducts.length,
         totalValue: freshTotal,
+        sectionsAssigned: Object.values(currentAssignmentByRow).filter(Boolean).length,
       });
     }
 
@@ -458,6 +641,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         step: 'product_selection',
         productsSelected: selectedProducts.length,
         totalValue: freshTotal,
+        sectionsAssigned: Object.values(currentAssignmentByRow).filter(Boolean).length,
       },
     });
 
@@ -468,21 +652,119 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         stepName: 'Product Selection',
         productCount: selectedProducts.length,
         totalAmount: freshTotal,
+        sectionsAssigned: Object.values(currentAssignmentByRow).filter(Boolean).length,
         userStory: 'US-3.1',
         hypothesis: 'H4',
       },
       'medium'
     );
 
+    // Ensure pending assignments flushed before moving on
+    try {
+      if (proposalId) {
+        await useSectionAssignmentStore.getState().flushPendingAssignments(proposalId);
+      }
+    } catch {
+      // ignore here; wizard will handle errors on update/finish
+    }
+
     onNext();
-  }, [analytics, onNext, selectedProducts, setStepData]);
+  }, [analytics, onNext, selectedProducts, setStepData, proposalId, currentAssignmentByRow]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Product Selection</h2>
-        <p className="mt-2 text-gray-600">Choose products and services for your proposal</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Product Selection</h2>
+          <p className="mt-2 text-gray-600">Choose products and assign to sections</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-700">Sections ({sectionsCount})</span>
+          <Button
+            aria-label="Add section"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsAddingSection(s => !s)}
+            disabled={!proposalId}
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
+
+      {isAddingSection && (
+        <Card className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+              <Input
+                value={newSectionTitle}
+                onChange={e => setNewSectionTitle(e.target.value)}
+                placeholder="e.g., Cameras"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description (optional)
+              </label>
+              <Input
+                value={newSectionDesc}
+                onChange={e => setNewSectionDesc(e.target.value)}
+                placeholder="Short description"
+              />
+            </div>
+            <div className="flex gap-2 md:col-span-3">
+              <Button
+                onClick={handleCreateSection}
+                disabled={
+                  !proposalId ||
+                  !newSectionTitle.trim() ||
+                  createSection.isPending ||
+                  sectionsPending
+                }
+                aria-label="Create section"
+              >
+                Create Section
+              </Button>
+              <Button variant="outline" onClick={() => setIsAddingSection(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Sections panel */}
+      <Card className="p-4">
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Sections</h3>
+        {!sectionsData || sectionsData.length === 0 ? (
+          <p className="text-gray-500">No sections yet. Click + to add a header section.</p>
+        ) : (
+          <div className="space-y-2">
+            {sectionsData.map(s => (
+              <div key={s.id} className="flex items-center justify-between p-2 border rounded bg-gray-50">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900">{s.title}</span>
+                  <span className="text-xs text-gray-500">({sectionCounts[s.id] || 0} products)</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => handleDeleteSection(s.id, s.title)}
+                  disabled={deleteSection.isPending}
+                  aria-label={`Delete section ${s.title}`}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        {sectionsLastUpdated && (
+          <div className="mt-2 text-xs text-gray-500">Last updated {sectionsLastUpdated}</div>
+        )}
+      </Card>
 
       {/* Search & Sort */}
       <Card className="p-4">
@@ -558,6 +840,231 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
             </label>
           </div>
         </div>
+      </Card>
+
+      {/* Grouped products by sections */}
+      <Card className="p-4">
+        <h3 className="text-lg font-medium text-gray-900 mb-3">Selected Items by Section</h3>
+        {(!selectedProducts || selectedProducts.length === 0) && (
+          <p className="text-gray-500">No products selected.</p>
+        )}
+        {selectedProducts && selectedProducts.length > 0 && (
+          <div className="space-y-6">
+            {/* Show sections with products */}
+            {Object.values(groupedProductsBySection.grouped).map(({ section, products, total }) => {
+              if (products.length === 0) return null;
+
+              return (
+                <div key={section.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+                    <h4 className="text-lg font-semibold text-gray-900">{section.title}</h4>
+                    <div className="text-right">
+                      <div className="text-sm text-gray-500">{products.length} product{products.length !== 1 ? 's' : ''}</div>
+                      <div className="text-lg font-bold text-gray-900">${total.toFixed(2)}</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {/* Header row */}
+                    <div className="grid grid-cols-12 gap-4 py-2 px-3 bg-gray-50 rounded text-sm font-medium text-gray-700">
+                      <div className="col-span-4">Product</div>
+                      <div className="col-span-2 text-center">Quantity</div>
+                      <div className="col-span-2 text-center">Unit Price</div>
+                      <div className="col-span-2 text-center">Total Price</div>
+                      <div className="col-span-1 text-center">Section</div>
+                      <div className="col-span-1 text-center">Action</div>
+                    </div>
+
+                    {/* Product rows */}
+                    {products.map(sp => (
+                      <div key={sp.id} className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50">
+                        <div className="col-span-4 min-w-0">
+                          <div className="font-medium text-gray-900 truncate">{sp.name}</div>
+                          <div className="text-xs text-gray-500 truncate">
+                            {sp.category || 'General'}
+                          </div>
+                        </div>
+                        <div className="col-span-2 flex items-center justify-center">
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => handleQuantityChange(sp.productId, sp.quantity - 1)}
+                            >
+                              -
+                            </Button>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={sp.quantity}
+                              onChange={e => handleQuantityChange(sp.productId, parseInt(e.target.value) || 1)}
+                              className="w-12 h-6 text-center text-sm"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => handleQuantityChange(sp.productId, sp.quantity + 1)}
+                            >
+                              +
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="col-span-2 flex items-center justify-center">
+                          <span className="text-sm font-medium text-gray-900">
+                            ${(sp.unitPrice || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="col-span-2 flex items-center justify-center">
+                          <span className="text-sm font-semibold text-gray-900">
+                            ${(sp.total || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="col-span-1 flex items-center justify-center">
+                          <select
+                            aria-label={`Assign section for ${sp.name}`}
+                            className="border rounded px-2 py-1 text-sm w-full"
+                            disabled={!proposalId}
+                            value={currentAssignmentByRow[sp.id] ?? ''}
+                            onChange={e => setAssignment(sp.id, e.target.value || null)}
+                          >
+                            <option value="">Unassigned</option>
+                            {(sectionsData || [])
+                              .slice()
+                              .sort((a, b) => a.order - b.order)
+                              .map(s => (
+                                <option key={s.id} value={s.id}>
+                                  {s.title}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                        <div className="col-span-1 flex items-center justify-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => handleRemoveProduct(sp.productId)}
+                            aria-label={`Remove ${sp.name}`}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Show unassigned products */}
+            {groupedProductsBySection.unassignedProducts.length > 0 && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+                  <h4 className="text-lg font-semibold text-gray-900">Unassigned Products</h4>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-500">{groupedProductsBySection.unassignedProducts.length} product{groupedProductsBySection.unassignedProducts.length !== 1 ? 's' : ''}</div>
+                    <div className="text-lg font-bold text-gray-900">
+                      ${groupedProductsBySection.unassignedProducts.reduce((sum, p) => sum + (p.total || 0), 0).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Header row */}
+                  <div className="grid grid-cols-12 gap-4 py-2 px-3 bg-gray-50 rounded text-sm font-medium text-gray-700">
+                    <div className="col-span-4">Product</div>
+                    <div className="col-span-2 text-center">Quantity</div>
+                    <div className="col-span-2 text-center">Unit Price</div>
+                    <div className="col-span-2 text-center">Total Price</div>
+                    <div className="col-span-1 text-center">Section</div>
+                    <div className="col-span-1 text-center">Action</div>
+                  </div>
+
+                  {/* Unassigned product rows */}
+                  {groupedProductsBySection.unassignedProducts.map(sp => (
+                    <div key={sp.id} className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50">
+                      <div className="col-span-4 min-w-0">
+                        <div className="font-medium text-gray-900 truncate">{sp.name}</div>
+                        <div className="text-xs text-gray-500 truncate">
+                          {sp.category || 'General'}
+                        </div>
+                      </div>
+                      <div className="col-span-2 flex items-center justify-center">
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => handleQuantityChange(sp.productId, sp.quantity - 1)}
+                          >
+                            -
+                          </Button>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={sp.quantity}
+                            onChange={e => handleQuantityChange(sp.productId, parseInt(e.target.value) || 1)}
+                            className="w-12 h-6 text-center text-sm"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => handleQuantityChange(sp.productId, sp.quantity + 1)}
+                          >
+                            +
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="col-span-2 flex items-center justify-center">
+                        <span className="text-sm font-medium text-gray-900">
+                          ${(sp.unitPrice || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="col-span-2 flex items-center justify-center">
+                        <span className="text-sm font-semibold text-gray-900">
+                          ${(sp.total || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="col-span-1 flex items-center justify-center">
+                        <select
+                          aria-label={`Assign section for ${sp.name}`}
+                          className="border rounded px-2 py-1 text-sm w-full"
+                          disabled={!proposalId}
+                          value={currentAssignmentByRow[sp.id] ?? ''}
+                          onChange={e => setAssignment(sp.id, e.target.value || null)}
+                        >
+                          <option value="">Unassigned</option>
+                          {(sectionsData || [])
+                            .slice()
+                            .sort((a, b) => a.order - b.order)
+                            .map(s => (
+                              <option key={s.id} value={s.id}>
+                                {s.title}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      <div className="col-span-1 flex items-center justify-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleRemoveProduct(sp.productId)}
+                          aria-label={`Remove ${sp.name}`}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* Loading State */}

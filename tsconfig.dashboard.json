@@ -1,7 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "noEmit": true
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "tsBuildInfoFile": "./config/tsconfig.dashboard.tsbuildinfo"
   },
   "include": [
     "src/app/(dashboard)/**/*.ts",

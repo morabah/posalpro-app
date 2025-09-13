@@ -198,9 +198,12 @@ export class SecurityHeaders {
           : "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com data:",
         "img-src 'self' data: https:",
-        "connect-src 'self' https://api.posalpro.com https://cdnjs.cloudflare.com",
-        // Allow PDF.js worker scripts and blob URLs
-        "worker-src 'self' blob: https://cdnjs.cloudflare.com",
+        // Allow API connections and CDN used by PDF.js worker
+        "connect-src 'self' https://api.posalpro.com https://cdnjs.cloudflare.com https://unpkg.com",
+        // Allow PDF.js worker scripts and blob URLs (match next.config.js)
+        "worker-src 'self' blob: https://cdnjs.cloudflare.com https://unpkg.com",
+        // Allow iframe embedding for PDF datasheets
+        "frame-src 'self' http://localhost:8080 https: https://mozilla.github.io",
         "frame-ancestors 'none'",
         // CSP violation reporting endpoint
         'report-uri /api/security/csp-report',

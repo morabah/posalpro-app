@@ -339,7 +339,7 @@ export function useEnhancedFetch() {
 /**
  * Hybrid API client that combines Next.js primitives with our infrastructure
  */
-export function useHybridApiClient() {
+export function useHybridApiClient(): ReturnType<typeof useApiClient> & ReturnType<typeof useEnhancedFetch> {
   const apiClient = useApiClient();
   const enhancedFetch = useEnhancedFetch();
 

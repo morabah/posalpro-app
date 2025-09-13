@@ -811,6 +811,8 @@ model ProposalSection {
   updatedAt        DateTime         @updatedAt
   proposal         Proposal         @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
+  proposalProducts     ProposalProduct[]
+
   @@index([proposalId, order])
   @@index([proposalId, order], map: "idx_proposal_sections_order")
   @@map("proposal_sections")
@@ -820,6 +822,7 @@ model ProposalProduct {
   id                 String            @id @default(cuid())
   proposalId         String
   productId          String
+  sectionId          String?
   quantity           Int               @default(1)
   unitPrice          Decimal
   discount           Decimal           @default(0)
@@ -830,10 +833,12 @@ model ProposalProduct {
   updatedAt          DateTime          @updatedAt
   product            Product           @relation(fields: [productId], references: [id])
   proposal           Proposal          @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  section            ProposalSection?  @relation(fields: [sectionId], references: [id])
   validationIssues   ValidationIssue[]
 
   @@index([proposalId])
   @@index([productId])
+  @@index([proposalId, sectionId])
   @@index([productId], map: "idx_proposal_products_product_id")
   @@map("proposal_products")
 }

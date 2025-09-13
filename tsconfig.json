@@ -41,9 +41,9 @@
     "explainFiles": false,
     "extendedDiagnostics": false,
 
-    // Build optimizations
-    "declaration": false,
-    "declarationMap": false,
+    // Build optimizations - declarations required for composite projects
+    "declaration": true,
+    "declarationMap": true,
     "emitDeclarationOnly": false,
     "sourceMap": false,
     "removeComments": false,
@@ -61,7 +61,7 @@
       "path": "./tsconfig.dashboard.json"
     }
   ],
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": ["next-env.d.ts"],
   "exclude": [
     "node_modules",
     "templates/**",

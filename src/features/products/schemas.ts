@@ -53,6 +53,55 @@ export const DatasheetPathSchema = z
     }
   );
 
+// Image validation schema
+export const ImageUrlSchema = z
+  .string()
+  .url('Must be a valid URL')
+  .refine(
+    url => {
+      try {
+        const parsedUrl = new URL(url);
+        // Allow HTTP/HTTPS URLs and local development paths
+        return (
+          parsedUrl.protocol === 'http:' ||
+          parsedUrl.protocol === 'https:' ||
+          url.includes('localhost') ||
+          url.includes('127.0.0.1') ||
+          url.match(/^\/[a-zA-Z0-9]/) // Relative paths
+        );
+      } catch {
+        return false;
+      }
+    },
+    {
+      message: 'Must be a valid HTTP/HTTPS URL or local development path',
+    }
+  );
+
+// Image upload schema for file uploads
+export const ImageUploadSchema = z.object({
+  file: z
+    .instanceof(File)
+    .refine(
+      file => file.size <= 5 * 1024 * 1024, // 5MB max
+      'File size must be less than 5MB'
+    )
+    .refine(
+      file => {
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+        return allowedTypes.includes(file.type);
+      },
+      'File must be an image (JPEG, PNG, WebP, or GIF)'
+    ),
+  alt: z.string().max(200, 'Alt text must be 200 characters or less').optional(),
+});
+
+// Product images schema
+export const ProductImagesSchema = z
+  .array(ImageUrlSchema)
+  .max(10, 'Maximum 10 images allowed per product')
+  .default([]);
+
 // ====================
 // Core Product Schemas
 // ====================
@@ -67,7 +116,7 @@ export const ProductSchema = z.object({
   category: z.union([z.array(z.string()), z.undefined()]).transform(val => val || []),
   tags: z.union([z.array(z.string()), z.undefined()]).transform(val => val || []),
   attributes: z.record(z.unknown()).optional(),
-  images: z.union([z.array(z.string()), z.undefined()]).transform(val => val || []),
+  images: ProductImagesSchema,
   datasheetPath: z.string().nullable().optional(), // Optional path to product datasheet (network or local)
   stockQuantity: z.number().optional().default(0),
   status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional().default('ACTIVE'),
@@ -312,6 +361,9 @@ export type ProductBulkOperation = z.infer<typeof ProductBulkOperationSchema>;
 export type LicenseDependency = z.infer<typeof LicenseDependencySchema>;
 export type ProductRelationshipType = z.infer<typeof ProductRelationshipTypeSchema>;
 export type DatasheetPath = z.infer<typeof DatasheetPathSchema>;
+export type ImageUrl = z.infer<typeof ImageUrlSchema>;
+export type ImageUpload = z.infer<typeof ImageUploadSchema>;
+export type ProductImages = z.infer<typeof ProductImagesSchema>;
 
 // ====================
 // API‑Specific Schemas

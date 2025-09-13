@@ -746,18 +746,68 @@ export default function ProposalVersionHistoryPage() {
                                 </div>
 
                                 {/* Expanded Detail View */}
-                                {expandedEntryIds.includes(entry.id) &&
-                                  expandedEntryDetail.data && (
-                                    <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm">
-                                      <div className="font-medium text-gray-900 mb-1">
-                                        Change Details
-                                      </div>
-                                      <div className="text-gray-700">
-                                        {expandedEntryDetail.data.changesSummary ||
-                                          'No additional details available'}
-                                      </div>
+                                {expandedEntryIds.includes(entry.id) && expandedEntryDetail.data && (
+                                  <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm">
+                                    <div className="font-medium text-gray-900 mb-2">Change Details</div>
+                                    <div className="text-gray-700 mb-2">
+                                      {expandedEntryDetail.data.changesSummary || 'No additional details available'}
                                     </div>
-                                  )}
+
+                                    {expandedEntryDetail.data.changeDetails && (
+                                      <div className="mb-2 text-gray-700">
+                                        <span className="font-medium">Grand total:</span>{' '}
+                                        {typeof (expandedEntryDetail.data.changeDetails as any).totalBefore === 'number' &&
+                                        typeof (expandedEntryDetail.data.changeDetails as any).totalAfter === 'number'
+                                          ? `${formatCurrency((expandedEntryDetail.data.changeDetails as any).totalBefore)} → ${formatCurrency((expandedEntryDetail.data.changeDetails as any).totalAfter)} (${((expandedEntryDetail.data.changeDetails as any).totalDelta >= 0 ? '+' : '')}${formatCurrency((expandedEntryDetail.data.changeDetails as any).totalDelta)})`
+                                          : '—'}
+                                      </div>
+                                    )}
+
+                                    {expandedEntryDetail.data.changes && (
+                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div>
+                                          <div className="font-medium text-gray-900">Added</div>
+                                          <ul className="list-disc list-inside text-gray-700">
+                                            {(expandedEntryDetail.data.changes.added || []).map((p, idx) => (
+                                              <li key={`add-${p.productId}-${idx}`}>
+                                                {p.name || p.productId} × {p.quantity}
+                                              </li>
+                                            ))}
+                                            {expandedEntryDetail.data.changes.added?.length === 0 && (
+                                              <li className="text-gray-400">None</li>
+                                            )}
+                                          </ul>
+                                        </div>
+                                        <div>
+                                          <div className="font-medium text-gray-900">Removed</div>
+                                          <ul className="list-disc list-inside text-gray-700">
+                                            {(expandedEntryDetail.data.changes.removed || []).map((p, idx) => (
+                                              <li key={`rem-${p.productId}-${idx}`}>
+                                                {p.name || p.productId} × {p.quantity}
+                                              </li>
+                                            ))}
+                                            {expandedEntryDetail.data.changes.removed?.length === 0 && (
+                                              <li className="text-gray-400">None</li>
+                                            )}
+                                          </ul>
+                                        </div>
+                                        <div>
+                                          <div className="font-medium text-gray-900">Updated</div>
+                                          <ul className="list-disc list-inside text-gray-700">
+                                            {(expandedEntryDetail.data.changes.updated || []).map((u, idx) => (
+                                              <li key={`upd-${u.productId}-${idx}`}>
+                                                {u.name || u.productId}
+                                              </li>
+                                            ))}
+                                            {expandedEntryDetail.data.changes.updated?.length === 0 && (
+                                              <li className="text-gray-400">None</li>
+                                            )}
+                                          </ul>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
 
                               <div className="flex items-center space-x-2 ml-4">

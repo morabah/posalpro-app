@@ -1,0 +1,8 @@
+
+        <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="200" height="200" fill="#3B82F6"/>
+          <text x="100" y="100" text-anchor="middle" dy="0.3em" fill="white" font-family="Arial" font-size="14" font-weight="bold">
+            Sample Product Image 1 - IoT Device
+          </text>
+        </svg>
+      

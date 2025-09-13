@@ -332,20 +332,101 @@ export function ServiceStatusMonitor({ className = '' }: ServiceStatusMonitorPro
                       </div>
                     </div>
 
-                    {/* Service Details */}
+                    {/* Service Details - Line 1: Version, Port, Latency */}
                     <div className="mt-1 flex items-center space-x-4 text-xs text-gray-600">
                       {service.version && <span>v{service.version}</span>}
+                      {service.port && (
+                        <span className="flex items-center">
+                          <span className="font-medium">Port:</span>
+                          <span className="ml-1 font-mono bg-gray-100 px-1 rounded">
+                            {service.port}
+                          </span>
+                        </span>
+                      )}
                       {service.latency !== undefined && service.latency !== null && (
                         <span className="flex items-center">
                           <ClockIcon className="h-3 w-3 mr-1" />
                           {service.latency}ms
                         </span>
                       )}
+                    </div>
+
+                    {/* Service Details - Line 2: Uptime and Performance */}
+                    <div className="mt-1 flex items-center space-x-4 text-xs text-gray-600">
                       {service.uptime && (
                         <span>
                           Uptime: {Math.floor(service.uptime / 3600)}h{' '}
                           {Math.floor((service.uptime % 3600) / 60)}m
                         </span>
+                      )}
+                      {service.details && (
+                        <>
+                          {service.details.memoryUsage &&
+                            typeof service.details.memoryUsage === 'object' && (
+                              <span>
+                                Memory: {(service.details.memoryUsage as any).heapUsed}MB /{' '}
+                                {(service.details.memoryUsage as any).heapTotal}MB
+                              </span>
+                            )}
+                          {service.details.pid && <span>PID: {String(service.details.pid)}</span>}
+                          {service.details.platform && service.details.arch && (
+                            <span>
+                              {String(service.details.platform)} {String(service.details.arch)}
+                            </span>
+                          )}
+                          {service.details.databaseType && (
+                            <span>{String(service.details.databaseType)} Database</span>
+                          )}
+                          {service.details.host && (
+                            <span>Host: {String(service.details.host)}</span>
+                          )}
+                          {service.details.connected !== undefined && (
+                            <span
+                              className={
+                                service.details.connected ? 'text-green-600' : 'text-red-600'
+                              }
+                            >
+                              {service.details.connected ? 'Connected' : 'Disconnected'}
+                            </span>
+                          )}
+                          {service.details.role && (
+                            <span className="text-blue-600 font-medium">
+                              {String(service.details.role)}
+                            </span>
+                          )}
+                          {service.details.environment && (
+                            <span className="text-purple-600">
+                              {String(service.details.environment)}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* Service Details - Line 3: Description and Access URL */}
+                    <div className="mt-1 flex items-center justify-between text-xs">
+                      <div className="flex items-center space-x-2">
+                        {service.details &&
+                          'description' in service.details &&
+                          typeof service.details.description === 'string' && (
+                            <span className="text-gray-500 italic">
+                              {service.details.description}
+                            </span>
+                          )}
+                      </div>
+                      {service.accessUrl && (
+                        <div className="flex items-center space-x-2">
+                          <span className="text-gray-500 font-medium">Access:</span>
+                          <a
+                            href={service.accessUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 underline font-mono bg-blue-50 px-2 py-1 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+                            title={`Open ${service.name} in new tab`}
+                          >
+                            {service.accessUrl}
+                          </a>
+                        </div>
                       )}
                     </div>
 

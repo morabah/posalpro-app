@@ -114,6 +114,7 @@ export interface ProposalProductData {
     discount: number; // Added to match database
     category: string;
     configuration?: Record<string, unknown>;
+    sectionId?: string | null;
   }>;
   totalValue: number;
   searchQuery?: string;

@@ -2,6 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "composite": true,
+    "declaration": true,
+    "declarationMap": true,
     "tsBuildInfoFile": "./config/tsconfig.core.tsbuildinfo"
   },
   "include": [
@@ -33,10 +35,3 @@
   ],
   "references": []
 }
-
-
-
-
-
-
-

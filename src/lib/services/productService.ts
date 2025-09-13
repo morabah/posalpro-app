@@ -1175,6 +1175,239 @@ export class ProductService {
   }
 
   /**
+   * Image Management Methods
+   * Following CORE_REQUIREMENTS.md service layer patterns
+   */
+
+  /**
+   * Upload product image and return the image URL
+   */
+  async uploadProductImage(productId: string, file: File, alt?: string): Promise<string> {
+    try {
+      const tenant = getCurrentTenant();
+
+      // Verify product exists and belongs to tenant
+      const product = await prisma.product.findFirst({
+        where: {
+          id: productId,
+          tenantId: tenant.tenantId,
+        },
+        select: { id: true, images: true },
+      });
+
+      if (!product) {
+        throw new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProductService',
+            operation: 'uploadProductImage',
+            productId,
+          },
+        });
+      }
+
+      // Check image limit (max 10 images per product)
+      if (product.images && product.images.length >= 10) {
+        throw new StandardError({
+          message: 'Maximum 10 images allowed per product',
+          code: ErrorCodes.VALIDATION.BUSINESS_RULE_VIOLATION,
+          metadata: {
+            component: 'ProductService',
+            operation: 'uploadProductImage',
+            productId,
+            currentImageCount: product.images.length,
+          },
+        });
+      }
+
+      // Save file to local uploads directory
+      const timestamp = Date.now();
+      const fileExtension = file.name.split('.').pop() || 'jpg';
+      const fileName = `product-${productId}-${timestamp}.${fileExtension}`;
+      const uploadPath = `/uploads/products/${fileName}`;
+
+      // Ensure uploads directory exists
+      const fs = require('fs');
+      const path = require('path');
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'products');
+
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      // Convert File to Buffer and save
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const filePath = path.join(uploadDir, fileName);
+
+      fs.writeFileSync(filePath, buffer);
+
+      // Return the public URL
+      const imageUrl = uploadPath;
+
+      // Add image to product's images array
+      const updatedImages = [...(product.images || []), imageUrl];
+
+      await prisma.product.update({
+        where: { id: productId },
+        data: { images: updatedImages },
+      });
+
+      return imageUrl;
+    } catch (error) {
+      errorHandlingService.processError(error);
+
+      if (error instanceof StandardError) {
+        throw error;
+      }
+
+      throw new StandardError({
+        message: 'Failed to upload product image',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'uploadProductImage',
+          productId,
+          fileName: file.name,
+        },
+      });
+    }
+  }
+
+  /**
+   * Remove image from product
+   */
+  async removeProductImage(productId: string, imageUrl: string): Promise<void> {
+    try {
+      const tenant = getCurrentTenant();
+
+      // Verify product exists and belongs to tenant
+      const product = await prisma.product.findFirst({
+        where: {
+          id: productId,
+          tenantId: tenant.tenantId,
+        },
+        select: { id: true, images: true },
+      });
+
+      if (!product) {
+        throw new StandardError({
+          message: 'Product not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProductService',
+            operation: 'removeProductImage',
+            productId,
+          },
+        });
+      }
+
+      // Remove image from array
+      const updatedImages = (product.images || []).filter(img => img !== imageUrl);
+
+      if (updatedImages.length === (product.images || []).length) {
+        throw new StandardError({
+          message: 'Image not found in product',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProductService',
+            operation: 'removeProductImage',
+            productId,
+            imageUrl,
+          },
+        });
+      }
+
+      await prisma.product.update({
+        where: { id: productId },
+        data: { images: updatedImages },
+      });
+
+      // Delete the actual file from filesystem
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join(process.cwd(), 'public', imageUrl);
+
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (fileError) {
+        // Log file deletion error but don't fail the operation
+        console.warn('Failed to delete image file:', fileError);
+      }
+    } catch (error) {
+      errorHandlingService.processError(error);
+
+      if (error instanceof StandardError) {
+        throw error;
+      }
+
+      throw new StandardError({
+        message: 'Failed to remove product image',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'removeProductImage',
+          productId,
+          imageUrl,
+        },
+      });
+    }
+  }
+
+  /**
+   * Update product images array
+   */
+  async updateProductImages(productId: string, images: string[]): Promise<Product> {
+    try {
+      const tenant = getCurrentTenant();
+
+      // Validate image limit
+      if (images.length > 10) {
+        throw new StandardError({
+          message: 'Maximum 10 images allowed per product',
+          code: ErrorCodes.VALIDATION.BUSINESS_RULE_VIOLATION,
+          metadata: {
+            component: 'ProductService',
+            operation: 'updateProductImages',
+            productId,
+            imageCount: images.length,
+          },
+        });
+      }
+
+      return await prisma.product.update({
+        where: {
+          id: productId,
+          tenantId: tenant.tenantId,
+        },
+        data: { images },
+      });
+    } catch (error) {
+      errorHandlingService.processError(error);
+
+      if (error instanceof StandardError) {
+        throw error;
+      }
+
+      throw new StandardError({
+        message: 'Failed to update product images',
+        code: ErrorCodes.DATA.UPDATE_FAILED,
+        cause: error instanceof Error ? error : undefined,
+        metadata: {
+          component: 'ProductService',
+          operation: 'updateProductImages',
+          productId,
+        },
+      });
+    }
+  }
+
+  /**
    * Helper: Normalize product data (Decimal conversion, null handling)
    * Following CORE_REQUIREMENTS.md transformation patterns
    */

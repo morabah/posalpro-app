@@ -22,6 +22,8 @@ export const ServiceStatusSchema = z.object({
   lastChecked: z.string(),
   details: z.record(z.unknown()).optional(),
   error: z.string().optional(),
+  port: z.number().nullable().optional(),
+  accessUrl: z.string().optional(),
 });
 
 // Service status response schema
@@ -53,4 +55,3 @@ export type ServiceStatus = z.infer<typeof ServiceStatusSchema>;
 export type ServiceStatusResponse = z.infer<typeof ServiceStatusResponseSchema>;
 export type ServiceStatusQuery = z.infer<typeof ServiceStatusQuerySchema>;
 export type ServiceStatusConfig = z.infer<typeof ServiceStatusConfigSchema>;
-

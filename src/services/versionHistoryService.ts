@@ -98,6 +98,39 @@ export class VersionHistoryService {
 
   private constructor() {}
 
+  // Normalize raw change types from DB to supported set for the UI/schema
+  private normalizeChangeType(
+    raw:
+      | string
+      | 'create'
+      | 'update'
+      | 'delete'
+      | 'batch_import'
+      | 'rollback'
+      | 'status_change'
+      | 'INITIAL'
+  ):
+    | 'create'
+    | 'update'
+    | 'delete'
+    | 'batch_import'
+    | 'rollback'
+    | 'status_change'
+    | 'INITIAL' {
+    const allowed = new Set([
+      'create',
+      'update',
+      'delete',
+      'batch_import',
+      'rollback',
+      'status_change',
+      'INITIAL',
+    ] as const);
+    const v = String(raw || '').toLowerCase();
+    if (allowed.has(v as any)) return v as any;
+    return 'update';
+  }
+
   /**
    * Get version history list with cursor-based pagination
    */
@@ -143,8 +176,8 @@ export class VersionHistoryService {
 
       const url = `/api/proposals/versions?${searchParams.toString()}`;
 
-      // Make HTTP request
-      const response = await http.get<ApiResponse<VersionHistoryList>>(url);
+      // Make HTTP request (http returns unwrapped data)
+      const data = await http.get<VersionHistoryList>(url);
 
       const loadTime = performance.now() - start;
       logInfo('VersionHistoryService: HTTP request completed', {
@@ -156,7 +189,8 @@ export class VersionHistoryService {
         hypothesis: 'H8',
       });
 
-      return response;
+      // Wrap to ApiResponse for compatibility
+      return { ok: true, data };
     } catch (error) {
       const loadTime = performance.now() - start;
       const processedError = this.errorHandlingService.processError(
@@ -253,7 +287,7 @@ export class VersionHistoryService {
           id: version.id,
           proposalId: version.proposalId,
           version: version.version,
-          changeType: version.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
+          changeType: this.normalizeChangeType(version.changeType),
           changesSummary: version.changesSummary || undefined,
           createdAt: version.createdAt,
           createdBy: version.createdBy || undefined,
@@ -359,7 +393,7 @@ export class VersionHistoryService {
         id: version.id,
         proposalId: version.proposalId,
         version: version.version,
-        changeType: version.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
+        changeType: this.normalizeChangeType(version.changeType),
         changesSummary: version.changesSummary || undefined,
         createdAt: version.createdAt,
 
@@ -499,7 +533,7 @@ export class VersionHistoryService {
           id: version.id,
           proposalId: version.proposalId,
           version: version.version,
-          changeType: version.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
+          changeType: this.normalizeChangeType(version.changeType),
           changesSummary: version.changesSummary || undefined,
           createdAt: version.createdAt,
           createdBy: version.createdBy || undefined,
@@ -619,24 +653,84 @@ export class VersionHistoryService {
         throw new Error('Version not found');
       }
 
-      // For now, return basic version details (can be enhanced with diff logic later)
+      // Enhance with diff calculation between this version and the previous one
+      // Fetch previous version entry
+      const previousEntry = await prisma.proposalVersion.findFirst({
+        where: { proposalId, version: { lt: version } },
+        orderBy: { version: 'desc' },
+        select: { snapshot: true, productIds: true },
+      });
+
+      const currSnapshot = (versionEntry.snapshot || {}) as any;
+      const prevSnapshot = (previousEntry?.snapshot || {}) as any;
+      const currProducts: Array<any> = Array.isArray(currSnapshot.products) ? currSnapshot.products : [];
+      const prevProducts: Array<any> = Array.isArray(prevSnapshot.products) ? prevSnapshot.products : [];
+
+      const currIds = new Set<string>(((versionEntry.productIds || []) as string[]) ?? []);
+      const prevIds = new Set<string>(((previousEntry?.productIds || []) as string[]) ?? []);
+      const addedIds = [...currIds].filter(id => !prevIds.has(id));
+      const removedIds = [...prevIds].filter(id => !currIds.has(id));
+      const commonIds = [...currIds].filter(id => prevIds.has(id));
+
+      const toMap = (arr: Array<any>) => {
+        const m = new Map<string, any>();
+        for (const p of arr) {
+          const pid = String(p.productId ?? p.id ?? '');
+          if (pid) m.set(pid, p);
+        }
+        return m;
+      };
+      const currMap = toMap(currProducts);
+      const prevMap = toMap(prevProducts);
+
+      const changedIds = Array.from(new Set([...addedIds, ...removedIds, ...commonIds]));
+      const productsInfo = changedIds.length
+        ? await prisma.product.findMany({ where: { id: { in: changedIds } }, select: { id: true, name: true, price: true } })
+        : [];
+      const nameOf = (id: string) => productsInfo.find(p => p.id === id)?.name || id;
+      const num = (v: any): number => (typeof v === 'number' ? v : v ? Number(v) : 0);
+
+      const added = addedIds.map(id => {
+        const p = currMap.get(id) || {};
+        return { productId: id, name: nameOf(id), quantity: num(p.quantity), unitPrice: num(p.unitPrice ?? productsInfo.find(x => x.id === id)?.price ?? 0) };
+      });
+      const removed = removedIds.map(id => {
+        const p = prevMap.get(id) || {};
+        return { productId: id, name: nameOf(id), quantity: num(p.quantity), unitPrice: num(p.unitPrice ?? productsInfo.find(x => x.id === id)?.price ?? 0) };
+      });
+      const updated = commonIds
+        .map(id => {
+          const c = currMap.get(id) || {};
+          const p = prevMap.get(id) || {};
+          const changes: Record<string, unknown> = {};
+          if (num(c.quantity) !== num(p.quantity)) changes.quantity = { from: num(p.quantity), to: num(c.quantity) };
+          if (num(c.unitPrice) !== num(p.unitPrice)) changes.unitPrice = { from: num(p.unitPrice), to: num(c.unitPrice) };
+          if (num(c.discount) !== num(p.discount)) changes.discount = { from: num(p.discount), to: num(c.discount) };
+          return Object.keys(changes).length > 0 ? { productId: id, name: nameOf(id), changes } : null;
+        })
+        .filter(Boolean) as Array<{ productId: string; name: string; changes: Record<string, unknown> }>;
+
+      const sumProducts = (arr: Array<any>) =>
+        arr.reduce((sum, x) => sum + (num(x.total) || num(x.quantity) * num(x.unitPrice)), 0);
+      const totalBefore = num(prevSnapshot?.totalValue ?? prevSnapshot?.value) || sumProducts(prevProducts);
+      const totalAfter = num(currSnapshot?.totalValue ?? currSnapshot?.value) || sumProducts(currProducts);
+      const delta = totalAfter - totalBefore;
+
+      const autoSummary = versionEntry.changesSummary || `${added.length} added, ${removed.length} removed, ${updated.length} updated; total ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`;
+
       const data: VersionHistoryDetail = {
         id: versionEntry.id,
         proposalId: versionEntry.proposalId,
         version: versionEntry.version,
-        changeType: versionEntry.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
-        changesSummary: versionEntry.changesSummary || undefined,
+        changeType: this.normalizeChangeType(versionEntry.changeType),
+        changesSummary: autoSummary,
         createdAt: versionEntry.createdAt,
-        // updatedAt doesn't exist in ProposalVersion model, using createdAt
         createdBy: versionEntry.createdBy || undefined,
-        proposal: versionEntry.proposal
-          ? {
-              id: versionEntry.proposal.id,
-              title: versionEntry.proposal.title,
-            }
-          : undefined,
-        snapshot: versionEntry.snapshot as Record<string, unknown> | undefined,
+        proposal: versionEntry.proposal ? { id: versionEntry.proposal.id, title: versionEntry.proposal.title } : undefined,
+        snapshot: currSnapshot as Record<string, unknown> | undefined,
         productIds: versionEntry.productIds,
+        changes: { added, removed, updated },
+        changeDetails: { totalBefore, totalAfter, totalDelta: delta },
       };
 
       const loadTime = performance.now() - start;
@@ -896,7 +990,7 @@ export class VersionHistoryService {
           id: version.id,
           proposalId: version.proposalId,
           version: version.version,
-          changeType: version.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
+          changeType: this.normalizeChangeType(version.changeType),
           changesSummary: version.changesSummary || undefined,
           createdAt: version.createdAt,
           createdBy: version.createdBy || undefined,

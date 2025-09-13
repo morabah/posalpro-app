@@ -14,13 +14,16 @@ import { analytics } from '@/lib/analytics';
 import { logError, logInfo } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { ImageUpload } from './ImageUpload';
+import { ImageGallery } from './ImageGallery';
 
 export function ProductCreateForm() {
   const router = useRouter();
   const createProduct = useCreateProduct();
+  const [productImages, setProductImages] = useState<string[]>([]);
 
   // ✅ Fetch categories and tags from database
   const { data: categoriesData, isLoading: categoriesLoading } = useProductCategories();
@@ -306,6 +309,41 @@ export function ProductCreateForm() {
                 Enter network path or select local file (PDF, DOC, DOCX, XLS, XLSX, TXT)
               </p>
             </div>
+          </div>
+
+          {/* Product Images */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-900">Product Images</h3>
+
+            {/* Image Upload */}
+            <ImageUpload
+              productId="new" // Placeholder for new products
+              onUploadSuccess={(imageUrl) => {
+                setProductImages(prev => [...prev, imageUrl]);
+                setValue('images', [...productImages, imageUrl]);
+              }}
+              onUploadError={(error) => {
+                toast.error(`Image upload failed: ${error}`);
+              }}
+              maxFiles={10}
+              disabled={productImages.length >= 10}
+            />
+
+            {/* Image Gallery */}
+            {productImages.length > 0 && (
+              <ImageGallery
+                productId="new" // Placeholder for new products
+                images={productImages}
+                onImageDelete={(imageUrl) => {
+                  setProductImages(prev => prev.filter(img => img !== imageUrl));
+                  setValue('images', productImages.filter(img => img !== imageUrl));
+                }}
+                onImageDeleteError={(error) => {
+                  toast.error(`Image deletion failed: ${error}`);
+                }}
+                maxImages={10}
+              />
+            )}
           </div>
 
           {/* Categories and Tags */}

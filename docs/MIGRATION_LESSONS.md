@@ -50,6 +50,24 @@ node test-entitlement-direct.js
 
 ---
 
+## 🔧 **PDF Preview Worker/Page Crash Fix (Latest)**
+
+Problem: Safari/dev crash `this.messageHandler.sendWithPromise` in `<Page>` and noisy circular logs.
+
+Root Cause: React-PDF page lifecycle racing a torn-down pdf.js worker; multiple module instances; circular object logging.
+
+Fix:
+
+- Single `react-pdf` import shared by `Document`/`Page`.
+- Same-origin worker via `workerPort` (bundled); CDN `workerSrc` fallback pinned to `pdfjs-dist@5.3.93`.
+- Guard: render `<Page>` only after `numPages > 0`; remount on messageHandler error; stable keys per file.
+- Safari-safe canvas path for first page (or `NEXT_PUBLIC_PDF_PAGE_SAFE_MODE=true`).
+- Trim logs: log only `numPages`; avoid circular payloads.
+
+Apply to: `DocumentPreview`, `QueryProvider`, `PrintDatasheets` alignment with worker.
+
+---
+
 ## 🔧 **Zod Parsing Error Fix (Latest)**
 
 **Problem**: `o["sync"===s.mode?"parse":"parseAsync"] is not a function` when
@@ -235,8 +253,17 @@ const response = await http.put<Customer>(`${this.baseUrl}/${id}`, {
 ```typescript
 // ✅ SERVICE LAYER - Return unwrapped data
 async getData(params): Promise<DataType> {
-  const response = await http.get<DataType>(endpoint);
-  return response.data; // Direct unwrapped data
+  const data = await http.get<DataType>(endpoint);
+  return data; // Already unwrapped by the HTTP client
+}
+
+// ✅ SERVICE LAYER - Include section assignments in product creation
+async createProduct(productData): Promise<Product> {
+  const product = await http.post<Product>(endpoint, {
+    ...productData,
+    sectionId: productData.sectionId || null, // Include section assignment
+  });
+  return product;
 }
 ```
 
@@ -260,12 +287,48 @@ export function useData(params) {
 | Layer     | Pattern                                         |
 | --------- | ----------------------------------------------- |
 | API Route | `NextResponse.json({ ok: true, data: result })` |
-| Service   | `return response.data`                          |
+| Service   | `return data`                                   |
 | Hook      | `queryFn: () => service.getData()`              |
 | Component | `data?.field`                                   |
 
 **Impact**: Unified response format, consistent HTTP client usage, simplified
 service layer, direct data access.
+
+#### ⚠️ Common Pitfall: Treating `http` responses as envelopes
+
+**Problem**: Calling `http.get/post<ApiResponse<T>>()` and checking `res.ok` or
+accessing `res.data`, which leads to false errors and dropped data.
+
+**Root Cause**: The centralized HTTP client (`@/lib/http`) already detects API
+envelopes and returns the inner `data` on success. On `{ ok: false }`, it throws
+`HttpClientError`. Consumers should not re-handle the envelope.
+
+```typescript
+// ❌ WRONG: Using ApiResponse generic and checking res.ok
+const res = await http.post<ApiResponse<Section>>(`/api/proposals/${id}/sections`, input);
+if (!res.ok) throw new Error(res.message || 'Failed');
+return res.data;
+
+// ✅ CORRECT: Use unwrapped types; http returns data directly
+const section = await http.post<Section>(`/api/proposals/${id}/sections`, input);
+return section;
+```
+
+**Real-world symptom**: Product Selection showed “Failed to create section” even
+on success because the hook treated the unwrapped `http` result as an envelope.
+Fix: remove `res.ok` checks and use unwrapped generics.
+
+**Prevention**:
+
+- Do not type `http.*` calls with `ApiResponse<T>`.
+- Never check `res.ok` or `'ok' in res` when using `@/lib/http`.
+- Hooks/services should type `http.*<T>` and return `T`.
+- If a service needs to expose `ApiResponse<T>`, rewrap once:
+
+```typescript
+const data = await http.get<T>(url);
+return { ok: true, data };
+```
 
 ### **2. Data Type Conversion Framework (Unified)**
 
@@ -499,6 +562,28 @@ const filteredProducts = useMemo(() => {
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 }, [products, searchTerm]); // ✅ Include all dependencies
+
+// ✅ PREVENT INFINITE LOOPS - Use useMemo for computed values instead of useEffect dependencies
+// ❌ WRONG: Adding computed values to useEffect dependencies
+useEffect(() => {
+  const productsWithSections = selectedProducts.map(product => ({
+    ...product,
+    sectionId: currentAssignmentByRow[product.id] || null,
+  }));
+  // ... rest of logic
+}, [selectedProducts, currentAssignmentByRow]); // ❌ currentAssignmentByRow changes on every render
+
+// ✅ CORRECT: Use useMemo for computed values
+const productsWithSections = useMemo(() => {
+  return selectedProducts.map(product => ({
+    ...product,
+    sectionId: currentAssignmentByRow[product.id] || null,
+  }));
+}, [selectedProducts, currentAssignmentByRow]);
+
+useEffect(() => {
+  // ... logic using productsWithSections
+}, [productsWithSections]); // ✅ Stable dependency
 ```
 
 #### **Store State Structure Understanding**
@@ -790,6 +875,22 @@ onSuccess: (data, { id, proposal }) => {
     exact: false,
   });
 };
+
+// ✅ FILTER TEMPORARY IDs - Prevent bulk-assign API errors
+const flushPendingAssignments = async (proposalId: string) => {
+  const { pendingAssignments } = get();
+  const entries = Object.entries(pendingAssignments);
+  if (entries.length === 0) return;
+
+  // Filter out temporary IDs - only flush assignments for products with real database IDs
+  const validEntries = entries.filter(([proposalProductId]) => !String(proposalProductId).startsWith('temp-'));
+  if (validEntries.length === 0) return;
+
+  await http.post(`/api/proposals/${proposalId}/product-selections/bulk-assign`, {
+    assignments: validEntries.map(([proposalProductId, sectionId]) => ({ proposalProductId, sectionId })),
+  });
+  set({ pendingAssignments: {}, assignmentsDirty: false });
+};
 ```
 
 #### **Centralized Query Keys**
@@ -923,6 +1024,9 @@ try {
 6. Use aggressive cache management
 7. Test with real data early and often
 8. Validate complete user flows
+9. Enable UI interactions for temporary data
+10. Use useMemo for computed values
+11. Filter temporary IDs before API calls
 
 ### **Common Anti-Patterns to Avoid**
 
@@ -934,6 +1038,9 @@ try {
 6. ❌ Missing structured logging
 7. ❌ Dynamic values in component IDs
 8. ❌ Testing individual components only
+9. ❌ Disabling UI elements for temporary data states
+10. ❌ Including computed values in useEffect dependencies
+11. ❌ Calling bulk-assign APIs with temporary IDs
 
 ---
 

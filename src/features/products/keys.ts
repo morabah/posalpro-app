@@ -40,5 +40,9 @@ export const qk = {
     categories: () => [...qk.products.all, 'categories'] as const,
     tags: () => [...qk.products.all, 'tags'] as const,
     relationships: (productId: string) => [...qk.products.all, 'relationships', productId] as const,
+    images: (productId: string) => [...qk.products.all, 'images', productId] as const,
   },
 } as const;
+
+// Export for backward compatibility and easier imports
+export const productKeys = qk.products;

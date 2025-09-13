@@ -2,6 +2,7 @@
 
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { DocumentPreview } from '@/components/products/DocumentPreview';
+import { ImageGallery } from '@/components/products/ImageGallery';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
@@ -222,6 +223,35 @@ export function ProductDetail({ productId }: ProductDetailProps) {
             </div>
           </div>
         </Card>
+
+        {/* Product Images Section */}
+        {productData.images && productData.images.length > 0 && (
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Product Images</h2>
+            <ImageGallery
+              productId={productId}
+              images={productData.images}
+              onImageDelete={(imageUrl) => {
+                // Handle image deletion - could refresh the product data
+                logInfo('Image deleted from product detail', {
+                  component: 'ProductDetail',
+                  operation: 'image_delete',
+                  productId,
+                  imageUrl,
+                });
+              }}
+              onImageDeleteError={(error) => {
+                logError('Failed to delete image from product detail', {
+                  component: 'ProductDetail',
+                  operation: 'image_delete_error',
+                  productId,
+                  error,
+                });
+              }}
+              showDeleteButton={false} // Read-only view in detail page
+            />
+          </Card>
+        )}
 
         <Card className="p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Categories & Tags</h2>

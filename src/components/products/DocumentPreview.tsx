@@ -6,78 +6,77 @@ import { Button } from '@/components/ui/forms/Button';
 import { analytics } from '@/lib/analytics';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { AlertCircle, Download, Eye, FileText, Maximize2 } from 'lucide-react';
-import React, { Suspense, useCallback, useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Dynamic imports for PDF and Word document libraries
-// ✅ NOTE: PDF.js worker is now configured globally in QueryProvider
-const PDFViewer = React.lazy(() =>
-  import('react-pdf').then(async module => {
-    // Wait for worker to be properly configured via global promise
-    const waitForWorker = async () => {
-      // Check if global worker promise exists
-      const globalWorkerPromise = (window as any).pdfWorkerPromise;
-
-      if (globalWorkerPromise) {
-        try {
-          await globalWorkerPromise;
-          logDebug('DocumentPreview: PDF worker initialized via global promise', {
-            component: 'DocumentPreview',
-            operation: 'worker_initialization',
-          });
-        } catch (error) {
-          logError('DocumentPreview: Global worker initialization failed', {
-            errorMessage: error instanceof Error ? error.message : 'Unknown error',
-            component: 'DocumentPreview',
-            operation: 'worker_initialization_error',
-          });
-        }
-      }
-
-      // Additional check for worker source
-      if (!module.pdfjs.GlobalWorkerOptions.workerSrc) {
-        // Fallback: Configure worker if not already configured
-        const cacheBuster = Date.now();
-        const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
-        module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-
-        logDebug('DocumentPreview: PDF worker configured as fallback', {
-          workerUrl,
-          cacheBuster,
+// ✅ NOTE: PDF.js worker is configured globally in QueryProvider
+// To avoid race conditions or duplicate module instances, share a single import promise
+const reactPdfModulePromise: Promise<typeof import('react-pdf')> = import('react-pdf').then(
+  async module => {
+    // Wait for worker init done by QueryProvider, if available
+    const globalWorkerPromise = (typeof window !== 'undefined'
+      ? (window as any).pdfWorkerPromise
+      : null) as Promise<any> | null;
+    if (globalWorkerPromise) {
+      try {
+        await globalWorkerPromise;
+        logDebug('DocumentPreview: PDF worker initialized via global promise', {
           component: 'DocumentPreview',
-          operation: 'worker_fallback_config',
+          operation: 'worker_initialization',
+        });
+      } catch (error) {
+        logError('DocumentPreview: Global worker initialization failed', {
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          component: 'DocumentPreview',
+          operation: 'worker_initialization_error',
         });
       }
+    }
 
-      logDebug('DocumentPreview: PDF worker status', {
-        workerSrc: module.pdfjs.GlobalWorkerOptions.workerSrc,
-        configured: !!module.pdfjs.GlobalWorkerOptions.workerSrc,
+    // Fallback worker configuration if none set yet
+    if (!module.pdfjs.GlobalWorkerOptions.workerSrc) {
+      const cacheBuster = Date.now();
+      const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
+      module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+      logDebug('DocumentPreview: PDF worker configured as fallback', {
+        workerUrl,
+        cacheBuster,
         component: 'DocumentPreview',
-        operation: 'worker_status_check',
+        operation: 'worker_fallback_config',
       });
-    };
+    }
 
-    await waitForWorker();
+    logDebug('DocumentPreview: PDF worker status', {
+      workerSrc: module.pdfjs.GlobalWorkerOptions.workerSrc,
+      configured: !!module.pdfjs.GlobalWorkerOptions.workerSrc,
+      component: 'DocumentPreview',
+      operation: 'worker_status_check',
+    });
 
-    return {
-      default: ({ file, onLoadSuccess, onLoadError, children }: any) => (
-        <div className="relative">
-          <module.Document
-            file={file}
-            onLoadSuccess={onLoadSuccess}
-            onLoadError={onLoadError}
-            loading={<DocumentLoading />}
-            error={<DocumentError />}
-          >
-            {children}
-          </module.Document>
-        </div>
-      ),
-    };
-  })
+    return module;
+  }
+);
+
+const PDFViewer = React.lazy(() =>
+  reactPdfModulePromise.then(module => ({
+    default: ({ file, onLoadSuccess, onLoadError, children }: any) => (
+      <div className="relative">
+        <module.Document
+          file={file}
+          onLoadSuccess={onLoadSuccess}
+          onLoadError={onLoadError}
+          loading={<DocumentLoading />}
+          error={<DocumentError />}
+        >
+          {children}
+        </module.Document>
+      </div>
+    ),
+  }))
 );
 
 const PDFPage = React.lazy(() =>
-  import('react-pdf').then(module => ({
+  reactPdfModulePromise.then(module => ({
     default: ({ pageNumber, scale, renderTextLayer, renderAnnotationLayer }: any) => (
       <module.Page
         pageNumber={pageNumber}
@@ -181,10 +180,20 @@ export function DocumentPreview({
   className = '',
 }: DocumentPreviewProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [, setPdfDocument] = useState<any>(null);
+  const [pdfDocProxy, setPdfDocProxy] = useState<any>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number>(0);
   const [loadStartTime, setLoadStartTime] = useState<number>(0);
+  const [viewerKey, setViewerKey] = useState<number>(0);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Detect Safari to enable safer canvas-based rendering for first page
+  const isSafari = useMemo(() => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent;
+    return /Safari\//.test(ua) && !/Chrome\//.test(ua) && !/Chromium\//.test(ua);
+  }, []);
+  const useCanvasPage = isSafari || process.env.NEXT_PUBLIC_PDF_PAGE_SAFE_MODE === 'true';
 
   // Debug logging for component initialization
   useEffect(() => {
@@ -248,8 +257,10 @@ export function DocumentPreview({
 
   // Handle PDF load success
   const handlePdfLoadSuccess = useCallback(
-    ({ numPages }: { numPages: number }) => {
-      setNumPages(numPages);
+    (doc: any) => {
+      const pages = typeof doc?.numPages === 'number' ? doc.numPages : 0;
+      setNumPages(pages);
+      setPdfDocProxy(doc || null);
       const loadTime = loadStartTime > 0 ? performance.now() - loadStartTime : 0;
 
       logInfo('PDF document loaded successfully', {
@@ -257,7 +268,7 @@ export function DocumentPreview({
         operation: 'handlePdfLoadSuccess',
         productId,
         productName,
-        numPages,
+        numPages: pages,
         loadTime: Math.round(loadTime),
         datasheetPath,
         userStory: 'US-4.1',
@@ -271,7 +282,7 @@ export function DocumentPreview({
           productId,
           productName,
           fileType: 'pdf',
-          numPages,
+          numPages: pages,
           loadTime: Math.round(loadTime),
           userStory: 'US-4.1',
           hypothesis: 'H5',
@@ -319,6 +330,8 @@ export function DocumentPreview({
           });
           setPdfError(null);
           setLoadStartTime(performance.now());
+          // Force remount of Document to reinitialize worker communication
+          setViewerKey(prev => prev + 1);
         }, 1000);
 
         setPdfError('PDF worker communication error. Retrying...');
@@ -467,6 +480,50 @@ export function DocumentPreview({
   const fileName = getFileName(datasheetPath);
   const fileAccessible = isFileAccessible(datasheetPath);
 
+  // Memoize proxied URL to avoid unnecessary re-renders of Document component
+  const proxiedUrlMemo = useMemo(() => getProxiedUrl(datasheetPath), [datasheetPath, getProxiedUrl]);
+
+  // Render first page to canvas (safe mode)
+  useEffect(() => {
+    if (!useCanvasPage) return;
+    if (!pdfDocProxy || !canvasRef.current) return;
+
+    let cancelled = false;
+    let renderTask: any | null = null;
+
+    (async () => {
+      try {
+        const page = await pdfDocProxy.getPage(1);
+        if (cancelled) return;
+        const scale = isExpanded ? 1.5 : 1.0;
+        const viewport = page.getViewport({ scale });
+        const canvas = canvasRef.current!;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas 2D context unavailable');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        renderTask = page.render({ canvasContext: context, viewport });
+        await renderTask.promise;
+      } catch (err: any) {
+        logError('DocumentPreview: Canvas render error', {
+          component: 'DocumentPreview',
+          operation: 'canvas_render_error',
+          errorMessage: err?.message || 'Unknown error',
+          productId,
+          productName,
+        });
+        handlePdfLoadError(new Error(`PDF rendering failed: ${err?.message || 'Unknown error'}`));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      try {
+        renderTask?.cancel?.();
+      } catch {}
+    };
+  }, [useCanvasPage, pdfDocProxy, isExpanded, handlePdfLoadError, productId, productName]);
+
   // Track PDF load timing
   useEffect(() => {
     if (fileType === 'pdf' && fileAccessible) {
@@ -513,7 +570,7 @@ export function DocumentPreview({
       >
         <Suspense fallback={<DocumentLoading />}>
           {(() => {
-            const proxiedUrl = getProxiedUrl(datasheetPath);
+            const proxiedUrl = proxiedUrlMemo;
             logDebug('DocumentPreview: Rendering decision', {
               fileType,
               fileAccessible,
@@ -550,10 +607,12 @@ export function DocumentPreview({
             return fileType === 'pdf' && fileAccessible ? (
               <div className="bg-gray-50 rounded-lg p-4">
                 <PDFViewer
+                  key={`${proxiedUrlMemo}:${viewerKey}`}
                   file={proxiedUrl}
                   onLoadSuccess={(data: { numPages: number }) => {
+                    // Avoid logging the full PDFDocumentProxy (very large & circular)
                     logDebug('DocumentPreview: PDF onLoadSuccess called', {
-                      data,
+                      numPages: (data as any)?.numPages,
                       productId,
                       productName,
                       component: 'DocumentPreview',
@@ -578,22 +637,31 @@ export function DocumentPreview({
                     <DocumentError />
                   ) : (
                     <div className="flex justify-center">
-                      <PDFPage
-                        pageNumber={1}
-                        scale={isExpanded ? 1.5 : 1.0}
-                        renderTextLayer={false}
-                        renderAnnotationLayer={false}
-                        onRenderError={(error: any) => {
-                          logError('DocumentPreview: PDF page render error', {
-                            errorMessage: error.message || 'Unknown render error',
-                            productId,
-                            productName,
-                            component: 'DocumentPreview',
-                            operation: 'pdf_page_render_error',
-                          });
-                          handlePdfLoadError(new Error(`PDF rendering failed: ${error.message}`));
-                        }}
-                      />
+                      {useCanvasPage ? (
+                        <canvas ref={canvasRef} className="max-w-full h-auto" />
+                      ) : (
+                        // Guard against rendering Page before document fully initialized
+                        numPages > 0 && (
+                          <PDFPage
+                            pageNumber={1}
+                            scale={isExpanded ? 1.5 : 1.0}
+                            renderTextLayer={false}
+                            renderAnnotationLayer={false}
+                            onRenderError={(error: any) => {
+                              logError('DocumentPreview: PDF page render error', {
+                                errorMessage: error?.message || 'Unknown render error',
+                                productId,
+                                productName,
+                                component: 'DocumentPreview',
+                                operation: 'pdf_page_render_error',
+                              });
+                              handlePdfLoadError(
+                                new Error(`PDF rendering failed: ${error?.message || 'Unknown error'}`)
+                              );
+                            }}
+                          />
+                        )
+                      )}
                     </div>
                   )}
                 </PDFViewer>

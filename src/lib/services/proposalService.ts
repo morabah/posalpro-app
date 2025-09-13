@@ -107,6 +107,7 @@ export interface ProposalWithDetails extends Proposal {
         currency: string;
         category: string[];
         isActive: boolean;
+        datasheetPath: string | null;
       };
     }
   >;
@@ -186,10 +187,33 @@ interface ProposalOrderByInput {
 }
 
 export class ProposalService {
+  // Generate a summary of changes for version history
+  private generateChangesSummary(updateData: Partial<UpdateProposalData>): string {
+    const changes: string[] = [];
+
+    if (updateData.title !== undefined) changes.push(`title: "${updateData.title}"`);
+    if (updateData.description !== undefined) changes.push(`description updated`);
+    if (updateData.priority !== undefined) changes.push(`priority: ${updateData.priority}`);
+    if (updateData.status !== undefined) changes.push(`status: ${updateData.status}`);
+    if (updateData.value !== undefined) changes.push(`value: ${updateData.value}`);
+    if (updateData.dueDate !== undefined) changes.push(`dueDate: ${updateData.dueDate}`);
+    if ('customerId' in updateData && updateData.customerId !== undefined)
+      changes.push(`customer updated`);
+
+    return changes.length > 0 ? changes.join(', ') : 'Proposal updated';
+  }
+
   // Schedules a non-blocking version snapshot for a proposal
   private scheduleVersionSnapshot(
     proposalId: string,
-    changeType: string,
+    changeType:
+      | 'create'
+      | 'update'
+      | 'delete'
+      | 'batch_import'
+      | 'rollback'
+      | 'status_change'
+      | 'INITIAL',
     changesSummary: string,
     productIdHints: string[] = []
   ): void {
@@ -219,12 +243,25 @@ export class ProposalService {
         );
         const nextVersion = (last[0]?.v ?? 0) + 1;
 
+        // Compute current total value from linked products (independent of denormalized field)
+        const computedTotal = Array.isArray(proposal.products)
+          ? proposal.products.reduce((sum, link: any) => {
+              const total = typeof link.total === 'number' ? link.total : Number(link.total ?? 0);
+              const unitPrice =
+                typeof link.unitPrice === 'number' ? link.unitPrice : Number(link.unitPrice ?? 0);
+              const qty =
+                typeof link.quantity === 'number' ? link.quantity : Number(link.quantity ?? 0);
+              // Prefer explicit total if present; otherwise compute
+              return sum + (Number.isFinite(total) ? total : qty * unitPrice);
+            }, 0)
+          : 0;
+
         const snapshot = {
           id: proposal.id,
           title: proposal.title,
           status: proposal.status,
           priority: proposal.priority,
-          value: proposal.value,
+          value: computedTotal, // ensure snapshot carries accurate total at time of snapshot
           currency: proposal.currency,
           customerId: proposal.customerId,
           metadata: proposal.metadata,
@@ -396,13 +433,19 @@ export class ProposalService {
   async updateProposal(data: UpdateProposalData): Promise<Proposal> {
     try {
       const { id, metadata, ...updateData } = data;
-      return await prisma.proposal.update({
+      const updatedProposal = await prisma.proposal.update({
         where: { id },
         data: {
           ...updateData,
           metadata: metadata ? toPrismaJson(metadata) : undefined,
         },
       });
+
+      // Schedule version snapshot for proposal update
+      const changesSummary = this.generateChangesSummary(updateData);
+      this.scheduleVersionSnapshot(id, 'update', changesSummary);
+
+      return updatedProposal;
     } catch (error) {
       // Log the error using ErrorHandlingService
       errorHandlingService.processError(error);
@@ -551,7 +594,24 @@ export class ProposalService {
           sections: true,
           products: {
             include: {
-              product: true,
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  sku: true,
+                  price: true,
+                  currency: true,
+                  category: true,
+                  isActive: true,
+                  datasheetPath: true,
+                },
+              },
+              section: {
+                select: {
+                  id: true,
+                  title: true,
+                },
+              },
             },
           },
           approvals: {
@@ -997,8 +1057,9 @@ export class ProposalService {
         },
       });
 
-      // Recalculate proposal value after adding product
-      await this.calculateProposalValue(proposalId as any);
+      // Record a version snapshot for product addition
+      const addSummary = `Product added (${data.productId}): qty=${data.quantity}, price=${data.unitPrice}`;
+      this.scheduleVersionSnapshot(proposalId, 'update', addSummary, [data.productId]);
 
       return created;
     } catch (error) {
@@ -1102,7 +1163,8 @@ export class ProposalService {
         if (data.unitPrice !== undefined) summaryParts.push(`price=${data.unitPrice}`);
         if (data.discount !== undefined) summaryParts.push(`discount=${data.discount}`);
         const summary = `Product updated (${current.productId ?? 'unknown'}): ${summaryParts.join(', ')}`;
-        this.scheduleVersionSnapshot(current.proposalId, 'product_change', summary);
+        // Normalize to supported change types for version history UI/schema
+        this.scheduleVersionSnapshot(current.proposalId, 'update', summary, [current.productId!]);
       }
 
       return updated;
@@ -1168,7 +1230,7 @@ export class ProposalService {
       // Schedule version snapshot noting product removal
       if (existing?.proposalId) {
         const summary = `Product removed (${existing.productId ?? 'unknown'}), qty=${existing.quantity ?? 0}`;
-        this.scheduleVersionSnapshot(existing.proposalId, 'product_change', summary);
+        this.scheduleVersionSnapshot(existing.proposalId, 'update', summary, [existing.productId!]);
       }
     } catch (error) {
       // Log the error using ErrorHandlingService
@@ -1947,6 +2009,371 @@ export class ProposalService {
         discount: product.discount || 0,
       })),
     });
+  }
+
+  // ====================
+  // Additional Methods for API Route Support
+  // ====================
+
+  /**
+   * Get proposal sections by proposal ID and type (for API routes)
+   */
+  async getProposalSectionsByType(
+    proposalId: string,
+    type: SectionType = SectionType.PRODUCTS
+  ): Promise<Array<{ id: string; title: string; content: string; order: number }>> {
+    try {
+      const sections = await prisma.proposalSection.findMany({
+        where: { proposalId, type },
+        orderBy: { order: 'asc' },
+        select: { id: true, title: true, content: true, order: true },
+      });
+
+      return sections;
+    } catch (error) {
+      errorHandlingService.processError(
+        error,
+        'Failed to fetch proposal sections',
+        ErrorCodes.DATA.QUERY_FAILED,
+        {
+          component: 'ProposalService',
+          operation: 'getProposalSectionsByType',
+          proposalId,
+          type,
+        }
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Create proposal section with idempotent behavior (for API routes)
+   */
+  async createProposalSectionIdempotent(
+    proposalId: string,
+    data: { title: string; description?: string },
+    type: SectionType = SectionType.PRODUCTS
+  ): Promise<{ id: string; title: string; content: string; order: number }> {
+    try {
+      const normalized = data.title.trim();
+
+      // Check for existing section (idempotent behavior)
+      const existing = await prisma.proposalSection.findFirst({
+        where: {
+          proposalId,
+          type,
+          title: { equals: normalized, mode: 'insensitive' },
+        },
+        select: { id: true, title: true, content: true, order: true },
+      });
+
+      if (existing) {
+        return existing; // Return existing as success (idempotent)
+      }
+
+      // Determine next order
+      const maxOrder = await prisma.proposalSection.aggregate({
+        where: { proposalId, type },
+        _max: { order: true },
+      });
+      const nextOrder = (maxOrder._max.order || 0) + 1;
+
+      const created = await prisma.proposalSection.create({
+        data: {
+          proposalId,
+          title: normalized,
+          content: data.description || '',
+          order: nextOrder,
+          type,
+        },
+        select: { id: true, title: true, content: true, order: true },
+      });
+
+      return created;
+    } catch (error) {
+      // Handle unique constraint race condition gracefully
+      if (isPrismaError(error) && error.code === 'P2002') {
+        const existing = await prisma.proposalSection.findFirst({
+          where: {
+            proposalId,
+            type,
+            title: { equals: data.title.trim(), mode: 'insensitive' },
+          },
+          select: { id: true, title: true, content: true, order: true },
+        });
+        if (existing) {
+          return existing; // Return existing as success
+        }
+      }
+
+      errorHandlingService.processError(
+        error,
+        'Failed to create proposal section',
+        ErrorCodes.DATA.CREATE_FAILED,
+        {
+          component: 'ProposalService',
+          operation: 'createProposalSectionIdempotent',
+          proposalId,
+          type,
+        }
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Update proposal section with validation (for API routes)
+   */
+  async updateProposalSectionWithValidation(
+    sectionId: string,
+    proposalId: string,
+    data: { title?: string; description?: string; order?: number },
+    type: SectionType = SectionType.PRODUCTS
+  ): Promise<{ id: string; title: string; content: string; order: number }> {
+    try {
+      // Verify section belongs to proposal
+      const section = await prisma.proposalSection.findUnique({
+        where: { id: sectionId },
+        select: { id: true, proposalId: true },
+      });
+
+      if (!section || section.proposalId !== proposalId) {
+        throw new StandardError({
+          message: 'Section not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'updateProposalSectionWithValidation',
+            sectionId,
+            proposalId,
+          },
+        });
+      }
+
+      // Check for title uniqueness if title is being updated
+      if (data.title) {
+        const dupCount = await prisma.proposalSection.count({
+          where: {
+            proposalId,
+            type,
+            id: { not: sectionId },
+            title: { equals: data.title.trim(), mode: 'insensitive' },
+          },
+        });
+
+        if (dupCount > 0) {
+          throw new StandardError({
+            message: 'A section with this title already exists for the proposal',
+            code: ErrorCodes.VALIDATION.INVALID_INPUT,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'updateProposalSectionWithValidation',
+              sectionId,
+              proposalId,
+              field: 'title',
+            },
+          });
+        }
+      }
+
+      const updated = await prisma.proposalSection.update({
+        where: { id: sectionId },
+        data: {
+          ...(data.title ? { title: data.title.trim() } : {}),
+          ...(data.description !== undefined ? { content: data.description } : {}),
+          ...(data.order !== undefined ? { order: data.order } : {}),
+        },
+        select: { id: true, title: true, content: true, order: true },
+      });
+
+      return updated;
+    } catch (error) {
+      if (error instanceof StandardError) {
+        throw error;
+      }
+
+      errorHandlingService.processError(
+        error,
+        'Failed to update proposal section',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        {
+          component: 'ProposalService',
+          operation: 'updateProposalSectionWithValidation',
+          sectionId,
+          proposalId,
+        }
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Delete proposal section with validation (for API routes)
+   */
+  async deleteProposalSectionWithValidation(
+    sectionId: string,
+    proposalId: string,
+    type: SectionType = SectionType.PRODUCTS
+  ): Promise<void> {
+    try {
+      // Verify section belongs to proposal
+      const section = await prisma.proposalSection.findUnique({
+        where: { id: sectionId },
+        select: { id: true, proposalId: true, title: true },
+      });
+
+      if (!section || section.proposalId !== proposalId) {
+        throw new StandardError({
+          message: 'Section not found',
+          code: ErrorCodes.DATA.NOT_FOUND,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'deleteProposalSectionWithValidation',
+            sectionId,
+            proposalId,
+          },
+        });
+      }
+
+      // Check if section has assigned products
+      const productCount = await prisma.proposalProduct.count({
+        where: {
+          proposalId,
+          sectionId,
+        },
+      });
+
+      if (productCount > 0) {
+        throw new StandardError({
+          message: `Cannot delete section "${section.title}" because it has ${productCount} assigned product(s). Please reassign or remove products first.`,
+          code: ErrorCodes.VALIDATION.BUSINESS_RULE_VIOLATION,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'deleteProposalSectionWithValidation',
+            sectionId,
+            proposalId,
+            productCount,
+          },
+        });
+      }
+
+      // Delete the section
+      await prisma.proposalSection.delete({
+        where: { id: sectionId },
+      });
+    } catch (error) {
+      if (error instanceof StandardError) {
+        throw error;
+      }
+
+      errorHandlingService.processError(
+        error,
+        'Failed to delete proposal section',
+        ErrorCodes.DATA.DELETE_FAILED,
+        {
+          component: 'ProposalService',
+          operation: 'deleteProposalSectionWithValidation',
+          sectionId,
+          proposalId,
+        }
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Bulk assign proposal products to sections
+   */
+  async bulkAssignProductsToSections(
+    proposalId: string,
+    assignments: Array<{ proposalProductId: string; sectionId: string | null }>
+  ): Promise<void> {
+    try {
+      const productIds = assignments.map(a => a.proposalProductId);
+      const sectionIds = assignments.map(a => a.sectionId).filter((x): x is string => !!x);
+
+      // Verify all products belong to this proposal
+      const products = await prisma.proposalProduct.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, proposalId: true },
+      });
+
+      const productIdSet = new Set(
+        products.filter(p => p.proposalId === proposalId).map(p => p.id)
+      );
+      if (productIdSet.size !== productIds.length) {
+        throw new StandardError({
+          message: 'Some products do not belong to this proposal',
+          code: ErrorCodes.VALIDATION.INVALID_INPUT,
+          metadata: {
+            component: 'ProposalService',
+            operation: 'bulkAssignProductsToSections',
+            proposalId,
+            productIds,
+          },
+        });
+      }
+
+      // Verify sectionIds are either null or belong to this proposal
+      if (sectionIds.length > 0) {
+        const sections = await prisma.proposalSection.findMany({
+          where: { id: { in: sectionIds } },
+          select: { id: true, proposalId: true },
+        });
+
+        const sectionIdSet = new Set(
+          sections.filter(s => s.proposalId === proposalId).map(s => s.id)
+        );
+        const invalid = sectionIds.find(sid => !sectionIdSet.has(sid));
+        if (invalid) {
+          throw new StandardError({
+            message: 'Invalid section assignment',
+            code: ErrorCodes.VALIDATION.INVALID_INPUT,
+            metadata: {
+              component: 'ProposalService',
+              operation: 'bulkAssignProductsToSections',
+              proposalId,
+              invalidSectionId: invalid,
+            },
+          });
+        }
+      }
+
+      // Perform updates in a transaction
+      await prisma.$transaction(
+        assignments.map(a =>
+          prisma.proposalProduct.update({
+            where: { id: a.proposalProductId },
+            data: { sectionId: a.sectionId ?? null },
+          })
+        )
+      );
+
+      // Record a version snapshot for section assignment updates
+      const uniqueProductIds = Array.from(new Set(productIds));
+      this.scheduleVersionSnapshot(
+        proposalId,
+        'update',
+        `Section assignments updated for ${uniqueProductIds.length} product(s)`,
+        uniqueProductIds
+      );
+    } catch (error) {
+      if (error instanceof StandardError) {
+        throw error;
+      }
+
+      errorHandlingService.processError(
+        error,
+        'Failed to bulk-assign product sections',
+        ErrorCodes.DATA.UPDATE_FAILED,
+        {
+          component: 'ProposalService',
+          operation: 'bulkAssignProductsToSections',
+          proposalId,
+        }
+      );
+      throw error;
+    }
   }
 }
 

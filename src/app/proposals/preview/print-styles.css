@@ -1,9 +1,36 @@
-/* 
+/*
  * PosalPro MVP2 - Proposals Preview Print Optimization Styles
  * Enhanced print styles for professional proposal presentation
  */
 
 @media print {
+  /* PDF.js canvas print helpers */
+  .pdf-page {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .print-datasheets-container {
+    width: 100% !important;
+  }
+
+  .print-datasheets-container canvas {
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+  }
+
+  .print-datasheet-wrapper {
+    page-break-before: always !important;
+    break-before: page !important;
+    margin: 0 !important;
+    padding: 12pt 0 !important;
+  }
+
+  .print-datasheet-header h1 { font-size: 16pt !important; margin-bottom: 6pt !important; }
+  .print-datasheet-header h2 { font-size: 13pt !important; margin-bottom: 4pt !important; }
+  .print-datasheet-header p { font-size: 9pt !important; margin-bottom: 8pt !important; }
+
   /* Page setup for professional printing */
   @page {
     margin: 0.75in;
@@ -27,39 +54,134 @@
     box-shadow: none !important;
   }
 
-  /* Enhanced typography for print */
+  /* Enhanced typography for print - Ultra-compact */
   body {
-    font-size: 12pt;
-    line-height: 1.4;
+    font-size: 10pt;
+    line-height: 1.2;
     color: black;
+    margin: 0;
+    padding: 0;
   }
 
-  h1 { font-size: 24pt; margin-bottom: 12pt; }
-  h2 { font-size: 18pt; margin-bottom: 10pt; }
-  h3 { font-size: 16pt; margin-bottom: 8pt; }
+  h1 { font-size: 18pt; margin-bottom: 8pt; line-height: 1.1; }
+  h2 { font-size: 14pt; margin-bottom: 6pt; line-height: 1.1; }
+  h3 { font-size: 12pt; margin-bottom: 4pt; line-height: 1.1; }
 
-  /* Table optimizations */
+  /* Remove default margins from all elements */
+  * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  /* Add minimal margins only where needed */
+  .section-container {
+    margin-bottom: 6pt !important;
+  }
+
+  /* Table optimizations - Ultra-compact cells */
   table {
     border-collapse: collapse;
     width: 100%;
-    margin-bottom: 20pt;
+    margin-bottom: 8pt;
+    font-size: 9pt;
   }
 
   th, td {
-    border: 1pt solid #ddd;
-    padding: 6pt;
+    border: 0.5pt solid #ddd;
+    padding: 2pt 3pt;
     text-align: left;
+    vertical-align: top;
+    line-height: 1.1;
   }
 
   th {
     background-color: #f5f5f5 !important;
     font-weight: bold;
+    font-size: 8pt;
+    padding: 2pt 3pt;
+  }
+
+  /* Ultra-compact table cells */
+  .compact-table td {
+    padding: 1pt 2pt;
+    font-size: 8pt;
+    line-height: 1.0;
+  }
+
+  .compact-table th {
+    padding: 2pt;
+    font-size: 7pt;
+    line-height: 1.0;
+  }
+
+  /* Prevent page breaks in table rows */
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   /* Prevent page breaks in important sections */
   .break-inside-avoid {
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+
+  /* Section containers - keep together when possible */
+  .section-container {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-bottom: 15pt;
+  }
+
+  /* Subtotal sections - keep with their tables */
+  .subtotal-section {
+    page-break-before: avoid;
+    break-before: avoid;
+    margin-top: 8pt;
+    padding-top: 6pt;
+  }
+
+  /* Ensure subtotals stay with their parent section */
+  .section-container .subtotal-section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Ultra-compact spacing for print */
+  .section-container {
+    padding: 8pt !important;
+    margin-bottom: 8pt !important;
+  }
+
+  /* Reduce header spacing in print */
+  .section-container h2 {
+    margin-bottom: 4pt !important;
+    font-size: 12pt !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Compact content areas */
+  .section-container .bg-gray-50 {
+    padding: 4pt !important;
+    margin-bottom: 4pt !important;
+    font-size: 8pt !important;
+    line-height: 1.1 !important;
+  }
+
+  /* Remove extra margins from section headers */
+  .section-container .flex.items-center.justify-between {
+    margin-bottom: 4pt !important;
+  }
+
+  /* Compact table spacing */
+  .section-container table {
+    margin-bottom: 8pt !important;
+  }
+
+  /* Reduce spacing between table and subtotals */
+  .subtotal-section {
+    margin-top: 4pt !important;
+    padding-top: 3pt !important;
   }
 
   /* Total section emphasis */
@@ -81,11 +203,138 @@
     margin-bottom: 20pt;
   }
 
-  /* Header consistency */
+  /* Header consistency - Ultra-compact */
   .print-header {
-    border-bottom: 2pt solid #333;
-    padding-bottom: 10pt;
-    margin-bottom: 20pt;
+    border-bottom: 1pt solid #333;
+    padding-bottom: 4pt;
+    margin-bottom: 8pt;
+  }
+
+  /* Compact proposal header */
+  .proposal-header {
+    margin-bottom: 6pt !important;
+    padding-bottom: 4pt !important;
+  }
+
+  /* Compact company info */
+  .company-info {
+    margin-bottom: 4pt !important;
+  }
+
+  /* Compact proposal details */
+  .proposal-details {
+    margin-bottom: 4pt !important;
+  }
+
+  /* Remove extra spacing from flex containers */
+  .flex {
+    gap: 2pt !important;
+  }
+
+  /* Compact button spacing */
+  .print\\:hidden + * {
+    margin-top: 2pt !important;
+  }
+
+  /* Ultra-compact grid spacing */
+  .grid {
+    gap: 4pt !important;
+  }
+
+  /* Reduce spacing in flex containers */
+  .flex.items-start.gap-3 {
+    gap: 2pt !important;
+  }
+
+  /* Compact text spacing */
+  p, div {
+    margin-bottom: 2pt !important;
+  }
+
+  /* Remove extra spacing from motion divs */
+  .motion-div {
+    margin-bottom: 4pt !important;
+  }
+
+  /* Compact section spacing */
+  .section-container + .section-container {
+    margin-top: 4pt !important;
+  }
+
+  /* Page break for datasheets */
+  .page-break-before {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  /* Hide datasheet selector in print */
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Show datasheet pages only in print */
+  .print\\:block {
+    display: none;
+  }
+
+  @media print {
+    .print\\:block {
+      display: block !important;
+    }
+  }
+
+  /* PDF iframe styling for print */
+  @media print {
+    iframe {
+      width: 100% !important;
+      height: auto !important;
+      min-height: 100vh !important;
+      border: 1pt solid #ddd !important;
+      page-break-inside: auto;
+      break-inside: auto;
+      display: block !important;
+    }
+
+    /* Allow PDF pages to flow naturally */
+    .page-break-before {
+      page-break-before: always !important;
+      break-before: page !important;
+      height: auto !important;
+      min-height: auto !important;
+    }
+
+    /* Ensure PDF container doesn't constrain height */
+    .page-break-before > div {
+      min-height: auto !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+
+    /* Remove height constraints on PDF containers */
+    .page-break-before .min-h-screen {
+      min-height: auto !important;
+      height: auto !important;
+    }
+
+    /* Ensure PDF iframe can expand to show all pages */
+    .page-break-before iframe {
+      height: auto !important;
+      min-height: 100vh !important;
+      max-height: none !important;
+      width: 100% !important;
+      display: block !important;
+    }
+
+    /* Remove overflow hidden that might clip PDF content */
+    .page-break-before > div {
+      overflow: visible !important;
+    }
+
+    /* Force PDF to display in single page mode for better print layout */
+    .page-break-before iframe {
+      transform: scale(1) !important;
+      transform-origin: top left !important;
+    }
   }
 }
 

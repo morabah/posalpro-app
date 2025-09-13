@@ -31,7 +31,7 @@ const securityHeaders = [
   {
     key: 'Content-Security-Policy',
     value:
-      "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com 'report-sample'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://api.posalpro.com https://cdnjs.cloudflare.com https://unpkg.com; worker-src 'self' blob: https://cdnjs.cloudflare.com https://unpkg.com; frame-ancestors 'none'; report-uri /api/security/csp-report",
+      "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com https://mozilla.github.io 'report-sample'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://api.posalpro.com https://cdnjs.cloudflare.com https://unpkg.com https://mozilla.github.io; worker-src 'self' blob: https://cdnjs.cloudflare.com https://unpkg.com https://mozilla.github.io; frame-src 'self' http://localhost:8080 https: https://mozilla.github.io; frame-ancestors 'none'; report-uri /api/security/csp-report",
   },
   { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
   { key: 'Pragma', value: 'no-cache' },

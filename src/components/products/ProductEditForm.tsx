@@ -18,9 +18,11 @@ import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { logError, logInfo } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { ImageUpload } from './ImageUpload';
+import { ImageGallery } from './ImageGallery';
 
 interface ProductEditFormProps {
   productId: string;
@@ -30,6 +32,7 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
   const router = useRouter();
   const { data: product, isLoading, isError, error } = useProductMigrated(productId);
   const updateProduct = useUpdateProduct();
+  const [productImages, setProductImages] = useState<string[]>([]);
 
   // ✅ Fetch categories and tags from database
   const { data: categoriesData, isLoading: categoriesLoading } = useProductCategories();
@@ -67,6 +70,8 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
   // ✅ Reset form when product data is loaded
   useEffect(() => {
     if (product) {
+      const productImagesArray = product.images || [];
+      setProductImages(productImagesArray);
       reset({
         name: product.name || '',
         description: product.description || '',
@@ -76,7 +81,7 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
         category: product.category || [],
         tags: product.tags || [],
         isActive: product.isActive ?? true,
-        images: product.images || [],
+        images: productImagesArray,
         datasheetPath: product.datasheetPath || '',
         version: product.version || 1,
         userStoryMappings: product.userStoryMappings || ['US-4.1'],
@@ -404,6 +409,39 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
                   ⚠️ File uploads require a local file server. Use network URLs for production.
                 </p>
               </div>
+            </div>
+
+            {/* Product Images */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-gray-900">Product Images</h3>
+
+              {/* Image Upload */}
+              <ImageUpload
+                productId={productId}
+                onUploadSuccess={(imageUrl) => {
+                  setProductImages(prev => [...prev, imageUrl]);
+                  setValue('images', [...productImages, imageUrl]);
+                }}
+                onUploadError={(error) => {
+                  toast.error(`Image upload failed: ${error}`);
+                }}
+                disabled={productImages.length >= 10}
+              />
+
+              {/* Image Gallery */}
+              {productImages.length > 0 && (
+                <ImageGallery
+                  productId={productId}
+                  images={productImages}
+                  onImageDelete={(imageUrl) => {
+                    setProductImages(prev => prev.filter(img => img !== imageUrl));
+                    setValue('images', productImages.filter(img => img !== imageUrl));
+                  }}
+                  onImageDeleteError={(error: string) => {
+                    toast.error(`Image operation failed: ${error}`);
+                  }}
+                />
+              )}
             </div>
 
             {/* Category */}

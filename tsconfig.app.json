@@ -2,9 +2,18 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "composite": true,
+    "declaration": true,
+    "declarationMap": true,
     "tsBuildInfoFile": "./config/tsconfig.app.tsbuildinfo"
   },
-  "include": ["src/app/**/*.ts", "src/app/**/*.tsx", "src/components/**/*.ts", "src/components/**/*.tsx"],
+  "include": [
+    "src/app/**/*.ts",
+    "src/app/**/*.tsx",
+    "src/components/**/*.ts",
+    "src/components/**/*.tsx",
+    "src/features/**/*.ts",
+    "src/features/**/*.tsx"
+  ],
   "exclude": [
     "node_modules",
     "templates/**",
@@ -25,10 +34,3 @@
     }
   ]
 }
-
-
-
-
-
-
-

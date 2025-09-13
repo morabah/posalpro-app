@@ -10,7 +10,8 @@ import { createRoute } from '@/lib/api/route';
 import prisma from '@/lib/db/prisma';
 import { ErrorCodes, errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
-import { Prisma } from '@prisma/client';
+import { ProposalService } from '@/lib/services/proposalService';
+import { Prisma, SectionType } from '@prisma/client';
 
 // Type definitions for proposal data
 type ProposalProductWithRelations = {
@@ -138,6 +139,7 @@ export const GET = createRoute(
           select: {
             id: true,
             productId: true,
+            sectionId: true,
             quantity: true,
             unitPrice: true,
             total: true,
@@ -204,6 +206,7 @@ export const GET = createRoute(
           unitPrice: pp.unitPrice !== null && pp.unitPrice !== undefined ? Number(pp.unitPrice) : 0,
           discount: pp.discount !== null && pp.discount !== undefined ? Number(pp.discount) : 0,
           total: pp.total !== null && pp.total !== undefined ? Number(pp.total) : 0,
+          sectionId: (pp as any).sectionId || null,
           name: pp.product?.name || `Product ${pp.productId}`,
           category: Array.isArray(pp.product?.category)
             ? pp.product.category[0] || 'General'
@@ -335,16 +338,32 @@ export const PUT = createRoute(
         };
       }
 
+      // Use ProposalService for basic proposal updates (includes version history)
+      const proposalService = new ProposalService();
+
       // Use transaction for data consistency
       const proposal = await prisma.$transaction(
         async (tx: Prisma.TransactionClient) => {
           const currentUserId = user.id;
 
-          // 1. Update the proposal
-          await tx.proposal.update({
-            where: { id },
-            data: updateData,
-          });
+          // 1. Update the proposal using ProposalService (includes version history)
+          // Extract only basic fields for ProposalService
+          const basicUpdateFields = {
+            id,
+            title: typeof updateData.title === 'string' ? updateData.title : undefined,
+            description: typeof updateData.description === 'string' ? updateData.description : undefined,
+            priority: typeof updateData.priority === 'string' ? updateData.priority : undefined,
+            status: typeof updateData.status === 'string' ? updateData.status : undefined,
+            value: typeof updateData.value === 'number' ? updateData.value : undefined,
+            dueDate: updateData.dueDate instanceof Date ? updateData.dueDate : undefined,
+          };
+
+          // Remove undefined fields but keep id
+          const cleanUpdateFields = Object.fromEntries(
+            Object.entries(basicUpdateFields).filter(([key, value]) => key === 'id' || value !== undefined)
+          );
+
+          await proposalService.updateProposal(cleanUpdateFields as any);
 
           // 2. 🚀 PERFORMANCE OPTIMIZATION: Return lightweight proposal data
           // Avoid heavy JOIN queries that can cause timeouts
@@ -367,40 +386,63 @@ export const PUT = createRoute(
             },
           });
 
-          // 3. Handle product data updates
+          // 3. Handle product data updates (diff, do not destroy section assignments)
           if (
             productData &&
             typeof productData === 'object' &&
             'products' in productData &&
             Array.isArray((productData as any).products)
           ) {
-            // Delete existing proposal products
-            await tx.proposalProduct.deleteMany({
+            const payloadProducts = (productData as any).products as Array<any>;
+            const existing = await tx.proposalProduct.findMany({
               where: { proposalId: id },
+              select: { id: true },
             });
+            const existingIds = new Set(existing.map(e => e.id));
 
-            // Create new proposal products
-            for (const product of (productData as any).products) {
-              const productId = product.productId;
-              const quantity = Number(product.quantity) || 1;
-              const unitPrice = Number(product.unitPrice) || 0;
-              const discount = Number(product.discount) || 0;
+            const toUpdate = payloadProducts.filter(p => p.id && !String(p.id).startsWith('temp-') && existingIds.has(p.id));
+            const toCreate = payloadProducts.filter(p => !p.id || String(p.id).startsWith('temp-'));
+            const keepIds = new Set(toUpdate.map(p => p.id));
+            const toDeleteIds = existing.filter(e => !keepIds.has(e.id)).map(e => e.id);
 
-              if (productId && quantity > 0 && unitPrice >= 0) {
-                const calculatedTotal = quantity * unitPrice * (1 - discount / 100);
-                const total = Number(product.total) || calculatedTotal;
+            if (toDeleteIds.length > 0) {
+              await tx.proposalProduct.deleteMany({ where: { id: { in: toDeleteIds } } });
+            }
 
-                await tx.proposalProduct.create({
-                  data: {
-                    proposalId: id,
-                    productId,
-                    quantity,
-                    unitPrice,
-                    discount,
-                    total,
-                  },
-                });
-              }
+            for (const p of toUpdate) {
+              const quantity = Math.max(1, Number(p.quantity) || 1);
+              const unitPrice = Number(p.unitPrice) || 0;
+              const discount = Number(p.discount) || 0;
+              const total = Number.isFinite(p.total)
+                ? Number(p.total)
+                : quantity * unitPrice * (1 - discount / 100);
+              await tx.proposalProduct.update({
+                where: { id: p.id },
+                data: { quantity, unitPrice, discount, total },
+              });
+            }
+
+            for (const p of toCreate) {
+              const productId = p.productId as string;
+              const quantity = Math.max(1, Number(p.quantity) || 1);
+              const unitPrice = Number(p.unitPrice) || 0;
+              const discount = Number(p.discount) || 0;
+              const sectionId = p.sectionId || null;
+              if (!productId) continue;
+              const total = Number.isFinite(p.total)
+                ? Number(p.total)
+                : quantity * unitPrice * (1 - discount / 100);
+              await tx.proposalProduct.create({
+                data: {
+                  proposalId: id,
+                  productId,
+                  quantity,
+                  unitPrice,
+                  discount,
+                  total,
+                  sectionId,
+                },
+              });
             }
 
             // Recalculate proposal total value
@@ -422,16 +464,16 @@ export const PUT = createRoute(
             });
           }
 
-          // 3. Handle section data updates
+          // 4. Handle content section data updates (do not affect PRODUCTS sections from Step 4)
           if (
             sectionData &&
             typeof sectionData === 'object' &&
             'sections' in sectionData &&
             Array.isArray((sectionData as any).sections)
           ) {
-            // Delete existing proposal sections
+            // Delete only non-PRODUCTS sections to preserve Step 4 headers
             await tx.proposalSection.deleteMany({
-              where: { proposalId: id },
+              where: { proposalId: id, NOT: { type: SectionType.PRODUCTS } },
             });
 
             // Create new proposal sections
@@ -443,6 +485,7 @@ export const PUT = createRoute(
                     title: section.title,
                     content: section.content,
                     order: section.order || 0,
+                    type: SectionType.TEXT,
                   },
                 });
               }

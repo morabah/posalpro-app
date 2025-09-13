@@ -19,39 +19,39 @@ import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 
 // ✅ CRITICAL: Global PDF.js worker configuration
-// Configure PDF.js worker globally to prevent message handler errors
+// Prefer a same-origin bundled module worker to avoid cross-origin quirks
 // This must be done before any PDF components are rendered
 if (typeof window !== 'undefined') {
-  // Configure PDF worker with working version and cache busting
-  const cacheBuster = Date.now();
-  const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
-
-  // Store worker initialization promise globally
   (window as any).pdfWorkerPromise = import('react-pdf')
     .then(async module => {
-      // Ensure worker URL is set
-      module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-
-      // Verify worker is accessible
       try {
-        const response = await fetch(workerUrl, { method: 'HEAD' });
-        if (!response.ok) {
-          throw new Error(`Worker URL not accessible: ${response.status}`);
-        }
-      } catch (fetchError) {
-        console.warn('[PDF Worker] Worker URL verification failed, using fallback');
-        // Try without cache buster as fallback
-        const fallbackUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs`;
-        module.pdfjs.GlobalWorkerOptions.workerSrc = fallbackUrl;
-      }
+        // Try creating a same-origin module worker bundled by Next.js/Webpack
+        const worker = new Worker(
+          new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url),
+          { type: 'module' }
+        );
+        module.pdfjs.GlobalWorkerOptions.workerPort = worker;
 
-      logInfo('QueryProvider: PDF.js worker configured globally', {
-        workerUrl: module.pdfjs.GlobalWorkerOptions.workerSrc,
-        cacheBuster,
-        configuredAt: new Date().toISOString(),
-        component: 'QueryProvider',
-        operation: 'pdf_worker_config',
-      });
+        logInfo('QueryProvider: PDF.js worker configured via workerPort (bundled)', {
+          component: 'QueryProvider',
+          operation: 'pdf_worker_config',
+          configuredAt: new Date().toISOString(),
+          mode: 'workerPort',
+        });
+      } catch (err) {
+        // Fallback: configure by URL (CDN)
+        const cacheBuster = Date.now();
+        const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
+        module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+
+        logInfo('QueryProvider: PDF.js worker configured via workerSrc (CDN fallback)', {
+          component: 'QueryProvider',
+          operation: 'pdf_worker_config',
+          configuredAt: new Date().toISOString(),
+          mode: 'workerSrc',
+          workerUrl,
+        });
+      }
 
       return module;
     })
@@ -61,17 +61,6 @@ if (typeof window !== 'undefined') {
         component: 'QueryProvider',
         operation: 'pdf_worker_config_error',
       });
-
-      // Set a fallback worker URL even if import fails
-      try {
-        import('react-pdf').then(module => {
-          module.pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs`;
-          console.log('[PDF Worker] Fallback worker URL set');
-        });
-      } catch (fallbackError) {
-        console.error('[PDF Worker] Fallback worker configuration failed');
-      }
-
       throw error;
     });
 
@@ -93,15 +82,7 @@ if (typeof window !== 'undefined') {
         component: 'QueryProvider',
         operation: 'pdf_worker_error_handler',
       });
-
-      // Prevent the error from propagating to avoid console spam
-      if (event.message?.includes('messageHandler') || event.message?.includes('sendWithPromise')) {
-        event.preventDefault();
-        logInfo('QueryProvider: MessageHandler error prevented from propagating', {
-          component: 'QueryProvider',
-          operation: 'message_handler_error_prevented',
-        });
-      }
+      // Do not call preventDefault here; let ErrorBoundary capture and UI recover
     }
   });
 
