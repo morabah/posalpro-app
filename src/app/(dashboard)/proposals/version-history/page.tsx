@@ -768,7 +768,7 @@ export default function ProposalVersionHistoryPage() {
                                         <div>
                                           <div className="font-medium text-gray-900">Added</div>
                                           <ul className="list-disc list-inside text-gray-700">
-                                            {(expandedEntryDetail.data.changes.added || []).map((p, idx) => (
+                                            {(expandedEntryDetail.data.changes.added || []).map((p: any, idx: number) => (
                                               <li key={`add-${p.productId}-${idx}`}>
                                                 {p.name || p.productId} × {p.quantity}
                                               </li>
@@ -781,7 +781,7 @@ export default function ProposalVersionHistoryPage() {
                                         <div>
                                           <div className="font-medium text-gray-900">Removed</div>
                                           <ul className="list-disc list-inside text-gray-700">
-                                            {(expandedEntryDetail.data.changes.removed || []).map((p, idx) => (
+                                            {(expandedEntryDetail.data.changes.removed || []).map((p: any, idx: number) => (
                                               <li key={`rem-${p.productId}-${idx}`}>
                                                 {p.name || p.productId} × {p.quantity}
                                               </li>
@@ -794,7 +794,7 @@ export default function ProposalVersionHistoryPage() {
                                         <div>
                                           <div className="font-medium text-gray-900">Updated</div>
                                           <ul className="list-disc list-inside text-gray-700">
-                                            {(expandedEntryDetail.data.changes.updated || []).map((u, idx) => (
+                                            {(expandedEntryDetail.data.changes.updated || []).map((u: any, idx: number) => (
                                               <li key={`upd-${u.productId}-${idx}`}>
                                                 {u.name || u.productId}
                                               </li>

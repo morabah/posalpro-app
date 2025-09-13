@@ -21,6 +21,7 @@ import type { User, UserCreate, UserUpdate, UsersListResponse, UsersQuery } from
 
 /**
  * Hook for fetching admin users with pagination and filtering
+ * ✅ ENHANCED: Added explicit React Query configuration with caching strategies
  */
 export function useAdminUsers(params: UsersQuery) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
@@ -57,15 +58,22 @@ export function useAdminUsers(params: UsersQuery) {
 
       return result;
     },
-    staleTime: 30000, // 30 seconds
-    gcTime: 120000, // 2 minutes
-    refetchOnWindowFocus: false,
-    retry: 1,
+    // ✅ ENHANCED: Explicit React Query configuration following CORE_REQUIREMENTS.md
+    staleTime: 30000, // 30 seconds - data considered fresh
+    gcTime: 120000, // 2 minutes - cache retention
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    // ✅ ENHANCED: Caching strategy for user data
+    placeholderData: previousData => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 }
 
 /**
  * Hook for fetching a single user by ID
+ * ✅ ENHANCED: Added explicit React Query configuration with caching strategies
  */
 export function useAdminUser(id: string) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
@@ -99,11 +107,17 @@ export function useAdminUser(id: string) {
 
       return result;
     },
-    staleTime: 30000,
-    gcTime: 120000,
+    // ✅ ENHANCED: Explicit React Query configuration for user details
+    staleTime: 60000, // 1 minute - user details change less frequently
+    gcTime: 300000, // 5 minutes - longer cache for user details
     refetchOnWindowFocus: false,
-    enabled: !!id,
-    retry: 1,
+    refetchOnReconnect: true,
+    retry: 2,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000),
+    // ✅ ENHANCED: Caching strategy for user details
+    placeholderData: previousData => previousData,
+    networkMode: 'online',
+    enabled: !!id, // Only fetch if ID is provided
   });
 }
 

@@ -35,6 +35,7 @@ export interface UpdatePermissionData extends Partial<CreatePermissionData> {
 
 /**
  * Hook for fetching permissions with React Query
+ * ✅ ENHANCED: Added explicit React Query configuration with caching strategies
  */
 export function useAdminPermissions() {
   const query = useQuery({
@@ -55,9 +56,16 @@ export function useAdminPermissions() {
 
       return result?.permissions || [];
     },
-    staleTime: 30000,
-    gcTime: 120000,
-    refetchOnWindowFocus: false,
+    // ✅ ENHANCED: Explicit React Query configuration following CORE_REQUIREMENTS.md
+    staleTime: 120000, // 2 minutes - permissions change very rarely
+    gcTime: 600000, // 10 minutes - longer cache for permissions
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    // ✅ ENHANCED: Caching strategy for permissions
+    placeholderData: (previousData) => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 
   return {

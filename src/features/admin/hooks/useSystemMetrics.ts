@@ -18,6 +18,7 @@ import type { SystemMetrics } from '../schemas';
 
 /**
  * Hook for fetching system metrics
+ * ✅ ENHANCED: Added explicit React Query configuration with caching strategies
  */
 export function useAdminSystemMetrics() {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
@@ -54,10 +55,16 @@ export function useAdminSystemMetrics() {
 
       return result;
     },
+    // ✅ ENHANCED: Explicit React Query configuration for system metrics
     staleTime: 30000, // 30 seconds - system metrics change frequently
-    gcTime: 120000, // 2 minutes
-    refetchOnWindowFocus: false,
+    gcTime: 120000, // 2 minutes - shorter cache for frequently changing data
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
     refetchInterval: 60000, // Refetch every minute for live metrics
-    retry: 1,
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    // ✅ ENHANCED: Caching strategy for system metrics
+    placeholderData: (previousData) => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 }

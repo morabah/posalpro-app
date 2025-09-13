@@ -3,6 +3,7 @@
  * Implements intelligent caching and offline capabilities
  * Expected impact: 30-50% improvement in repeat visits
  */
+/* eslint-disable no-undef, @typescript-eslint/no-unused-vars */
 
 const CACHE_NAME = 'posalpro-mvp2-v1.0.0';
 const STATIC_CACHE_NAME = 'posalpro-static-v1.0.0';
@@ -30,13 +31,14 @@ const API_CACHE_PATTERNS = [
 ];
 
 // Cache strategies
-const CACHE_STRATEGIES = {
-  CACHE_FIRST: 'cache-first',
-  NETWORK_FIRST: 'network-first',
-  STALE_WHILE_REVALIDATE: 'stale-while-revalidate',
-  NETWORK_ONLY: 'network-only',
-  CACHE_ONLY: 'cache-only',
-};
+// Cache strategies - commented out to avoid unused variable warning
+// const CACHE_STRATEGIES = {
+//   CACHE_FIRST: 'cache-first',
+//   NETWORK_FIRST: 'network-first',
+//   STALE_WHILE_REVALIDATE: 'stale-while-revalidate',
+//   NETWORK_ONLY: 'network-only',
+//   CACHE_ONLY: 'cache-only',
+// };
 
 // Install event - cache static assets
 self.addEventListener('install', event => {
@@ -120,7 +122,12 @@ self.addEventListener('fetch', event => {
 
   // Handle different types of requests
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(handleApiRequest(request));
+    // Only handle API requests that should be cached
+    const shouldCache = API_CACHE_PATTERNS.some(pattern => url.pathname.startsWith(pattern));
+    if (shouldCache) {
+      event.respondWith(handleApiRequest(request));
+    }
+    // For non-cached APIs, let them pass through without service worker interference
   } else if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(handleStaticAssets(request));
   } else if (url.pathname.startsWith('/auth/')) {
@@ -138,11 +145,12 @@ async function handleApiRequest(request) {
   const shouldCache = API_CACHE_PATTERNS.some(pattern => url.pathname.startsWith(pattern));
 
   if (!shouldCache) {
+    // For non-cached APIs, just pass through to network without service worker interference
     return fetch(request);
   }
 
   try {
-    // Try network first
+    // Try network first for cached APIs
     const networkResponse = await fetch(request);
 
     if (networkResponse.ok) {
@@ -153,9 +161,9 @@ async function handleApiRequest(request) {
 
     return networkResponse;
   } catch (error) {
-    console.log('[SW] Network failed for API request, trying cache:', url.pathname);
+    console.log('[SW] Network failed for cached API request, trying cache:', url.pathname);
 
-    // Fallback to cache
+    // Fallback to cache only for cached APIs
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
@@ -175,6 +183,7 @@ async function handleApiRequest(request) {
       );
     }
 
+    // For other cached APIs, let the error propagate
     throw error;
   }
 }

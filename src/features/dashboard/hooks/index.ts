@@ -16,3 +16,10 @@ export type {
   UseDashboardDataOptions,
   UseDashboardDataReturn,
 } from './useDashboard';
+
+// ====================
+// Advanced Caching and Enhanced Hooks
+// ====================
+
+export { useDashboardCache } from './useDashboardCache';
+export { useDashboardEnhanced } from './useDashboardEnhanced';

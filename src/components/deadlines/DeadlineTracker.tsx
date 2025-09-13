@@ -9,7 +9,7 @@
 import { Alert } from '@/components/ui/feedback/Alert';
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
-import { SystemUser, useUsers } from '@/hooks/admin';
+import { SystemUser, useAdminUsers } from '@/hooks/admin';
 import { useDeadlineManagementAnalytics } from '@/hooks/deadlines/useDeadlineManagementAnalytics';
 import {
   ComplexityLevel,
@@ -138,7 +138,8 @@ export function DeadlineTracker({
   className = '',
 }: DeadlineTrackerProps) {
   const analytics = useDeadlineManagementAnalytics();
-  const { users, loading: isLoadingUsers, error: usersError } = useUsers();
+  const { data: usersData, isLoading: isLoadingUsers, error: usersError } = useAdminUsers({ page: '1', limit: '50' });
+  const users = usersData?.users || [];
 
   const teamMemberOptions = useMemo(() => {
     if (!users) return [];

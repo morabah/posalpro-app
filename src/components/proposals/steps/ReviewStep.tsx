@@ -10,7 +10,11 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug } from '@/lib/logger';
-import { useProposalPlanType, useProposalStepData } from '@/lib/store/proposalStore';
+import {
+  useProposalPlanType,
+  useProposalStepData,
+  useProposalStore,
+} from '@/lib/store/proposalStore';
 import { useCallback, useMemo } from 'react';
 
 interface ReviewStepProps {
@@ -87,7 +91,10 @@ export function ReviewStep({ onNext, onBack, onSubmit }: ReviewStepProps) {
       return productData.totalValue;
     }
     return (
-      productData?.products?.reduce((sum: number, product: any) => sum + (product.unitPrice * product.quantity), 0) || 0
+      productData?.products?.reduce(
+        (sum: number, product: any) => sum + product.unitPrice * product.quantity,
+        0
+      ) || 0
     );
   }, [productData]);
 
@@ -108,6 +115,17 @@ export function ReviewStep({ onNext, onBack, onSubmit }: ReviewStepProps) {
       });
       return;
     }
+
+    // Store review data in the store for persistence
+    const { setStepData } = useProposalStore.getState();
+    setStepData(6, {
+      validationChecklist,
+      totalProducts,
+      totalValue,
+      totalSections,
+      isComplete,
+      submittedAt: new Date().toISOString(),
+    } as any);
 
     // Debug logging for final submission payload
     logDebug('Step 6 final submission payload', {

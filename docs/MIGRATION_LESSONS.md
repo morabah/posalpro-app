@@ -2,6 +2,22 @@
 
 **Status**: ✅ **SUCCESSFUL** - Unified framework for common migration issues.
 
+**🔧 UPDATED TO ALIGN WITH CORE_REQUIREMENTS.md** - This document has been
+updated to eliminate contradictions and ensure alignment with
+CORE_REQUIREMENTS.md as the source of truth. Key updates include:
+
+- ✅ **Error Handling**: Updated to use ErrorHandlingService and structured
+  logging instead of console.log/console.error
+- ✅ **Service Layer Architecture**: Clarified two-distinct service layers
+  (frontend services vs database services)
+- ✅ **Store Location Rules**: Added mandatory store location rules
+  (src/lib/store/ only)
+- ✅ **Feature-Based Organization**: Added feature-based organization patterns
+- ✅ **Route Boundaries**: Added route boundary requirements (loading.tsx and
+  error.tsx)
+- ✅ **Anti-Patterns**: Updated to include all CORE_REQUIREMENTS.md forbidden
+  practices
+
 ---
 
 ## 🔧 **Missing Entitlements Error Fix (Latest)**
@@ -47,24 +63,6 @@ with:
 npm run db:seed
 node test-entitlement-direct.js
 ```
-
----
-
-## 🔧 **PDF Preview Worker/Page Crash Fix (Latest)**
-
-Problem: Safari/dev crash `this.messageHandler.sendWithPromise` in `<Page>` and noisy circular logs.
-
-Root Cause: React-PDF page lifecycle racing a torn-down pdf.js worker; multiple module instances; circular object logging.
-
-Fix:
-
-- Single `react-pdf` import shared by `Document`/`Page`.
-- Same-origin worker via `workerPort` (bundled); CDN `workerSrc` fallback pinned to `pdfjs-dist@5.3.93`.
-- Guard: render `<Page>` only after `numPages > 0`; remount on messageHandler error; stable keys per file.
-- Safari-safe canvas path for first page (or `NEXT_PUBLIC_PDF_PAGE_SAFE_MODE=true`).
-- Trim logs: log only `numPages`; avoid circular payloads.
-
-Apply to: `DocumentPreview`, `QueryProvider`, `PrintDatasheets` alignment with worker.
 
 ---
 
@@ -248,23 +246,61 @@ const response = await http.put<Customer>(`${this.baseUrl}/${id}`, {
 });
 ```
 
-#### **Service Layer Response Handling**
+#### **Service Layer Architecture (MANDATORY)**
+
+**Two-Distinct Service Layers**:
+
+1. **Frontend Services: `src/services/`** - HTTP client services for React Query
+   integration
+2. **Database Services: `src/lib/services/`** - Direct database access for API
+   routes
 
 ```typescript
-// ✅ SERVICE LAYER - Return unwrapped data
-async getData(params): Promise<DataType> {
-  const data = await http.get<DataType>(endpoint);
-  return data; // Already unwrapped by the HTTP client
+// ✅ FRONTEND SERVICE (src/services/) - HTTP client services
+export class ProductService {
+  private baseUrl = '/api/products';
+
+  async getProducts(params: ProductQueryParams): Promise<ProductList> {
+    const response = await http.get<ProductList>(
+      `${this.baseUrl}?${searchParams}`
+    );
+    return response; // Already unwrapped by HTTP client
+  }
+
+  async createProduct(data: ProductCreate): Promise<Product> {
+    const validatedData = ProductCreateSchema.parse(data);
+    const response = await http.post<Product>(this.baseUrl, validatedData);
+    return response;
+  }
 }
 
-// ✅ SERVICE LAYER - Include section assignments in product creation
-async createProduct(productData): Promise<Product> {
-  const product = await http.post<Product>(endpoint, {
-    ...productData,
-    sectionId: productData.sectionId || null, // Include section assignment
-  });
-  return product;
+// ✅ DATABASE SERVICE (src/lib/services/) - Direct Prisma access
+export class ProductDatabaseService {
+  async getProducts(filters: ProductFilters): Promise<Product[]> {
+    return await prisma.product.findMany({
+      where: filters,
+      select: { id: true, name: true, price: true },
+    });
+  }
 }
+```
+
+### **❌ FORBIDDEN: API routes importing Prisma directly**
+
+```typescript
+// ❌ WRONG: Route with Prisma/business logic
+import prisma from '@/lib/db/prisma';
+export const GET = createRoute({ query: MyQuery }, async ({ query }) => {
+  const rows = await prisma.product.findMany({ where: {...} });
+  return ok({ items: rows });
+});
+
+// ✅ CORRECT: Route delegating to service
+import { productDatabaseService } from '@/lib/services/productDatabaseService';
+export const GET = createRoute({ query: MyQuery }, async ({ query }) => {
+  const { items, nextCursor } = await productDatabaseService.list(query);
+  return ok({ items, nextCursor });
+});
 ```
 
 #### **Hook Layer Data Access**
@@ -305,12 +341,18 @@ envelopes and returns the inner `data` on success. On `{ ok: false }`, it throws
 
 ```typescript
 // ❌ WRONG: Using ApiResponse generic and checking res.ok
-const res = await http.post<ApiResponse<Section>>(`/api/proposals/${id}/sections`, input);
+const res = await http.post<ApiResponse<Section>>(
+  `/api/proposals/${id}/sections`,
+  input
+);
 if (!res.ok) throw new Error(res.message || 'Failed');
 return res.data;
 
 // ✅ CORRECT: Use unwrapped types; http returns data directly
-const section = await http.post<Section>(`/api/proposals/${id}/sections`, input);
+const section = await http.post<Section>(
+  `/api/proposals/${id}/sections`,
+  input
+);
 return section;
 ```
 
@@ -533,6 +575,21 @@ const handleSort = useCallback(
 );
 ```
 
+#### **Store Location Rules (MANDATORY)**
+
+### **CANONICAL STORE LOCATION (MANDATORY)**
+
+- **✅ ONLY use**: `src/lib/store/` for ALL Zustand stores
+- **❌ NEVER use**: `src/stores/` or any other location
+- **Import pattern**: `@/lib/store/[storeName]`
+
+**Why this location?**
+
+- Consistent with the overall `src/lib/` architecture pattern
+- Clear separation of UI state (stores) from server state (React Query)
+- Follows established project structure conventions
+- Prevents confusion about where state management code belongs
+
 #### **Selector Naming Conventions**
 
 ```typescript
@@ -743,13 +800,20 @@ changeType: filters.changeTypeFilters[0] as ChangeType;
 
 ```typescript
 // ✅ VALIDATE AGAINST DATABASE
+import { logError } from '@/lib/logger';
+
 async function validateSchemaCompleteness() {
   const sampleData = await prisma.changeType.findMany({ limit: 5 });
   for (const item of sampleData) {
     try {
       ChangeTypeSchema.parse(item.changeType);
     } catch (error) {
-      console.error(`Missing enum value: ${item.changeType}`);
+      logError('Schema validation failed', {
+        component: 'SchemaValidator',
+        operation: 'validateEnumValue',
+        error: `Missing enum value: ${item.changeType}`,
+        itemChangeType: item.changeType,
+      });
     }
   }
 }
@@ -769,8 +833,13 @@ async function validateSchemaCompleteness() {
 
 ```typescript
 // ✅ DEBUG REQUEST BODIES - Log exact data being validated
-console.log('Request body:', JSON.stringify(body, null, 2));
-console.log('Schema validation input:', problematicField);
+import { logDebug } from '@/lib/logger';
+logDebug('Schema validation debug', {
+  component: 'SchemaValidator',
+  operation: 'validate',
+  requestBody: JSON.stringify(body, null, 2),
+  problematicField: problematicField,
+});
 
 // ✅ ISOLATE ISSUES - Test with CLI vs browser
 npm run app:cli -- db customer create '{"tier":"bronze"}'  # Test CLI
@@ -883,12 +952,20 @@ const flushPendingAssignments = async (proposalId: string) => {
   if (entries.length === 0) return;
 
   // Filter out temporary IDs - only flush assignments for products with real database IDs
-  const validEntries = entries.filter(([proposalProductId]) => !String(proposalProductId).startsWith('temp-'));
+  const validEntries = entries.filter(
+    ([proposalProductId]) => !String(proposalProductId).startsWith('temp-')
+  );
   if (validEntries.length === 0) return;
 
-  await http.post(`/api/proposals/${proposalId}/product-selections/bulk-assign`, {
-    assignments: validEntries.map(([proposalProductId, sectionId]) => ({ proposalProductId, sectionId })),
-  });
+  await http.post(
+    `/api/proposals/${proposalId}/product-selections/bulk-assign`,
+    {
+      assignments: validEntries.map(([proposalProductId, sectionId]) => ({
+        proposalProductId,
+        sectionId,
+      })),
+    }
+  );
   set({ pendingAssignments: {}, assignmentsDirty: false });
 };
 ```
@@ -963,25 +1040,139 @@ centralized keys.
 **Prevention**: Use centralized query keys, standardized cache config,
 aggressive invalidation.
 
-### **5. Error Handling Issues**
+### **5. Error Handling Framework (MANDATORY)**
 
-**Problem**: Inconsistent error handling
+**Problem**: Inconsistent error handling across the codebase
 
-**Solution**:
+**Solution**: Use standardized ErrorHandlingService with structured logging
 
 ```typescript
-// ✅ Centralized error handling
+// ✅ CORRECT: Always use ErrorHandlingService + Structured Logger
+import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
+import { logInfo, logError } from '@/lib/logger'; // ✅ Automatic request ID inclusion
+
 try {
   const result = await operation();
-  logInfo('Success', { result });
+  logInfo('Operation successful', {
+    component: 'ServiceName',
+    operation: 'methodName',
+    result: result?.id || 'success',
+  });
 } catch (error) {
-  const processedError = errorHandlingService.processError(error);
-  logError('Failed', { error: processedError });
+  const processedError = ErrorHandlingService.processError(error);
+  logError('Operation failed', {
+    component: 'ServiceName',
+    operation: 'methodName',
+    error: processedError.message,
+    errorCode: processedError.code,
+  });
   throw processedError;
 }
 ```
 
+### **API Route Error Handling**
+
+```typescript
+// ✅ CORRECT: Use getErrorHandler for API routes
+import { createRoute } from '@/lib/api/route';
+import {
+  getErrorHandler,
+  withAsyncErrorHandler,
+} from '@/server/api/errorHandler';
+
+export const GET = createRoute({ requireAuth: true }, async () => {
+  const eh = getErrorHandler({ component: 'EntityAPI', operation: 'GET' });
+  try {
+    const items = await withAsyncErrorHandler(
+      () => prisma.entity.findMany(),
+      'Fetch failed',
+      { component: 'EntityAPI', operation: 'GET' }
+    );
+    return eh.createSuccessResponse({ items });
+  } catch (err) {
+    return eh.createErrorResponse(err, 'Fetch failed');
+  }
+});
+```
+
+### **❌ FORBIDDEN: Custom error handling or console.error**
+
+**Prevention**: Always use ErrorHandlingService, never console.log/console.error
+in production code.
+
 ---
+
+---
+
+## 🎯 **FEATURE-BASED ORGANIZATION (MANDATORY)**
+
+### **Feature-Based Structure (MANDATORY)**
+
+```typescript
+// ✅ CORRECT: Feature-based organization
+src/features/proposals/
+├── schemas.ts        // All Zod schemas, types, validation
+├── keys.ts          // Centralized React Query keys
+├── hooks/
+│   └── useProposals.ts
+└── index.ts         // Consolidated exports
+
+src/features/customers/
+├── schemas.ts
+├── keys.ts
+├── hooks/
+└── index.ts
+
+src/features/products/
+├── schemas.ts
+├── keys.ts
+├── hooks/
+└── index.ts
+```
+
+### **📋 Feature Implementation Template**
+
+```typescript
+// 1. Schemas (src/features/[domain]/schemas.ts)
+export const [Domain]Schema = z.object({...});
+export const [Domain]CreateSchema = z.object({...});
+export const [Domain]UpdateSchema = z.object({...});
+
+// 2. Query Keys (src/features/[domain]/keys.ts)
+export const qk = {
+  [domain]: {
+    all: ['[domain]'] as const,
+    list: (params) => ['[domain]', 'list', ...params] as const,
+    byId: (id: string) => ['[domain]', 'byId', id] as const,
+  },
+} as const;
+
+// 3. Hooks (src/features/[domain]/hooks/use[Domain].ts)
+export function use[Domain](params) {
+  return useQuery({
+    queryKey: qk.[domain].list(params),
+    queryFn: () => [domain]Service.get[Domain](params),
+  });
+}
+```
+
+### **Route Boundaries (MANDATORY)**
+
+```typescript
+src/app/(dashboard)/[domain]/
+├── [id]/
+│   ├── page.tsx     # Server component with Suspense boundaries
+│   ├── loading.tsx  # Route-level loading UI with user feedback
+│   └── error.tsx    # Route-level error boundary with recovery
+├── create/
+│   ├── page.tsx     # Creation form with validation
+│   ├── loading.tsx  # Loading states during form setup
+│   └── error.tsx    # Error handling for creation failures
+└── page.tsx         # List/index page with data fetching
+```
+
+**Prevention**: Always follow feature-based organization and implement route
+boundaries for all new features.
 
 ---
 
@@ -994,6 +1185,12 @@ try {
 3. Inventory existing API endpoints
 4. Plan component architecture patterns
 5. Design multi-layer validation
+6. **Follow feature-based organization** - Use `src/features/[domain]/`
+   structure
+7. **Implement route boundaries** - Every route must have loading.tsx and
+   error.tsx
+8. **Use proper service layer separation** - Frontend services vs database
+   services
 
 ### **Implementation Strategy**
 
@@ -1001,6 +1198,11 @@ try {
 2. **Leverage existing endpoints** - Use proven APIs
 3. **Stable state management** - Individual selectors, functional updates
 4. **Complete user flow testing** - End-to-end validation
+5. **Feature-based architecture** - Organize by domain in
+   `src/features/[domain]/`
+6. **Service layer separation** - Frontend services vs database services
+7. **Route boundaries** - Implement loading.tsx and error.tsx for all routes
+8. **Structured logging** - Use ErrorHandlingService and structured logger
 
 ### **Quality Gates**
 
@@ -1009,6 +1211,11 @@ try {
 - ✅ Database integration working
 - ✅ API validation passing
 - ✅ Complete user flows functional
+- ✅ **Route boundaries implemented** (loading.tsx and error.tsx for all routes)
+- ✅ **Service layer separation** (frontend services vs database services)
+- ✅ **Structured logging** (ErrorHandlingService, no console.log/console.error)
+- ✅ **Feature-based organization** (src/features/[domain]/ structure)
+- ✅ **Store location compliance** (src/lib/store/ only)
 
 ---
 
@@ -1016,31 +1223,44 @@ try {
 
 ### **Always Follow These Patterns**
 
-1. Check existing implementations first
-2. Use consistent naming across all layers
-3. Design stable state management from start
-4. Implement structured logging from day one
-5. Support multiple response formats
-6. Use aggressive cache management
-7. Test with real data early and often
-8. Validate complete user flows
-9. Enable UI interactions for temporary data
-10. Use useMemo for computed values
-11. Filter temporary IDs before API calls
+1. Check existing implementations first - Don't reinvent working solutions
+2. Use consistent naming across all layers - Database schema is the source of
+   truth
+3. Design stable state management from the start - Individual selectors,
+   functional updates
+4. Implement comprehensive logging from day one - Structured, traceable,
+   user-friendly
+5. Support multiple response formats - Be format-agnostic in HTTP clients
+6. Use aggressive cache management - Immediate updates, comprehensive
+   invalidation
+7. Test with real data early and often - Don't wait until the end
+8. Validate complete user flows - Not just individual components
+9. Let HTTP client handle envelopes - Don't manually unwrap response data
+10. Understand selector return values - Check what selectors actually return
+11. Use proper service layer architecture - Frontend services vs database
+    services
+12. Implement route boundaries - Every route must have loading.tsx and error.tsx
+13. Use ErrorHandlingService - Never custom error handling or console.log
+14. Follow feature-based organization - src/features/[domain]/ structure
 
 ### **Common Anti-Patterns to Avoid**
 
 1. ❌ Creating new APIs when existing ones work
-2. ❌ Composite hooks creating new objects
+2. ❌ Composite hooks creating new objects on every render
 3. ❌ Inconsistent field names across layers
-4. ❌ Single response format support
+4. ❌ Manual response envelope handling in services
 5. ❌ Long stale times for frequently updated data
-6. ❌ Missing structured logging
+6. ❌ Missing structured logging and error handling
 7. ❌ Dynamic values in component IDs
-8. ❌ Testing individual components only
-9. ❌ Disabling UI elements for temporary data states
-10. ❌ Including computed values in useEffect dependencies
-11. ❌ Calling bulk-assign APIs with temporary IDs
+8. ❌ Testing individual components without end-to-end flows
+9. ❌ Manual response envelope handling in services
+10. ❌ Array access on individual selector return values
+11. ❌ Using console.log/console.error instead of structured logging
+12. ❌ API routes importing Prisma directly instead of using database services
+13. ❌ Single response format support in HTTP clients
+14. ❌ Disabling UI elements for temporary data states
+15. ❌ Including computed values in useEffect dependencies
+16. ❌ Calling bulk-assign APIs with temporary IDs
 
 ---
 
@@ -1593,209 +1813,49 @@ correctly with proper data structure transformation.
 
 ---
 
-## 🔧 **Multi-Layer Response Format Coordination Fix (Latest)**
+## 🔧 **API Response Format & Data Access Fixes (Latest)**
 
-### **Migration Goal**: Fix response format mismatch across service, hook, and component layers
+**Problem**: Multiple API response format mismatches and data access errors
+across components.
 
-**Final Status**: ✅ **SUCCESSFUL** - Proper data flow from API → Service → Hook
-→ Components.
+**Root Causes**:
 
-### **Symptoms**
+1. **API Response Format Mismatch**: APIs returning
+   `{ success: true, data: {...} }` but HTTP client expected
+   `{ ok: true, data: {...} }`
+2. **Data Structure Mismatch**: Components accessing wrong nested properties
+3. **Unstable Re-renders**: Missing memoization causing infinite loops
 
-- Hook throwing "Failed to load data" error despite successful API responses
-- TypeScript compilation errors for data access patterns
-- Components unable to access nested data properties
-
-### **Root Causes**
-
-1. **Service Layer**: Returned unwrapped data but hook expected full response
-2. **Hook Layer**: Explicit return type annotations conflicted with inferred
-   types
-3. **Component Layer**: Incorrect data access patterns (`data.field` vs
-   `data.data.field`)
-
-### **Solutions Implemented**
-
-1. **Service Layer Pattern** (`src/services/[domain]Service.ts`)
+**Solution**: Standardize API response format and fix data access patterns.
 
 ```typescript
-// ✅ CORRECT: Return unwrapped data
-return response.data; // API response unwrapped
-```
-
-2. **Hook Layer Pattern** (`src/features/[domain]/hooks/use[Domain].ts`)
-
-```typescript
-// ✅ CORRECT: Let TypeScript infer return type
-export function useDomainData(params) {
-  return useQuery({ ... }); // No explicit return type annotation
-}
-```
-
-3. **Component Layer Pattern** (`src/components/[domain]/[Component].tsx`)
-
-```typescript
-// ✅ CORRECT: Access data through proper nested structure
-const { data, isLoading } = useDomainData(params);
-useEffect(() => {
-  if (data?.data) {
-    // ✅ Handle API response structure
-    setState(data.data.field);
-  }
-}, [data]);
-```
-
-4. **Schema Validation** (`src/features/[domain]/schemas.ts`)
-
-```typescript
-// ✅ CORRECT: Include all API response fields in schema
-export const DomainResponseSchema = z.object({
-  success: z.boolean(),
-  data: z.object({
-    // Include ALL fields returned by API
-    field1: z.string(),
-    field2: z.number(),
-    // ... all actual API response fields
-  }),
-});
-```
-
-### **Prevention Framework (Multi-Layer Coordination)**
-
-1. **Service Layer**: Always return unwrapped data (`response.data`)
-2. **Hook Layer**: Remove explicit return type annotations, let TypeScript infer
-3. **Component Layer**: Always check nested structure (`data?.data?.field`)
-4. **Schema Layer**: Include all actual API response fields
-5. **Type Safety**: Verify with `npm run type-check` after changes
-
-### **Success Metrics**
-
-- ✅ No "Failed to load data" errors
-- ✅ Proper data flow across all layers
-- ✅ TypeScript compilation passes
-- ✅ Components access data correctly
-
-**Result**: **SUCCESSFUL MULTI-LAYER FIX** - Consistent response format handling
-across service, hook, and component layers.
-
-## 🔧 **Admin Page Data Access & API Response Format Fixes (Latest)**
-
-### **Migration Goal**: Fix admin page "users.map is not a function" error and API response format issues
-
-**Final Status**: ✅ **SUCCESSFUL** - Admin page now loads correctly with proper
-data access patterns.
-
-### **Core Challenges Identified**
-
-#### **1. API Response Format Mismatch**
-
-- **Problem**: `/api/admin/metrics` returned `{ success: true, metrics: {...} }`
-  but HTTP client expected `{ ok: true, data: {...} }`
-- **Symptom**: `result.data` was `undefined`, causing React Query to reject data
-- **Fix**: Updated API route to return `ok/data` format and removed debug
-  logging
-
-#### **2. Users Data Structure Mismatch**
-
-- **Problem**: Component tried to map over `users` but API returned
-  `{ users: [...], pagination: {...} }`
-- **Symptom**: `TypeError: users.map is not a function`
-- **Fix**: Changed from `users?.map()` to `users?.users?.map()` and updated all
-  related data access
-
-#### **3. Excessive Re-rendering**
-
-- **Problem**: Unstable data references causing infinite re-renders
-- **Symptom**: Admin page constantly re-rendering, high CPU usage
-- **Fix**: Added `useMemo` for stable query parameters and cleaned up debug
-  logging
-
-### **Key Fixes Applied**
-
-#### **API Response Format Fix**
-
-```typescript
-// ❌ BEFORE: Wrong format
-return NextResponse.json({
-  success: true,
-  metrics,
-  timestamp: new Date().toISOString(),
-});
-
-// ✅ AFTER: Correct format
+// ✅ API Response Format Standardization
 return NextResponse.json({
   ok: true,
-  data: metrics,
+  data: result,
   timestamp: new Date().toISOString(),
 });
-```
 
-#### **Data Access Pattern Fix**
-
-```typescript
-// ❌ BEFORE: Wrong data structure
-{users?.map((user: any) => (
-  // Error: users.map is not a function
+// ✅ Data Access Pattern Fix
+{users?.users?.map((user: any) => ( // Correct nested access
+  // Component logic
 ))}
-{users?.length || 0} users found
 
-// ✅ AFTER: Correct data structure
-{users?.users?.map((user: any) => (
-  // ✅ Works correctly
-))}
-{users?.users?.length || 0} users found
+// ✅ Stable Query Parameters
+const queryParams = useMemo(() => ({
+  search: filters.search,
+  role: filters.role || '',
+}), [filters.search, filters.role]);
 ```
 
-#### **Stable Query Parameters**
+**Apply to**: Any component with API response format mismatches or data access
+errors.
 
-```typescript
-// ✅ ADDED: Stable memoization to prevent re-renders
-const usersQueryParams = useMemo(
-  () => ({
-    search: usersFilters.search,
-    role: usersFilters.role || '',
-    status: usersFilters.status === 'all' ? '' : usersFilters.status,
-    page: String(usersFilters.page),
-    limit: '10',
-  }),
-  [
-    usersFilters.search,
-    usersFilters.role,
-    usersFilters.status,
-    usersFilters.page,
-  ]
-);
-```
+**Prevention**: Always verify API response structure and use correct nested
+property access.
 
-### **Migration Success Metrics**
-
-**Before Fix**:
-
-- Admin page crashed with JavaScript errors
-- "users.map is not a function" error
-- API response format mismatch causing undefined data
-- Excessive re-rendering loops
-
-**After Fix**:
-
-- ✅ Admin page loads without errors
-- ✅ Users table displays correctly
-- ✅ System metrics load properly
-- ✅ No more re-rendering loops
-- ✅ 100% TypeScript compliance
-- ✅ Clean console logs
-
-### **Prevention Framework (Admin Data Access)**
-
-1. **Verify API response structure** - Check actual data format returned by APIs
-2. **Use correct data access patterns** - Map over correct nested properties
-3. **Add stable memoization** - Use `useMemo` for query parameters to prevent
-   re-renders
-4. **Clean up debug logging** - Remove temporary console.log statements after
-   fixes
-
-**Result**: **SUCCESSFUL ADMIN PAGE FIXES** - Admin system now works correctly
-with proper data flow and no performance issues.
+**Result**: **SUCCESSFUL API FORMAT FIXES** - All components now correctly
+handle API responses and data access.
 
 ---
 
@@ -1978,63 +2038,6 @@ export const ChangeTypeSchema = z.enum([
 
 **Result**: **SUCCESSFUL ENUM ALIGNMENT** - Schemas now match database content,
 eliminating validation errors.
-
----
-
-## 🔧 **Comprehensive Schema Validation Error Handling (Latest)**
-
-### **Core Challenge**: Silent schema validation failures without proper error context
-
-**Problem**: Schema validation errors occur without detailed logging, making
-debugging difficult and causing silent data loading failures.
-
-**Symptoms**:
-
-- Zod validation fails without error details
-- Components receive undefined/null data
-- No logging of validation failure reasons
-- Difficult to identify which fields/values are problematic
-
-**Root Cause**: Schema parsing without try-catch blocks and detailed error
-logging.
-
-**Solution Applied**:
-
-```typescript
-// ❌ BEFORE: Silent validation failures
-const parsed = VersionHistoryListSchema.parse(response);
-
-// ✅ AFTER: Comprehensive error handling
-let parsed;
-try {
-  parsed = VersionHistoryListSchema.parse(response);
-} catch (schemaError) {
-  logError('Schema validation failed', {
-    component: 'VersionHistoryServiceClient',
-    operation: 'getVersionHistory',
-    schemaError: schemaError instanceof Error ? schemaError.message : 'Unknown',
-    responseKeys:
-      response && typeof response === 'object' ? Object.keys(response) : null,
-    responseType: typeof response,
-    userStory: 'US-5.1',
-    hypothesis: 'H8',
-  });
-  throw schemaError;
-}
-```
-
-**Prevention Framework**:
-
-1. **Try-Catch for All Schema Parsing** - Wrap all Zod.parse() calls in
-   try-catch
-2. **Detailed Error Context** - Log response structure, operation context, user
-   story
-3. **Error Propagation** - Re-throw errors after logging for proper handling
-4. **Development Debugging** - Include response keys/types for easier
-   troubleshooting
-
-**Result**: **SUCCESSFUL ERROR HANDLING** - Schema validation failures now
-provide comprehensive debugging information.
 
 ---
 
@@ -2855,54 +2858,12 @@ cause runtime failures.
 
 ---
 
-## 🔧 **PDF Document Loading System Fix (Latest)**
-
-**Problem**: PDF documents failing to load with "Missing PDF.js worker" errors.
-
-**Root Cause**: PDF.js version 5.3.93 requires `.mjs` worker extension and CSP
-headers needed updating for CDN access.
-
-**Solution**:
-
-- ✅ Updated PDF.js worker URL to `pdf.worker.min.mjs` for v5.3.93 compatibility
-- ✅ Added CSP headers to allow `unpkg.com` CDN access
-- ✅ Fixed URL decoding in document proxy API
-- ✅ Verified CORS server serving PDFs correctly
-
-**Impact**:
-
-- ✅ PDF documents now load successfully in DocumentPreview component
-- ✅ Document proxy API returns 200 OK with binary PDF content
-- ✅ All PDF-related features functional (preview, download, navigation)
-- ✅ 100% working PDF loading system verified via app-cli
-- ✅ Fixed "null is not an object (evaluating
-  'this.messageHandler.sendWithPromise')" error
-
-**Additional Fix - PDF Worker Global Configuration**:
-
-- ✅ Moved PDF.js worker configuration from component-level to global
-  (QueryProvider)
-- ✅ Added comprehensive error handling for worker communication failures
-- ✅ Prevented timing issues with worker initialization
-- ✅ Eliminated message handler null reference errors
-
-**Files Modified**:
-
-- `src/components/products/DocumentPreview.tsx` - Worker URL and CSP fixes,
-  TypeScript error fix
-- `src/app/api/documents/route.ts` - URL decoding fix
-- `next.config.js` - CSP headers update
-- `public/docs/cors_server.py` - CORS configuration
-- `src/components/providers/QueryProvider.tsx` - Global PDF worker configuration
-
----
-
 ## 🚨 **GENERAL ISSUE: PDF.js Worker Message Handler Errors**
 
 **Common Pattern**: PDF.js worker communication failures causing JavaScript
 errors after successful PDF loading.
 
-### **Symptoms**
+**Symptoms**:
 
 - ✅ PDFs load successfully (HTTP 200, binary data received)
 - ❌ JavaScript error:
@@ -2910,7 +2871,7 @@ errors after successful PDF loading.
 - ❌ Error occurs after `PDFDocumentProxy` is created
 - ❌ PDF viewer renders but worker communication fails
 
-### **Root Causes**
+**Root Causes**:
 
 1. **Component-level worker configuration** - PDF.js worker configured in
    lazy-loaded components
@@ -2918,12 +2879,10 @@ errors after successful PDF loading.
 3. **Multiple configurations** - Duplicate worker setup causing conflicts
 4. **Missing error handling** - No fallback for worker communication failures
 
-### **Standard Solution Pattern**
-
-#### **1. Global Worker Configuration**
+**Solution**:
 
 ```typescript
-// ✅ DO: Configure in global provider (QueryProvider, AppProvider, etc.)
+// ✅ Global Worker Configuration
 if (typeof window !== 'undefined') {
   import('react-pdf').then(module => {
     const cacheBuster = Date.now();
@@ -2931,269 +2890,35 @@ if (typeof window !== 'undefined') {
     module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
   });
 }
-```
 
-#### **2. Comprehensive Error Handling**
+// ✅ Comprehensive Error Handling
+import { logError } from '@/lib/logger';
 
-```typescript
-// ✅ DO: Add global error handlers
-if (typeof window !== 'undefined') {
-  window.addEventListener('error', event => {
-    if (event.message?.includes('pdfjs') || event.message?.includes('worker')) {
-      console.error('[PDF WORKER ERROR]', event);
-    }
-  });
+window.addEventListener('error', event => {
+  if (event.message?.includes('pdfjs') || event.message?.includes('worker')) {
+    logError('PDF worker error', {
+      component: 'PDFViewer',
+      operation: 'workerCommunication',
+      error: event.message,
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+    });
+  }
+});
 
-  window.addEventListener('unhandledrejection', event => {
-    if (
-      event.reason?.message?.includes('pdfjs') ||
-      event.reason?.message?.includes('worker')
-    ) {
-      console.error('[PDF WORKER PROMISE ERROR]', event.reason);
-      event.preventDefault(); // Prevent default handler
-    }
-  });
-}
-```
-
-#### **3. Component-Level Cleanup**
-
-```typescript
-// ❌ AVOID: Component-level worker configuration
-const PDFViewer = React.lazy(() =>
-  import('react-pdf').then(module => {
-    // Don't configure worker here
-    module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl; // ❌
-    return module;
-  })
-);
-
-// ✅ DO: Simple component import
+// ✅ Component-Level Cleanup
 const PDFViewer = React.lazy(() => import('react-pdf').then(m => m));
 ```
 
-### **Prevention Checklist**
+**Apply to**: Any React app using PDF.js to prevent worker communication
+failures.
 
-- [ ] Configure PDF.js worker globally, not in components
-- [ ] Add cache busting to worker URL
-- [ ] Implement global error handlers for worker issues
-- [ ] Test with real PDF files in development
-- [ ] Monitor for worker communication errors in production
+**Prevention**: Configure PDF.js worker globally, add error handling, use cache
+busting.
 
-### **Impact of This Pattern**
-
-- ✅ **Eliminates message handler errors** - No more `sendWithPromise` failures
-- ✅ **Stable worker communication** - Reliable PDF rendering
-- ✅ **Better error handling** - Graceful fallbacks for worker issues
-- ✅ **Performance improvement** - Single worker instance for entire app
-- ✅ **Debugging capability** - Comprehensive error logging
-
-### **Common Anti-Patterns to Avoid**
-
-- ❌ Component-level worker configuration
-- ❌ Missing error handling for worker communication
-- ❌ No cache busting on worker URL
-- ❌ Multiple worker configurations
-- ❌ Ignoring worker communication errors
-
-**Apply this pattern to any React app using PDF.js to prevent worker
-communication failures and message handler errors.**
-
----
-
-## 🔧 **Double-Wrapped API Response Data Extraction Fix (Latest)**
-
-### **Migration Goal**: Fix dashboard components showing zeros despite APIs returning real data due to double-wrapped response structure
-
-**Final Status**: ✅ **SUCCESSFUL** - Dashboard components now correctly extract
-data from double-wrapped API responses.
-
-### **Core Challenge**: API response structure mismatch between hook return format and component data extraction logic
-
-**Problem**: The `useExecutiveDashboard` hook was returning data in a
-double-wrapped format, but the component was trying to extract data using
-single-wrapped logic, causing all metrics to display as zeros.
-
-**Symptoms**:
-
-- Dashboard showing zeros for all metrics (Total Revenue: $0, Total Proposals:
-  0, Win Rate: 0%)
-- API endpoints returning real data (confirmed via app-cli testing)
-- Console logs showing successful data fetching but
-  `responseData.metrics: undefined`
-- Component state not updating despite successful API calls
-
-**Root Cause**: Double-wrapped API response structure where the hook returned:
-
-```javascript
-{
-  success: true,
-  data: {
-    success: true,
-    data: {
-      metrics: { totalRevenue: 450000, totalProposals: 8, conversionRate: 37.5, ... },
-      revenueChart: [...],
-      teamPerformance: [...],
-      pipelineStages: [...]
-    },
-    meta: {...}
-  },
-  meta: {...}
-}
-```
-
-But the component was extracting using single-wrapped logic:
-
-```javascript
-const responseData = dashboardData.data || dashboardData; // Wrong - gets entire object
-const metrics = responseData.metrics; // undefined because metrics is nested deeper
-```
-
-### **Solution Applied**
-
-#### **Data Extraction Logic Fix**
-
-```typescript
-// ❌ BEFORE: Single-wrapped extraction logic
-const responseData = dashboardData.data || dashboardData;
-const metrics = responseData.metrics; // undefined
-
-// ✅ AFTER: Double-wrapped extraction logic
-const responseData = dashboardData.data?.data || dashboardData.data;
-const metrics = responseData?.metrics; // correctly extracts nested data
-```
-
-#### **Generalized Pattern for Any Double-Wrapped Response**
-
-```typescript
-// ✅ UNIVERSAL PATTERN: Handle both single and double-wrapped responses
-const extractNestedData = (apiResponse: any, targetProperty: string) => {
-  // Handle double-wrapped response
-  if (apiResponse?.data?.data?.[targetProperty]) {
-    return apiResponse.data.data[targetProperty];
-  }
-
-  // Handle single-wrapped response
-  if (apiResponse?.data?.[targetProperty]) {
-    return apiResponse.data[targetProperty];
-  }
-
-  // Handle direct response
-  if (apiResponse?.[targetProperty]) {
-    return apiResponse[targetProperty];
-  }
-
-  return null;
-};
-
-// Usage in component
-const metrics = extractNestedData(dashboardData, 'metrics');
-const revenueChart = extractNestedData(dashboardData, 'revenueChart');
-const teamPerformance = extractNestedData(dashboardData, 'teamPerformance');
-```
-
-#### **Debugging Strategy for Data Extraction Issues**
-
-```typescript
-// ✅ COMPREHENSIVE DEBUGGING: Log all levels of data structure
-useEffect(() => {
-  console.log('Raw API response:', data);
-  console.log('First level data:', data?.data);
-  console.log('Second level data:', data?.data?.data);
-  console.log('Target property:', data?.data?.data?.metrics);
-
-  // Extract data with fallback logic
-  const responseData = data?.data?.data || data?.data || data;
-  console.log('Final extracted data:', responseData);
-}, [data]);
-```
-
-### **Migration Success Metrics**
-
-**Before Fix**:
-
-- Dashboard displaying zeros for all metrics
-- `responseData.metrics: undefined` in console logs
-- API returning real data but component unable to extract it
-- Poor user experience with misleading dashboard information
-
-**After Fix**:
-
-- ✅ Dashboard displaying real metrics (Total Revenue: $450,000, Total
-  Proposals: 8, Win Rate: 37.5%)
-- ✅ Proper data extraction from double-wrapped response structure
-- ✅ All dashboard components working correctly
-- ✅ 100% TypeScript compliance maintained
-
-### **Prevention Framework (Double-Wrapped Response Handling)**
-
-1. **Response Structure Analysis**:
-   - Always log the complete API response structure during development
-   - Use browser dev tools to inspect actual response format
-   - Test API endpoints independently with app-cli to verify data structure
-
-2. **Defensive Data Extraction**:
-
-   ```typescript
-   // ✅ DEFENSIVE PATTERN: Handle multiple response formats
-   const getNestedProperty = (obj: any, path: string[]) => {
-     return path.reduce((current, key) => current?.[key], obj);
-   };
-
-   // Usage
-   const metrics =
-     getNestedProperty(dashboardData, ['data', 'data', 'metrics']) ||
-     getNestedProperty(dashboardData, ['data', 'metrics']) ||
-     getNestedProperty(dashboardData, ['metrics']);
-   ```
-
-3. **Hook Response Format Standardization**:
-   - Document expected response format for each hook
-   - Use consistent response wrapping patterns across all hooks
-   - Consider unwrapping responses at the hook level to simplify component usage
-
-4. **Component Data Access Patterns**:
-
-   ```typescript
-   // ✅ STANDARDIZED PATTERN: Always check for nested structure
-   const { data, isLoading } = useDashboardHook();
-
-   useEffect(() => {
-     if (data) {
-       // Handle multiple possible response structures
-       const actualData = data?.data?.data || data?.data || data;
-       if (actualData?.metrics) {
-         setMetrics(actualData.metrics);
-       }
-     }
-   }, [data]);
-   ```
-
-5. **Testing Strategy**:
-   - Test with real API responses, not mocked data
-   - Verify data extraction logic with actual response structures
-   - Add unit tests for data extraction functions
-
-### **Common Double-Wrapped Response Patterns**
-
-| Response Type   | Structure                                                              | Extraction Pattern               |
-| --------------- | ---------------------------------------------------------------------- | -------------------------------- |
-| Single-wrapped  | `{ success: true, data: { metrics: {...} } }`                          | `data.data.metrics`              |
-| Double-wrapped  | `{ success: true, data: { success: true, data: { metrics: {...} } } }` | `data.data.data.metrics`         |
-| Direct response | `{ metrics: {...} }`                                                   | `data.metrics`                   |
-| Mixed format    | Variable nesting levels                                                | Use defensive extraction pattern |
-
-### **Related Issues This Fixes**
-
-- Dashboard components showing zeros despite successful API calls
-- Component state not updating with real data
-- Data extraction failures in React Query hooks
-- Inconsistent response format handling across components
-- Frontend-backend data flow mismatches
-
-**Result**: **SUCCESSFUL DOUBLE-WRAPPED RESPONSE FIX** - Dashboard components
-now correctly handle double-wrapped API responses and display real data instead
-of zeros, providing accurate user experience.
+**Result**: **SUCCESSFUL PDF WORKER FIX** - Eliminates message handler errors
+and ensures stable PDF rendering.
 
 ---
 
@@ -3299,3 +3024,39 @@ const updatedProposal = await tx.proposal.findUnique({
 
 **Result**: **SUCCESSFUL HTTP TIMEOUT FIX** - Proposal updates now complete
 without network timeouts, eliminating "Resource load failed" errors.
+
+---
+
+## 🔧 **API Data Preparation Without Execution Fix (Latest)**
+
+**Problem**: Data prepared in API routes but never actually saved to database.
+
+**Root Cause**: API routes prepare data objects but only execute basic field
+updates, missing prepared data in database transactions.
+
+**Solution**: Include prepared data in database update operations.
+
+```typescript
+// ❌ BEFORE: Data prepared but never saved
+const updateData = {
+  ...basicFields,
+  userStoryTracking: { teamData, contentData, productData },
+};
+await proposalService.updateProposal(cleanUpdateFields); // Missing userStoryTracking
+
+// ✅ AFTER: Include prepared data in transaction
+await proposalService.updateProposal(cleanUpdateFields);
+await tx.proposal.update({
+  where: { id },
+  data: { userStoryTracking: updateData.userStoryTracking },
+});
+```
+
+**Apply to**: Any API route that prepares complex data objects but only executes
+basic updates.
+
+**Prevention**: Always include prepared data in database transactions, not just
+basic field updates.
+
+**Result**: **SUCCESSFUL DATA PERSISTENCE FIX** - All prepared data now properly
+saved to database.

@@ -85,4 +85,19 @@ export {
 // Feature Hooks
 // ====================
 
-export { useCustomer } from './hooks';
+export {
+  useCustomer,
+  useCustomersByIds,
+  useCreateCustomer,
+  useCustomerSearch,
+  useDeleteCustomer,
+  useDeleteCustomersBulk,
+  useInfiniteCustomers,
+  useUpdateCustomer,
+  useCustomerStats,
+  useUnifiedCustomerData,
+} from './hooks';
+
+// Advanced caching and enhanced hooks
+export { useCustomerCache } from './hooks/useCustomerCache';
+export { useCustomerEnhanced } from './hooks/useCustomerEnhanced';

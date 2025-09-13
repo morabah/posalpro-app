@@ -100,6 +100,7 @@ export const GET = createRoute(
           updatedAt: true,
           customerId: true,
           createdBy: true,
+          userStoryTracking: true, // Include wizard data for edit mode
         },
       });
 
@@ -190,6 +191,7 @@ export const GET = createRoute(
         sections,
         products: productsWithDetails,
         assignedTo: assignedUsers,
+        metadata: proposal.userStoryTracking || {}, // Include wizard data as metadata
       };
 
       // Transform for frontend compatibility
@@ -351,7 +353,8 @@ export const PUT = createRoute(
           const basicUpdateFields = {
             id,
             title: typeof updateData.title === 'string' ? updateData.title : undefined,
-            description: typeof updateData.description === 'string' ? updateData.description : undefined,
+            description:
+              typeof updateData.description === 'string' ? updateData.description : undefined,
             priority: typeof updateData.priority === 'string' ? updateData.priority : undefined,
             status: typeof updateData.status === 'string' ? updateData.status : undefined,
             value: typeof updateData.value === 'number' ? updateData.value : undefined,
@@ -360,12 +363,24 @@ export const PUT = createRoute(
 
           // Remove undefined fields but keep id
           const cleanUpdateFields = Object.fromEntries(
-            Object.entries(basicUpdateFields).filter(([key, value]) => key === 'id' || value !== undefined)
+            Object.entries(basicUpdateFields).filter(
+              ([key, value]) => key === 'id' || value !== undefined
+            )
           );
 
           await proposalService.updateProposal(cleanUpdateFields as any);
 
-          // 2. 🚀 PERFORMANCE OPTIMIZATION: Return lightweight proposal data
+          // 2. Update userStoryTracking field if wizard data is provided
+          if (updateData.userStoryTracking) {
+            await tx.proposal.update({
+              where: { id },
+              data: {
+                userStoryTracking: updateData.userStoryTracking,
+              },
+            });
+          }
+
+          // 3. 🚀 PERFORMANCE OPTIMIZATION: Return lightweight proposal data
           // Avoid heavy JOIN queries that can cause timeouts
           const updatedProposal = await tx.proposal.findUnique({
             where: { id },
@@ -386,7 +401,7 @@ export const PUT = createRoute(
             },
           });
 
-          // 3. Handle product data updates (diff, do not destroy section assignments)
+          // 4. Handle product data updates (diff, do not destroy section assignments)
           if (
             productData &&
             typeof productData === 'object' &&
@@ -400,7 +415,9 @@ export const PUT = createRoute(
             });
             const existingIds = new Set(existing.map(e => e.id));
 
-            const toUpdate = payloadProducts.filter(p => p.id && !String(p.id).startsWith('temp-') && existingIds.has(p.id));
+            const toUpdate = payloadProducts.filter(
+              p => p.id && !String(p.id).startsWith('temp-') && existingIds.has(p.id)
+            );
             const toCreate = payloadProducts.filter(p => !p.id || String(p.id).startsWith('temp-'));
             const keepIds = new Set(toUpdate.map(p => p.id));
             const toDeleteIds = existing.filter(e => !keepIds.has(e.id)).map(e => e.id);
@@ -464,7 +481,7 @@ export const PUT = createRoute(
             });
           }
 
-          // 4. Handle content section data updates (do not affect PRODUCTS sections from Step 4)
+          // 5. Handle content section data updates (do not affect PRODUCTS sections from Step 4)
           if (
             sectionData &&
             typeof sectionData === 'object' &&

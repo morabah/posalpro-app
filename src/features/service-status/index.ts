@@ -12,3 +12,9 @@ export { qk } from './keys';
 // Re-export hooks
 export * from './hooks';
 
+// ====================
+// Advanced Caching and Enhanced Hooks
+// ====================
+
+export { useServiceStatusCache } from './hooks/useServiceStatusCache';
+export { useServiceStatusEnhanced } from './hooks/useServiceStatusEnhanced';

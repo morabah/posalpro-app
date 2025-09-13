@@ -10,45 +10,59 @@
  * - Test Cases: TC-H8-001, TC-H8-002, TC-H8-003
  */
 
-// Individual hook exports
-export { usePermissions } from './usePermissions';
-export { useRoles } from './useRoles';
-export { useSystemMetrics } from './useSystemMetrics';
-export { useUsers } from './useUsers';
+// ✅ MIGRATED: Use feature-based React Query hooks instead of useApiClient-based hooks
+// Individual hook exports - now using feature-based hooks
+export { useAdminPermissions } from '@/features/admin/hooks/usePermissions';
+export { useAdminRoles } from '@/features/admin/hooks/useRoles';
+export { useAdminSystemMetrics } from '@/features/admin/hooks/useSystemMetrics';
+export { useAdminUsers, useAdminUser } from '@/features/admin/hooks/useUsers';
+
+// ✅ ENHANCED: Advanced caching and performance optimization hooks
+export { useAdminCache } from '@/features/admin/hooks/useAdminCache';
+export { useAdminEnhanced } from '@/features/admin/hooks/useAdminEnhanced';
 
 // Local imports for combined hook usage
-import { usePermissions as _usePermissions } from './usePermissions';
-import { useRoles as _useRoles } from './useRoles';
-import { useSystemMetrics as _useSystemMetrics } from './useSystemMetrics';
-import { useUsers as _useUsers } from './useUsers';
+import { useAdminPermissions as _usePermissions } from '@/features/admin/hooks/usePermissions';
+import { useAdminRoles as _useRoles } from '@/features/admin/hooks/useRoles';
+import { useAdminSystemMetrics as _useSystemMetrics } from '@/features/admin/hooks/useSystemMetrics';
+import { useAdminUsers as _useUsers } from '@/features/admin/hooks/useUsers';
 
-// Type exports
+// ✅ MIGRATED: Type exports from feature-based schemas
 export type {
-  PaginationInfo,
   SystemMetrics,
-  SystemPermission,
-  SystemRole,
-  SystemUser,
-  UseMetricsResult,
-  UsePermissionsResult,
-  UseRolesResult,
-  UseUsersResult,
-} from './types';
+  User as SystemUser, // Alias for backward compatibility
+  Role as SystemRole, // Alias for backward compatibility
+  Permission as SystemPermission, // Alias for backward compatibility
+  User,
+  UserCreate,
+  UserUpdate,
+  UsersListResponse,
+  UsersQuery,
+  Role,
+  RoleCreate,
+  RoleUpdate,
+  RolesListResponse,
+  RolesQuery,
+  Permission,
+  PermissionCreate,
+  PermissionUpdate,
+  PermissionsListResponse,
+  PermissionsQuery,
+} from '@/features/admin/schemas';
 
-// Optional: Combined hook for components needing multiple admin hooks
+// ✅ MIGRATED: Combined hook for components needing multiple admin hooks
 export function useAdminData() {
   // Use direct imports to comply with ESM and lint rules
-
   return {
-    users: _useUsers(),
+    users: _useUsers({ page: '1', limit: '10' }), // Default pagination
     roles: _useRoles(),
     permissions: _usePermissions(),
     metrics: _useSystemMetrics(),
   };
 }
 
-// Legacy export for backward compatibility
-export { usePermissions as useAdminPermissions } from './usePermissions';
-export { useRoles as useAdminRoles } from './useRoles';
-export { useSystemMetrics as useAdminMetrics } from './useSystemMetrics';
-export { useUsers as useAdminUsers } from './useUsers';
+// ✅ MIGRATED: Legacy exports for backward compatibility - now using feature-based hooks
+export { useAdminPermissions as usePermissions } from '@/features/admin/hooks/usePermissions';
+export { useAdminRoles as useRoles } from '@/features/admin/hooks/useRoles';
+export { useAdminSystemMetrics as useSystemMetrics } from '@/features/admin/hooks/useSystemMetrics';
+export { useAdminUsers as useUsers } from '@/features/admin/hooks/useUsers';

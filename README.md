@@ -1,13 +1,16 @@
 # PosalPro MVP2
 
-> **Production-Ready Enterprise Proposal Management Platform** AI-assisted
-> development with systematic learning capture and knowledge preservation.
+> **Production-Ready Enterprise Proposal Management Platform** with advanced
+> AI-assisted development, comprehensive error handling, and enterprise-grade
+> architecture patterns.
 
 [![Version](https://img.shields.io/badge/Version-0.2.1--alpha.3-blue.svg)](https://github.com/your-repo/posalpro-app)
 [![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue.svg)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-15.3.3-black.svg)](https://nextjs.org/)
 [![Production Ready](https://img.shields.io/badge/Production-Ready-green.svg)](https://posalpro-mvp2.windsurf.build)
 [![Live Demo](https://img.shields.io/badge/Demo-Running-green.svg)](https://posalpro-mvp2.windsurf.build)
+[![Architecture](https://img.shields.io/badge/Architecture-Enterprise--Grade-purple.svg)](docs/CORE_REQUIREMENTS.md)
+[![Error Handling](https://img.shields.io/badge/Error--Handling-Standardized-red.svg)](src/lib/errors/)
 
 ---
 
@@ -54,6 +57,17 @@ management platform with comprehensive business functionality:
 - ✅ **Database Integration**: 44 tables with complete relationships
 - ✅ **API Coverage**: 52 functional endpoints with authentication
 - ✅ **Component Library**: 90+ production-ready React components
+- ✅ **Standardized Error Handling**: Comprehensive ErrorHandlingService with
+  structured logging
+- ✅ **Feature-Based Architecture**: Domain-driven organization with centralized
+  query management
+- ✅ **Advanced Caching**: Multi-layer caching with Redis and React Query
+  optimization
+- ✅ **Real-Time Analytics**: Live performance monitoring and hypothesis
+  validation
+- ✅ **Service Layer Separation**: Frontend services vs database services
+  architecture
+- ✅ **Route Boundaries**: Complete loading.tsx and error.tsx implementation
 
 ---
 
@@ -98,6 +112,10 @@ management platform with comprehensive business functionality:
 - **jose 6.0.11** - JWT token handling
 - **html2pdf.js 0.10.3** - PDF generation
 - **workbox-precaching 7.3.0** - Service worker caching
+- **ErrorHandlingService** - Centralized error management with structured
+  logging
+- **Redis 5.7.0** - Advanced caching and session management
+- **Performance Monitoring** - Real-time Web Vitals and optimization
 
 ### **🧪 Quality & Development**
 
@@ -129,27 +147,135 @@ src/features/[domain]/
 **Three-Layer Pattern**: Components → Management Bridge → API Bridge → API
 Routes
 
-### Modern Data Flow
+### **Complete Data Flow Architecture**
 
+```text
+┌──────────────────────┐
+│ Edge Middleware      │  middleware.ts + rbacIntegration.authenticateAndAuthorize
+└──────────┬───────────┘
+           │ allow/redirect
+           ▼
+┌───────────────────────────────┐
+│ Route Boundaries (App Router) │  loading.tsx / error.tsx
+└──────────────┬────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Layout Gating                                                                │
+│                                                                              │
+│  Dashboard routes:                                                           │
+│   src/app/(dashboard)/layout.tsx                                             │
+│     → getServerSession(authOptions)                                          │
+│     → AuthProvider(session)                                                  │
+│     → GlobalStateProvider (for bridge hooks)                                 │
+│     → ProtectedLayout                                                        │
+│                                                                              │
+│  API routes:                                                                 │
+│   src/app/api/*/route.ts                                                     │
+│     → validateApiPermission()                                                │
+│     → rate limiting                                                          │
+│     → error handling                                                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Feature-Based Architecture (src/features/[domain]/)                         │
+│                                                                              │
+│  Each feature contains:                                                      │
+│  ├── schemas.ts        # Zod schemas, types, validation                      │
+│  ├── keys.ts          # Centralized React Query keys                        │
+│  ├── hooks/           # Feature-specific hooks                              │
+│  │   ├── use[Domain].ts           # Main data fetching hook                  │
+│  │   ├── use[Domain]Cache.ts      # Advanced caching with Redis              │
+│  │   └── use[Domain]Enhanced.ts   # Enhanced features (analytics, etc.)      │
+│  └── index.ts         # Consolidated exports                                │
+│                                                                              │
+│  Examples:                                                                   │
+│  • src/features/proposals/     # Proposal management                         │
+│  • src/features/customers/     # Customer management                         │
+│  • src/features/products/      # Product catalog                            │
+│  • src/features/analytics/     # Analytics and monitoring                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Two-Distinct Service Layers                                                 │
+│                                                                              │
+│  1. Frontend Services (src/services/)                                       │
+│     → HTTP client services for React Query integration                      │
+│     → Singleton pattern with caching                                        │
+│     → Error handling with ErrorHandlingService                              │
+│     → Structured logging with request ID propagation                        │
+│                                                                              │
+│  2. Database Services (src/lib/services/)                                   │
+│     → Direct database access for API routes                                 │
+│     → Prisma ORM integration                                                 │
+│     → Business logic and validation                                          │
+│     → Transaction management                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Advanced Caching & State Management                                         │
+│                                                                              │
+│  • React Query (Server State)                                               │
+│    → Stale-while-revalidate caching                                         │
+│    → Optimistic updates                                                     │
+│    → Background refetching                                                  │
+│    → Error boundary integration                                             │
+│                                                                              │
+│  • Redis (Advanced Caching)                                                 │
+│    → Multi-layer caching strategy                                           │
+│    → TTL management                                                          │
+│    → Cache invalidation                                                     │
+│    → Session storage                                                         │
+│                                                                              │
+│  • Zustand (UI State)                                                       │
+│    → Client-side state management                                           │
+│    → Individual selectors                                                   │
+│    → Functional updates                                                     │
+│    → Location: src/lib/store/ (MANDATORY)                                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Error Handling & Monitoring                                                 │
+│                                                                              │
+│  • ErrorHandlingService                                                     │
+│    → Centralized error processing                                           │
+│    → User-friendly error messages                                           │
+│    → Analytics integration                                                  │
+│    → Recovery strategies                                                    │
+│                                                                              │
+│  • Structured Logging                                                       │
+│    → Request ID propagation                                                 │
+│    → Component and operation tracking                                       │
+│    → Performance metrics                                                    │
+│    → Security event logging                                                 │
+│                                                                              │
+│  • Real-Time Analytics                                                      │
+│    → Live performance monitoring                                            │
+│    → Hypothesis validation                                                  │
+│    → Predictive analytics                                                   │
+│    → System health monitoring                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   UI        │───▶│ React Query │───▶│  Service    │
-│ Components  │    │   Hooks     │    │   Layer     │
-└─────────────┘    └─────────────┘    └─────────────┘
-       │                   │                   │
-       ▼                   ▼                   ▼
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│ Zustand     │    │ Centralized │    │   API       │
-│ UI State    │    │ Query Keys  │    │  Routes     │
-└─────────────┘    └─────────────┘    └─────────────┘
-```
 
-### Key Patterns
+### **Key Architecture Patterns**
 
-- **Database-First**: Schema alignment with Prisma models
-- **Service Layer**: Stateless services with singleton pattern
-- **Error Handling**: Centralized with `ErrorHandlingService`
+- **Database-First**: Schema alignment with Prisma models as source of truth
+- **Feature-Based Organization**: Domain-driven architecture in
+  `src/features/[domain]/`
+- **Two-Distinct Service Layers**: Frontend services vs database services
+  separation
+- **Error Handling**: Centralized with `ErrorHandlingService` and structured
+  logging
 - **Performance**: Cursor pagination, optimistic updates, multi-layer caching
+  with Redis
+- **Route Boundaries**: Mandatory loading.tsx and error.tsx for all routes
+- **Store Location**: Canonical location `src/lib/store/` for all Zustand stores
+- **Request Correlation**: `x-request-id` propagation across all services
+- **Real-Time Analytics**: Live performance monitoring and hypothesis validation
 
 ---
 
@@ -281,7 +407,7 @@ npm run schema:all         # Run all schema validations
 
 ## Project Structure
 
-```
+```text
 posalpro-app/
 ├── src/
 │   ├── app/               # Next.js App Router
@@ -304,7 +430,7 @@ posalpro-app/
 
 ### **📋 Proposals API (52+ Endpoints)**
 
-```typescript
+```text
 # Core CRUD Operations
 GET    /api/proposals              # List proposals with advanced filtering
 GET    /api/proposals/[id]         # Get proposal details with full relations
@@ -412,6 +538,16 @@ POST   /api/analytics/track        # Track user events
 - **Request Correlation**: `x-request-id` tracking across services
 - **Audit Logging**: Comprehensive security event tracking
 - **Error Handling**: Standardized error responses with user-friendly messages
+- **Real-Time Analytics**: Live performance monitoring and optimization
+  recommendations
+- **Advanced Caching**: Multi-layer caching with Redis and React Query
+  optimization
+- **Feature-Based Architecture**: Domain-driven organization with centralized
+  query management
+- **Service Layer Separation**: Frontend services vs database services
+  architecture
+- **Structured Logging**: Request ID propagation with component and operation
+  tracking
 
 ## Contributing
 
@@ -456,8 +592,12 @@ npm run app:cli -- --command "schema check"
 - **Feature-First**: Organize code in `src/features/[domain]/`
 - **Database-First**: Align with Prisma schema field names
 - **Service Layer**: Use existing services, don't create new ones
-- **Error Handling**: Always use `ErrorHandlingService.processError()`
+- **Error Handling**: Always use `ErrorHandlingService.processError()` with
+  structured logging
 - **TypeScript**: 100% compliance required
+- **Route Boundaries**: Implement loading.tsx and error.tsx for all routes
+- **Store Location**: Use canonical location `src/lib/store/` for Zustand stores
+- **Caching Strategy**: Implement multi-layer caching with Redis and React Query
 
 #### **Phase 3: Testing & Validation**
 
@@ -519,11 +659,20 @@ const { data } = useApiClient({
 #### **Error Handling**
 
 ```typescript
-// ✅ CORRECT: Centralized error handling
+// ✅ CORRECT: Centralized error handling with structured logging
+import { ErrorHandlingService } from '@/lib/errors';
+import { logError } from '@/lib/logger';
+
 try {
   await operation();
 } catch (error) {
   const processedError = ErrorHandlingService.processError(error);
+  logError('Operation failed', {
+    component: 'ComponentName',
+    operation: 'operationName',
+    error: processedError.message,
+    requestId: processedError.requestId,
+  });
   // User gets friendly error message
 }
 ```
@@ -531,12 +680,54 @@ try {
 #### **Database Queries**
 
 ```typescript
-// ✅ CORRECT: Database-first approach
+// ✅ CORRECT: Database-first approach with service layer
 // Check Prisma schema first, then implement
 const proposal = await prisma.proposal.findUnique({
   where: { id },
   include: { customer: true, products: true },
 });
+```
+
+#### **Feature-Based Organization**
+
+```typescript
+// ✅ CORRECT: Feature-based organization
+src/features/proposals/
+├── schemas.ts        # Zod schemas, types, validation
+├── keys.ts          # Centralized React Query keys
+├── hooks/
+│   ├── useProposals.ts           # Main data fetching hook
+│   ├── useProposalCache.ts       # Advanced caching with Redis
+│   └── useProposalEnhanced.ts    # Enhanced features (analytics, etc.)
+└── index.ts         # Consolidated exports
+```
+
+#### **Service Layer Architecture**
+
+```typescript
+// ✅ FRONTEND SERVICE (src/services/) - HTTP client services
+export class ProposalService {
+  private static instance: ProposalService;
+
+  static getInstance(): ProposalService {
+    if (!ProposalService.instance) {
+      ProposalService.instance = new ProposalService();
+    }
+    return ProposalService.instance;
+  }
+
+  async getProposals(): Promise<Proposal[]> {
+    return this.httpClient.get<Proposal[]>('/api/proposals');
+  }
+}
+
+// ✅ DATABASE SERVICE (src/lib/services/) - Direct database access
+export async function getProposalById(id: string) {
+  return await prisma.proposal.findUnique({
+    where: { id },
+    include: { customer: true, products: true },
+  });
+}
 ```
 
 ### **📚 Documentation Updates Required**
@@ -591,6 +782,17 @@ The system is architected for continuous evolution with:
 - **Performance Optimization**: Real-time monitoring and optimization
 - **Mobile Enhancement**: Progressive Web App capabilities
 - **Advanced Security**: Multi-factor authentication and audit enhancements
+- **Advanced Caching**: Multi-layer caching with Redis and React Query
+  optimization
+- **Real-Time Analytics**: Live performance monitoring and hypothesis validation
+- **Feature-Based Architecture**: Domain-driven organization with centralized
+  query management
+- **Service Layer Separation**: Frontend services vs database services
+  architecture
+- **Structured Logging**: Request ID propagation with component and operation
+  tracking
+- **Route Boundaries**: Complete loading.tsx and error.tsx implementation
+- **Store Location**: Canonical location `src/lib/store/` for all Zustand stores
 
 ### **📋 Development Philosophy**
 
@@ -603,6 +805,14 @@ capture**:
    optimization
 4. **Knowledge Preservation**: Lessons learned documented for continuous
    improvement
+5. **Architecture Excellence**: Feature-based organization, service layer
+   separation, advanced caching
+6. **Error Handling**: Centralized error management with structured logging
+7. **Real-Time Monitoring**: Live performance analytics and hypothesis
+   validation
+8. **Route Boundaries**: Complete loading.tsx and error.tsx implementation
+9. **Store Management**: Canonical location for all Zustand stores
+10. **Request Correlation**: `x-request-id` propagation across all services
 
 ---
 
@@ -612,7 +822,8 @@ capture**:
 
 ---
 
-#### **🎉 PosalPro MVP2 - Enterprise-Grade Proposal Management Platform**
+### **🎉 PosalPro MVP2 - Enterprise-Grade Proposal Management Platform**
 
-_Built with modern React architecture, comprehensive TypeScript coverage, and
-advanced performance optimization._
+_Built with modern React architecture, comprehensive TypeScript coverage,
+advanced performance optimization, standardized error handling, feature-based
+organization, and real-time analytics monitoring._

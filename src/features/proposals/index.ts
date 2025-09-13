@@ -76,3 +76,10 @@ export {
   useProposalsByIds,
   useUpdateProposal,
 } from './hooks';
+
+// ====================
+// Advanced Caching and Enhanced Hooks
+// ====================
+
+export { useProposalCache } from './hooks/useProposalCache';
+export { useProposalEnhanced } from './hooks/useProposalEnhanced';

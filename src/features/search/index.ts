@@ -49,5 +49,11 @@ export {
 // Feature Hooks
 // ====================
 
-// Note: Search hooks are still under development
-// Export any search-related hooks here when they are implemented
+export { useSuggestions } from './hooks/useSuggestions';
+
+// ====================
+// Advanced Caching and Enhanced Hooks
+// ====================
+
+export { useSearchCache } from './hooks/useSearchCache';
+export { useSearchEnhanced } from './hooks/useSearchEnhanced';

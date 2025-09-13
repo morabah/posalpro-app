@@ -5,7 +5,7 @@
 import { useHttpClient } from '@/hooks/useHttpClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logError, logInfo } from '@/lib/logger';
-import { Product, ProductCreate, ProductUpdate, productService } from '@/services/productService';
+import { Product, ProductCreate, ProductUpdate } from '@/services/productService';
 import {
   useInfiniteQuery,
   useMutation,
@@ -101,10 +101,14 @@ export function useInfiniteProductsMigrated({
     },
     initialPageParam: null as string | null,
     getNextPageParam: lastPage => lastPage.nextCursor || undefined,
-    staleTime: 30000, // 30 seconds
-    gcTime: 120000, // 2 minutes
-    refetchOnWindowFocus: false,
-    retry: 1,
+    staleTime: 30000, // 30 seconds - data considered fresh
+    gcTime: 120000, // 2 minutes - cache retention
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    placeholderData: previousData => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 }
 
@@ -130,10 +134,14 @@ export function useProductMigrated(id: string) {
       return response;
     },
     enabled: !!id,
-    staleTime: 30000,
-    gcTime: 120000,
-    refetchOnWindowFocus: false,
-    retry: 1,
+    staleTime: 30000, // 30 seconds - data considered fresh
+    gcTime: 120000, // 2 minutes - cache retention
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    placeholderData: previousData => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 }
 
@@ -159,10 +167,14 @@ export function useProductWithRelationshipsMigrated(id: string) {
       return response;
     },
     enabled: !!id,
-    staleTime: 30000,
-    gcTime: 120000,
-    refetchOnWindowFocus: false,
-    retry: 1,
+    staleTime: 30000, // 30 seconds - data considered fresh
+    gcTime: 120000, // 2 minutes - cache retention
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    placeholderData: previousData => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 }
 
@@ -186,10 +198,15 @@ export function useProductStatsMigrated() {
       const response = await get('/api/products/stats');
       return response;
     },
-    staleTime: 60000, // 1 minute
-    gcTime: 300000, // 5 minutes
-    refetchOnWindowFocus: false,
-    retry: 1,
+    staleTime: 60000, // 1 minute - stats change less frequently
+    gcTime: 300000, // 5 minutes - longer cache for stats
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    refetchInterval: 300000, // Auto-refresh every 5 minutes
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    placeholderData: previousData => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 }
 
@@ -218,10 +235,14 @@ export function useProductSearchMigrated(query: string, limit: number = 10) {
       return response;
     },
     enabled: !!query && query.length >= 2,
-    staleTime: 30000,
-    gcTime: 120000,
-    refetchOnWindowFocus: false,
-    retry: 1,
+    staleTime: 30000, // 30 seconds - search results considered fresh
+    gcTime: 120000, // 2 minutes - cache retention
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    placeholderData: previousData => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 }
 
@@ -248,10 +269,14 @@ export function useProductsByIds(ids: string[]) {
         return response;
       },
       enabled: !!id,
-      staleTime: 30000,
-      gcTime: 120000,
-      refetchOnWindowFocus: false,
-      retry: 1,
+      staleTime: 30000, // 30 seconds - data considered fresh
+      gcTime: 120000, // 2 minutes - cache retention
+      refetchOnWindowFocus: false, // Prevent unnecessary refetches
+      refetchOnReconnect: true, // Refetch when connection restored
+      retry: 2, // Retry failed requests twice
+      retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+      placeholderData: (previousData: any) => previousData, // Keep previous data while loading
+      networkMode: 'online' as const, // Only fetch when online
     })),
   });
 

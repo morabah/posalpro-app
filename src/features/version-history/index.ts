@@ -82,6 +82,13 @@ export {
 } from './hooks';
 
 // ====================
+// Advanced Caching and Enhanced Hooks
+// ====================
+
+export { useVersionHistoryCache } from './hooks/useVersionHistoryCache';
+export { useVersionHistoryEnhanced } from './hooks/useVersionHistoryEnhanced';
+
+// ====================
 // Utility Exports (when implemented)
 // ====================
 

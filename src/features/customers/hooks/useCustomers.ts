@@ -56,10 +56,14 @@ export function useInfiniteCustomers({
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: CustomerList) => lastPage.nextCursor ?? undefined,
-    staleTime: 60_000, // 1 minute
-    gcTime: 120_000, // 2 minutes
-    refetchOnWindowFocus: false,
-    retry: 1,
+    staleTime: 30000, // 30 seconds - data considered fresh
+    gcTime: 120000, // 2 minutes - cache retention
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    placeholderData: (previousData) => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 }
 
@@ -69,10 +73,14 @@ export function useCustomer(id: string) {
     queryKey: customerKeys.customers.detail(id),
     queryFn: () => customerService.getCustomer(id),
     enabled: !!id,
-    staleTime: 60_000,
-    gcTime: 120_000,
-    refetchOnWindowFocus: false,
-    retry: 1,
+    staleTime: 30000, // 30 seconds - data considered fresh
+    gcTime: 120000, // 2 minutes - cache retention
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    placeholderData: (previousData) => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 }
 
@@ -82,10 +90,14 @@ export function useCustomerSearch(query: string, limit: number = 10) {
     queryKey: customerKeys.customers.search(query, limit),
     queryFn: () => customerService.searchCustomers(query, limit),
     enabled: !!query && query.length >= 2,
-    staleTime: 30_000, // 30 seconds for search results
-    gcTime: 60_000,
-    refetchOnWindowFocus: false,
-    retry: 1,
+    staleTime: 30000, // 30 seconds - search results considered fresh
+    gcTime: 120000, // 2 minutes - cache retention
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    placeholderData: (previousData) => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 }
 
@@ -96,10 +108,14 @@ export function useCustomersByIds(ids: string[]) {
       queryKey: customerKeys.customers.detail(id),
       queryFn: () => customerService.getCustomer(id),
       enabled: !!id,
-      staleTime: 60_000,
-      gcTime: 120_000,
-      refetchOnWindowFocus: false,
-      retry: 1,
+      staleTime: 30000, // 30 seconds - data considered fresh
+      gcTime: 120000, // 2 minutes - cache retention
+      refetchOnWindowFocus: false, // Prevent unnecessary refetches
+      refetchOnReconnect: true, // Refetch when connection restored
+      retry: 2, // Retry failed requests twice
+      retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+      placeholderData: (previousData: any) => previousData, // Keep previous data while loading
+      networkMode: 'online' as const, // Only fetch when online
     })),
   });
 
@@ -295,10 +311,15 @@ export function useCustomerStats() {
   return useQuery({
     queryKey: customerKeys.customers.stats(),
     queryFn: () => customerService.getCustomerStats(),
-    staleTime: 60_000, // 1 minute
-    gcTime: 120_000, // 2 minutes
-    refetchOnWindowFocus: false,
-    retry: 1,
+    staleTime: 60000, // 1 minute - stats change less frequently
+    gcTime: 300000, // 5 minutes - longer cache for stats
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    refetchInterval: 300000, // Auto-refresh every 5 minutes
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    placeholderData: (previousData) => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 }
 

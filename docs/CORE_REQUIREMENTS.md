@@ -29,10 +29,10 @@ following items are mandatory moving forward:
   - References: `src/lib/auth.ts`
 
 - PDF preview stability: Use a single `react-pdf` instance and configure a
-  same-origin pdf.js worker via `workerPort` (bundled); fall back to
-  `workerSrc` pinned to `pdfjs-dist@5.3.93` only if needed. Guard `<Page>`
-  rendering (`numPages > 0`), remount on worker messageHandler errors, avoid
-  logging circular objects, and proxy network PDFs through `/api/documents`.
+  same-origin pdf.js worker via `workerPort` (bundled); fall back to `workerSrc`
+  pinned to `pdfjs-dist@5.3.93` only if needed. Guard `<Page>` rendering
+  (`numPages > 0`), remount on worker messageHandler errors, avoid logging
+  circular objects, and proxy network PDFs through `/api/documents`.
   - References: `src/components/providers/QueryProvider.tsx`,
     `src/components/products/DocumentPreview.tsx`,
     `src/app/api/documents/route.ts`
@@ -189,16 +189,30 @@ services.
 ```
 ┌──────────────────────┐
 │ Edge Middleware      │  middleware.ts + rbacIntegration.authenticateAndAuthorize
+│                      │  • Rate limiting & security headers
+│                      │  • Request-ID propagation
+│                      │  • CORS enforcement
 └──────────┬───────────┘
            │ allow/redirect
            ▼
-┌───────────────────────────────┐
-│ Route Boundaries (App Router) │  loading.tsx / error.tsx
-└──────────────┬────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Route Boundaries (App Router) - MANDATORY for ALL routes                    │
+│                                                                              │
+│  src/app/(dashboard)/[domain]/                                               │
+│  ├── [id]/                                                                   │
+│  │   ├── page.tsx     # Server component with Suspense boundaries           │
+│  │   ├── loading.tsx  # Route-level loading UI with user feedback           │
+│  │   └── error.tsx    # Route-level error boundary with recovery            │
+│  ├── create/                                                                 │
+│  │   ├── page.tsx     # Creation form with validation                       │
+│  │   ├── loading.tsx  # Loading states during form setup                    │
+│  │   └── error.tsx    # Error handling for creation failures                │
+│  └── page.tsx         # List/index page with data fetching                  │
+└──────────────┬───────────────────────────────────────────────────────────────┘
                │
                ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ Layout Gating                                                                │
+│ Layout Gating & Authentication                                               │
 │                                                                              │
 │  Dashboard routes:                                                           │
 │   src/app/(dashboard)/layout.tsx                                             │
@@ -207,32 +221,128 @@ services.
 │     → ProtectedLayout                                                        │
 │     → AppLayout (header/sidebar/nav)                                         │
 │                                                                              │
-│  Top-level internal routes (e.g., /observability, /performance/*, /docs):    │
+│  Top-level internal routes (/observability, /performance/*, /docs):          │
 │     ClientLayoutWrapper → AuthProvider → ProtectedLayout                     │
 └──────────────────────────────────────────────────────────────────────────────┘
                │
                ▼
-┌──────────────┐        ┌─────────────┐
-│ UI Components│  <-->  │ Zustand UI  │  '@/lib/store/*'
-└──────┬───────┘        │ State       │
-       │                └─────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Feature-Based Architecture (src/features/[domain]/)                         │
+│                                                                              │
+│  src/features/proposals/                                                     │
+│  ├── schemas.ts        # All Zod schemas, types, validation                 │
+│  ├── keys.ts          # Centralized React Query keys                        │
+│  ├── hooks/           # React Query hooks                                   │
+│  │   └── useProposals.ts                                                    │
+│  └── index.ts         # Consolidated exports                                │
+│                                                                              │
+│  src/features/customers/ src/features/products/ (same structure)            │
+└──────────────┬───────────────────────────────────────────────────────────────┘
+               │
+               ▼
+┌──────────────┐        ┌─────────────────────────────────────────────────────┐
+│ UI Components│  <-->  │ Zustand UI State (src/lib/store/* - CANONICAL)     │
+│              │        │                                                     │
+│  • Form handling      │  • UI filters & selection state                     │
+│  • User interactions  │  • Modal/dialog state                               │
+│  • Event handling     │  • Navigation state                                 │
+│  • Accessibility      │  • Theme preferences                                │
+└──────┬───────┘        └─────────────────────────────────────────────────────┘
+       │
        ▼
-┌──────────────┐
-│ React Query  │  hooks ('@/features/*/hooks') + centralized keys
-└──────┬───────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ React Query Layer (Server State Management)                                 │
+│                                                                              │
+│  • hooks ('@/features/*/hooks') + centralized keys                          │
+│  • Cache configuration: staleTime: 30000, gcTime: 120000                    │
+│  • Optimistic updates & cache invalidation                                  │
+│  • Parallel data loading patterns                                           │
+│  • Error boundaries & retry logic                                           │
+└──────┬───────────────────────────────────────────────────────────────────────┘
+       │
        ▼
-┌──────────────┐        ┌────────────────┐        ┌──────────────────┐        ┌──────────┐
-│ Frontend     │  -->   │ API Routes     │  -->   │ DB Services      │  -->   │ Prisma   │
-│ Services     │  <--   │ (App Router)   │  <--   │ (src/lib/services│  <--   │ / DB     │
-│ (src/services│        │                │        │ /*.ts)           │        └──────────┘
-└──────────────┘        └────────────────┘        └──────────────────┘
-       │                         │                           │
-       ▼                         ▼                           ▼
- ErrorHandlingService      ProblemDetails RFC7807      Caching / Indexes
- (standard errors)         (standardized responses)    (prisma + SQL)
-
-Observability & Analytics: WebVitalsProvider, logger, metrics store, optimized analytics
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Two-Distinct Service Layers (MANDATORY SEPARATION)                          │
+│                                                                              │
+│  ┌─────────────────────┐        ┌─────────────────────────────────────────┐  │
+│  │ Frontend Services   │        │ Database Services                       │  │
+│  │ (src/services/)     │        │ (src/lib/services/)                     │  │
+│  │                     │        │                                         │  │
+│  │ • HTTP client       │        │ • Direct Prisma access                  │  │
+│  │ • React Query       │        │ • Complex queries & transactions        │  │
+│  │   integration       │        │ • Data normalization                    │  │
+│  │ • Stateless         │        │ • Business logic                        │  │
+│  │ • API communication │        │ • Error handling                        │  │
+│  └─────────────────────┘        └─────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────┘
+       │
+       ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ API Routes (App Router) - Thin Boundaries                                   │
+│                                                                              │
+│  • Schema validation (Zod)                                                  │
+│  • RBAC/permissions (validateApiPermission/withRole)                        │
+│  • Idempotency protection                                                   │
+│  • Request-ID propagation                                                   │
+│  • Standardized responses (ProblemDetails RFC 7807)                         │
+│                                                                              │
+│  ❌ FORBIDDEN: Direct Prisma imports, business logic, raw SQL               │
+└──────────────────────────────────────────────────────────────────────────────┘
+       │
+       ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Database Layer                                                               │
+│                                                                              │
+│  ┌──────────────┐        ┌─────────────────────────────────────────────────┐ │
+│  │ Prisma ORM   │  <-->  │ PostgreSQL Database                             │ │
+│  │              │        │                                                 │ │
+│  │ • Type-safe  │        │ • ACID transactions                             │ │
+│  │   queries    │        │ • Complex relationships                         │ │
+│  │ • Migrations │        │ • Performance indexes                           │ │
+│  │ • Schema     │        │ • Backup & recovery                             │ │
+│  │   validation │        │ • Connection pooling                            │ │
+│  └──────────────┘        └─────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────────┘
+       │
+       ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Cross-Cutting Concerns                                                       │
+│                                                                              │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│  │ ErrorHandling   │  │ Structured      │  │ Observability & Analytics   │   │
+│  │ Service         │  │ Logging         │  │                             │   │
+│  │                 │  │                 │  │ • WebVitalsProvider         │   │
+│  │ • StandardError │  │ • logInfo       │  │ • Metrics store             │   │
+│  │ • ErrorCodes    │  │ • logError      │  │ • Optimized analytics       │   │
+│  │ • User-friendly │  │ • logDebug      │  │ • Performance monitoring    │   │
+│  │   messages      │  │ • Request ID    │  │ • Cache hit rates           │   │
+│  │                 │  │   correlation   │  │ • Database query times      │   │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
+│                                                                              │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│  │ Caching Layer   │  │ Security        │  │ Performance Optimization    │   │
+│  │                 │  │                 │  │                             │   │
+│  │ • Redis cache   │  │ • Input         │  │ • Bundle optimization       │   │
+│  │ • In-memory     │  │   validation    │  │ • Code splitting            │   │
+│  │ • Query cache   │  │ • CSRF          │  │ • Lazy loading              │   │
+│  │ • Cache         │  │   protection    │  │ • Memoization               │   │
+│  │   invalidation  │  │ • Rate limiting │  │ • Parallel data loading     │   │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**🔑 Key Architecture Principles:**
+
+1. **Feature-Based Organization**: All domain logic organized in
+   `src/features/[domain]/`
+2. **Two-Distinct Service Layers**: Clear separation between frontend and
+   database services
+3. **Route Boundaries**: Every route must have loading.tsx and error.tsx
+4. **Store Location**: UI state only in `src/lib/store/` (canonical location)
+5. **Error Handling**: Centralized ErrorHandlingService with structured logging
+6. **Request-ID Propagation**: End-to-end request correlation
+7. **Security-First**: Rate limiting, input validation, CSRF protection
+8. **Performance-First**: Caching, parallel loading, bundle optimization
 
 ## **Service Layer Patterns** {#service-layer-patterns}
 
@@ -940,19 +1050,27 @@ if (response.success) {
 
 ### HTTP Client Unwrapped Data (MANDATORY)
 
-- Do not annotate `http.*` calls with `ApiResponse<T>`; the client returns `T` directly.
+- Do not annotate `http.*` calls with `ApiResponse<T>`; the client returns `T`
+  directly.
 - Never check `res.ok` or `'ok' in res` on results from `@/lib/http`.
 - Hooks and frontend services must type `http.*<T>` and work with `T`.
-- Only rewrap to `{ ok: true, data }` at service boundaries that explicitly return `ApiResponse<T>`.
+- Only rewrap to `{ ok: true, data }` at service boundaries that explicitly
+  return `ApiResponse<T>`.
 
 ```typescript
 // ❌ FORBIDDEN: Treating http result as an envelope
-const res = await http.post<ApiResponse<Section>>(`/api/proposals/${id}/sections`, input);
+const res = await http.post<ApiResponse<Section>>(
+  `/api/proposals/${id}/sections`,
+  input
+);
 if (!res.ok) throw new Error(res.message || 'Failed');
 return res.data;
 
 // ✅ REQUIRED: Use unwrapped generics and data directly
-const section = await http.post<Section>(`/api/proposals/${id}/sections`, input);
+const section = await http.post<Section>(
+  `/api/proposals/${id}/sections`,
+  input
+);
 return section; // or rewrap once if your method returns ApiResponse
 ```
 
@@ -1016,20 +1134,30 @@ export const useSelectionActions = () =>
 **React Query Configuration (MANDATORY)**
 
 ```typescript
-// ✅ CORRECT: Optimized React Query settings
+// ✅ CORRECT: Optimized React Query settings with advanced caching
 return useQuery({
   queryKey: qk.[domain].list(params),
   queryFn: () => [domain]Service.get[Domain](params),
   staleTime: 30000,        // 30s - data considered fresh
   gcTime: 120000,          // 2min - cache garbage collection
   refetchOnWindowFocus: false,
-  retry: 1,
+  refetchOnReconnect: true, // Refetch when connection restored
+  retry: 2,                // Retry failed requests twice
+  retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+  placeholderData: (previousData) => previousData, // Keep previous data while loading
+  networkMode: 'online',   // Only fetch when online
 });
 
-// ✅ CORRECT: Immediate cache updates
+// ✅ CORRECT: Advanced cache management
 onSuccess: (response, { id }) => {
   queryClient.setQueryData(qk.[domain].byId(id), response);
   queryClient.invalidateQueries({ queryKey: qk.[domain].all });
+  // Prefetch related data
+  queryClient.prefetchQuery({
+    queryKey: qk.[domain].related(id),
+    queryFn: () => [domain]Service.getRelated(id),
+    staleTime: 60000,
+  });
 }
 ```
 
@@ -1105,10 +1233,10 @@ function useUnifiedProductData() {
 **Performance Monitoring Patterns (MANDATORY)**
 
 ```typescript
-// ✅ CORRECT: Real-time performance tracking
+// ✅ CORRECT: Real-time performance tracking with cache optimization
 const { trackOptimized: analytics } = useOptimizedAnalytics();
 
-// Track API performance
+// Track API performance with cache metrics
 analytics('api_performance', {
   endpoint: '/api/admin/metrics',
   responseTime: 300, // ms
@@ -1117,13 +1245,16 @@ analytics('api_performance', {
   optimization: 'single_query_aggregation'
 }, 'medium');
 
-// Monitor cache efficiency
+// Monitor cache efficiency with advanced metrics
 analytics('cache_performance', {
   component: 'useProposalStats',
   hitRate: 89,
   missRate: 11,
   staleTime: 30000,
-  gcTime: 120000
+  gcTime: 120000,
+  prefetchCount: 12,    // Prefetched queries
+  optimisticUpdates: 3, // Optimistic update count
+  memoryUsage: '45MB'   // Cache memory footprint
 }, 'low');
 ```
 
@@ -1287,6 +1418,10 @@ Acceptance
 - **NEW**: Track database query times (<50ms optimal)
 - **NEW**: Monitor API response times (<500ms acceptable)
 - **NEW**: Alert on slow queries (>500ms threshold)
+- **NEW**: Advanced caching: prefetching, optimistic updates, intelligent
+  invalidation
+- **NEW**: Cache warming strategies for critical user paths
+- **NEW**: Memory optimization with automatic garbage collection
 
 ## ⚠️ **WHAT NOT TO DO** {#what-not-to-do}
 
@@ -1301,7 +1436,8 @@ Acceptance
 7. **Don't bypass React Query for complex data fetching**
 8. **Don't use console.log/console.error in production code - use structured
    logger**
-9. **Don't implement custom caching systems**
+9. **Don't implement custom caching systems - use React Query advanced
+   patterns**
 10. **Don't ignore TypeScript strict mode errors**
 11. **Don't over-fetch data in single queries (load ALL relations at once)**
 12. **Don't use sequential API calls when parallel loading is possible**
@@ -1368,7 +1504,7 @@ cleanup phases.
 - [ ] No duplicate implementations or conflicts
 - [ ] Build process completes successfully
 - [ ] Performance standards met (cache hit rate >80%, API <500ms, DB queries
-      <50ms)
+      <50ms, advanced caching patterns implemented)
 - [ ] All API endpoints tested
 - [ ] Database query optimization applied (single aggregation queries, proper
       indexes)

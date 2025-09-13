@@ -1656,7 +1656,7 @@ export class ProposalService {
           approvedAt: true,
           validUntil: true,
           priority: true,
-          totalValue: true,
+          value: true,
           currency: true,
           status: true,
           tags: true,
@@ -1920,7 +1920,7 @@ export class ProposalService {
     return {
       ...proposal,
       tenantId: proposal.tenantId || '',
-      value: proposal.totalValue ? Number(proposal.totalValue) : undefined,
+      value: proposal.value ? Number(proposal.value) : undefined,
       description: proposal.description || '',
       userStoryTracking: proposal.userStoryTracking || {},
       version: proposal.version || 1,

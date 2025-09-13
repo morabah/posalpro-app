@@ -44,15 +44,29 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
   const { setStepData } = useProposalActions();
   const apiClient = useApiClient();
 
+  // Debug logging for data prop
+  logDebug('TeamAssignmentStep: Component initialized', {
+    component: 'TeamAssignmentStep',
+    operation: 'component_init',
+    hasData: !!data,
+    dataKeys: data ? Object.keys(data) : [],
+    teamLead: data?.teamLead,
+    salesRepresentative: data?.salesRepresentative,
+    subjectMatterExperts: data?.subjectMatterExperts,
+    executiveReviewers: data?.executiveReviewers,
+    userStory: 'US-3.1',
+    hypothesis: 'H4',
+  });
+
   // Fetch users using React Query with authenticated API client
   const {
     data: usersData,
     isLoading: usersLoading,
     error: usersError,
   } = useQuery<User[]>({
-    queryKey: ['users', 'proposal-wizard'],
+    queryKey: ['admin-users', 'proposal-wizard'],
     queryFn: async () => {
-      logDebug('Fetching users from API', { component: 'TeamAssignmentStep' });
+      logDebug('Fetching users from admin API', { component: 'TeamAssignmentStep' });
 
       try {
         const response = await apiClient.get<{
@@ -63,9 +77,7 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
             meta: unknown;
           };
           message: string;
-        }>(
-          'users?search=&isActive=true&sortBy=name&sortOrder=asc&fields=id,firstName,lastName,name,email,department,status,lastLogin,createdAt,updatedAt,role,roles'
-        );
+        }>('admin/users?search=&status=ACTIVE&sortBy=name&sortOrder=asc&limit=100');
 
         logDebug('Raw API response structure', {
           responseStructure: response,
@@ -148,13 +160,14 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       return (
         user.role === 'Proposal Manager' ||
         user.role === 'System Administrator' ||
-        user.role === 'Administrator'
+        user.role === 'Executive'
       );
     });
 
     logDebug('Team leads found', {
       count: leads.length,
       names: leads.map(u => u.name),
+      roles: leads.map(u => u.role),
       component: 'TeamAssignmentStep',
     });
     return leads;
@@ -171,21 +184,22 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
     const reps = usersData.filter((user: User) => {
       logDebug('Checking user for SME role', {
         userName: user.name || user.email,
-        roles: user.role ? [user.role] : [],
         role: user.role,
       });
 
       return (
-        user.role === 'Subject Matter Expert (SME)' ||
-        user.role === 'Technical SME' ||
+        user.role === 'SME' ||
+        user.role === 'Senior SME' ||
+        user.role === 'Content Manager' ||
         user.role === 'System Administrator' ||
-        user.role === 'Administrator'
+        user.role === 'Proposal Manager'
       );
     });
 
     logDebug('Sales reps found', {
       count: reps.length,
       names: reps.map(u => u.name),
+      roles: reps.map(u => u.role),
     });
     return reps;
   }, [usersData]);
@@ -198,20 +212,16 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
     const execs = usersData.filter((user: User) => {
       logDebug('Checking user for Executive role', {
         userName: user.name || user.email,
-        roles: user.role ? [user.role] : [],
         role: user.role,
       });
 
-      return (
-        user.role === 'Executive' ||
-        user.role === 'System Administrator' ||
-        user.role === 'Administrator'
-      );
+      return user.role === 'Executive' || user.role === 'System Administrator';
     });
 
     logDebug('Executives found', {
       count: execs.length,
       names: execs.map(u => u.name),
+      roles: execs.map(u => u.role),
     });
     return execs;
   }, [usersData]);
@@ -285,6 +295,18 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
 
       setStepData(2, updatedData);
 
+      // Debug logging for team data persistence
+      logDebug('TeamAssignmentStep: Field changed', {
+        component: 'TeamAssignmentStep',
+        operation: 'fieldChange',
+        field,
+        value,
+        updatedData,
+        step: 2,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+
       analytics.trackOptimized('proposal_field_change', {
         field,
         step: 2,
@@ -308,6 +330,18 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
 
       setStepData(2, updatedData);
 
+      // Debug logging for SME assignment
+      logDebug('TeamAssignmentStep: SME assigned', {
+        component: 'TeamAssignmentStep',
+        operation: 'smeChange',
+        area,
+        value,
+        updatedData,
+        step: 2,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+
       analytics.trackOptimized('proposal_sme_assigned', {
         area,
         step: 2,
@@ -329,6 +363,18 @@ export function TeamAssignmentStep({ data, onNext, onBack, onUpdate }: TeamAssig
       };
 
       setStepData(2, updatedData);
+
+      // Debug logging for executive toggle
+      logDebug('TeamAssignmentStep: Executive toggled', {
+        component: 'TeamAssignmentStep',
+        operation: 'executiveToggle',
+        executiveId,
+        isSelected: !formData.executiveReviewers.includes(executiveId),
+        updatedData,
+        step: 2,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
 
       analytics.trackOptimized('proposal_executive_toggled', {
         executiveId,

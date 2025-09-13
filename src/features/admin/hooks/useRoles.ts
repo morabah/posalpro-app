@@ -39,6 +39,7 @@ export interface UpdateRoleData extends Partial<CreateRoleData> {
 
 /**
  * Hook for fetching roles with React Query
+ * ✅ ENHANCED: Added explicit React Query configuration with caching strategies
  */
 export function useAdminRoles() {
   const query = useQuery({
@@ -66,9 +67,16 @@ export function useAdminRoles() {
 
       return result.roles || [];
     },
-    staleTime: 30000,
-    gcTime: 120000,
-    refetchOnWindowFocus: false,
+    // ✅ ENHANCED: Explicit React Query configuration following CORE_REQUIREMENTS.md
+    staleTime: 60000, // 1 minute - roles change less frequently
+    gcTime: 300000, // 5 minutes - longer cache for roles
+    refetchOnWindowFocus: false, // Prevent unnecessary refetches
+    refetchOnReconnect: true, // Refetch when connection restored
+    retry: 2, // Retry failed requests twice
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+    // ✅ ENHANCED: Caching strategy for roles
+    placeholderData: (previousData) => previousData, // Keep previous data while loading
+    networkMode: 'online', // Only fetch when online
   });
 
   return {

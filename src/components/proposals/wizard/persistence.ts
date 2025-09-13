@@ -1,6 +1,7 @@
 'use client';
 
 import { http } from '@/lib/http';
+import { logDebug } from '@/lib/logger';
 import { useProposalStore } from '@/lib/store/proposalStore';
 
 export type WizardPayload = Record<string, unknown> & {
@@ -16,6 +17,30 @@ export function buildWizardPayloadFromStore(
   const contentData = stepData[3] || {};
   const productData = stepData[4] || {};
   const sectionData = stepData[5] || {};
+  const reviewData = stepData[6] || {}; // Include step 6 data if it exists
+
+  // Debug logging for team data
+  logDebug('buildWizardPayloadFromStore: Team data', {
+    component: 'buildWizardPayloadFromStore',
+    operation: 'extractTeamData',
+    teamData,
+    teamDataKeys: Object.keys(teamData),
+    teamLead: teamData.teamLead,
+    salesRepresentative: teamData.salesRepresentative,
+    subjectMatterExperts: teamData.subjectMatterExperts,
+    executiveReviewers: teamData.executiveReviewers,
+  });
+
+  // Calculate totals from product data
+  const totalProducts = productData.products?.length || 0;
+  const totalValue =
+    productData.totalValue ||
+    productData.products?.reduce(
+      (sum: number, product: any) => sum + (product.unitPrice || 0) * (product.quantity || 0),
+      0
+    ) ||
+    0;
+  const totalSections = sectionData.sections?.length || 0;
 
   return {
     title: basicInfo.title || '',
@@ -30,7 +55,7 @@ export function buildWizardPayloadFromStore(
       : undefined,
     dueDate: basicInfo.dueDate || '',
     priority: basicInfo.priority || 'MEDIUM',
-    value: basicInfo.value || 0,
+    value: totalValue, // Use calculated total value
     currency: basicInfo.currency || 'USD',
     projectType: basicInfo.projectType || '',
     tags: basicInfo.tags || [],
@@ -47,17 +72,18 @@ export function buildWizardPayloadFromStore(
     },
     productData: {
       products: productData.products || [],
-      totalValue: productData.totalValue || 0,
+      totalValue: totalValue,
     },
     sectionData: {
       sections: sectionData.sections || [],
       sectionTemplates: sectionData.sectionTemplates || [],
     },
     reviewData: {
-      validationChecklist: [],
-      totalProducts: productData.products?.length || 0,
-      totalValue: productData.totalValue || 0,
-      totalSections: sectionData.sections?.length || 0,
+      validationChecklist: reviewData.validationChecklist || [],
+      totalProducts: totalProducts,
+      totalValue: totalValue,
+      totalSections: totalSections,
+      isComplete: reviewData.isComplete || false,
     },
     planType,
   } as WizardPayload;

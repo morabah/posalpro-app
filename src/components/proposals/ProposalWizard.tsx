@@ -19,6 +19,36 @@ import { useCreateProposal, useProposal, useUpdateProposal } from '@/features/pr
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { http } from '@/lib/http';
 import { logDebug, logError, logWarn } from '@/lib/logger';
+import {
+  useProposalCanGoBack,
+  useProposalCanProceed,
+  useProposalCurrentStep,
+  useProposalInitializeFromData,
+  useProposalIsSubmitting,
+  useProposalNextStep,
+  useProposalPlanType,
+  useProposalPreviousStep,
+  useProposalResetWizard,
+  useProposalSetCurrentStep,
+  useProposalSetPlanType,
+  useProposalStepData,
+  useProposalStore,
+  useProposalSubmitProposal,
+  useProposalTotalSteps,
+  type ProposalBasicInfo,
+  type ProposalProductData,
+  type ProposalSectionData,
+  type ProposalTeamData,
+} from '@/lib/store/proposalStore';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import {
+  buildCreateBodyFromStore,
+  buildWizardPayloadFromStore,
+  saveDraftToLocalStorage,
+} from './wizard/persistence';
+import { WizardHeader } from './wizard/WizardHeader';
+import { WizardSidebar } from './wizard/WizardSidebar';
 
 // Type definitions for proposal wizard
 interface ProposalStepData {
@@ -67,40 +97,10 @@ interface ProposalPreview {
   };
   terms: unknown[];
 }
-import {
-  useProposalCanGoBack,
-  useProposalCanProceed,
-  useProposalCurrentStep,
-  useProposalInitializeFromData,
-  useProposalIsSubmitting,
-  useProposalNextStep,
-  useProposalPlanType,
-  useProposalPreviousStep,
-  useProposalResetWizard,
-  useProposalSetCurrentStep,
-  useProposalSetPlanType,
-  useProposalStepData,
-  useProposalStore,
-  useProposalSubmitProposal,
-  useProposalTotalSteps,
-  type ProposalBasicInfo,
-  type ProposalProductData,
-  type ProposalSectionData,
-  type ProposalTeamData,
-} from '@/lib/store/proposalStore';
-import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import {
-  buildCreateBodyFromStore,
-  buildWizardPayloadFromStore,
-  saveDraftToLocalStorage,
-} from './wizard/persistence';
-import { WizardHeader } from './wizard/WizardHeader';
-import { WizardSidebar } from './wizard/WizardSidebar';
 // Icons now handled inside extracted components
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useSectionAssignmentStore } from '@/features/proposal-sections/store';
 import { flushPendingSectionCreatesAndUpdates } from '@/features/proposal-sections/publicApi';
+import { useSectionAssignmentStore } from '@/features/proposal-sections/store';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 // Step components
 import { BasicInformationStep } from './steps/BasicInformationStep';
@@ -207,6 +207,26 @@ export function ProposalWizard({
   const step5Data = useProposalStepData(5) as ProposalSectionData | undefined;
   const currentStepData = useProposalStepData(currentStep);
 
+  // Debug logging for step data
+  logDebug('ProposalWizard: Step data loaded', {
+    component: 'ProposalWizard',
+    operation: 'step_data_loaded',
+    currentStep,
+    editMode,
+    proposalId,
+    step1DataKeys: step1Data ? Object.keys(step1Data) : [],
+    step2DataKeys: step2Data ? Object.keys(step2Data) : [],
+    step2TeamLead: step2Data?.teamLead,
+    step2SalesRep: step2Data?.salesRepresentative,
+    step2SMEs: step2Data?.subjectMatterExperts,
+    step2Executives: step2Data?.executiveReviewers,
+    step4DataKeys: step4Data ? Object.keys(step4Data) : [],
+    step5DataKeys: step5Data ? Object.keys(step5Data) : [],
+    currentStepDataKeys: currentStepData ? Object.keys(currentStepData) : [],
+    userStory: 'US-3.1',
+    hypothesis: 'H4',
+  });
+
   // Fetch proposal data for edit mode - only when we have a valid proposalId
   const { data: proposalData, isLoading: isLoadingProposal } = useProposal(
     editMode && proposalId && typeof proposalId === 'string' ? proposalId : ''
@@ -234,7 +254,7 @@ export function ProposalWizard({
           description: proposalData.description || undefined,
           dueDate: proposalData.dueDate || undefined,
           assignedTo: proposalData.assignedTo ? [proposalData.assignedTo] : undefined,
-          submittedAt: proposalData.submittedAt || undefined
+          submittedAt: proposalData.submittedAt || undefined,
         });
         // Ensure edit opens on step 4 directly
         setCurrentStep(4);
@@ -293,6 +313,22 @@ export function ProposalWizard({
         console.warn('Error flushing pending section updates:', error);
       }
       const payload = buildWizardPayload();
+
+      // Debug logging for update payload
+      logDebug('ProposalWizard: Update payload', {
+        component: 'ProposalWizard',
+        operation: 'update_proposal',
+        proposalId,
+        payloadKeys: Object.keys(payload),
+        stepDataKeys: Object.keys(useProposalStore.getState().stepData),
+        teamData: payload.teamData,
+        productData: payload.productData,
+        sectionData: payload.sectionData,
+        reviewData: payload.reviewData,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
+
       await http.put(`/api/proposals/${proposalId}`, payload);
       // After products persisted (ids stable), flush any pending assignments
       try {
@@ -369,7 +405,8 @@ export function ProposalWizard({
         await http.put(`/api/proposals/${proposalId}`, payload);
         // After products persisted (ids stable), flush any pending assignments
         try {
-          const { assignmentsDirty, flushPendingAssignments } = useSectionAssignmentStore.getState();
+          const { assignmentsDirty, flushPendingAssignments } =
+            useSectionAssignmentStore.getState();
           if (assignmentsDirty) await flushPendingAssignments(proposalId);
         } catch (error) {
           console.warn('Error flushing pending assignments:', error);
@@ -955,7 +992,9 @@ export function ProposalWizard({
                   data={
                     currentStep === 4 && editMode && proposalData?.products
                       ? { products: proposalData.products }
-                      : currentStepData
+                      : currentStep === 2 && editMode && step2Data
+                        ? step2Data
+                        : currentStepData
                   }
                   onNext={handleNext}
                   onBack={handleBack}
