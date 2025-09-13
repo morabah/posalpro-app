@@ -801,95 +801,135 @@ export default function ProposalPreviewPage() {
                       animate="animate"
                       transition={{ delay: 0.3 }}
                     >
-                      <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center justify-between mb-4">
                         <div>
                           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                             <DocumentIcon className="h-5 w-5 text-blue-600" />
                             Product Datasheets
+                            <span className="ml-2 text-sm font-normal text-gray-500">
+                              ({availableDatasheets.length} available)
+                            </span>
                           </h2>
                           <p className="text-sm text-gray-600 mt-1">
-                            Select datasheets to include in the PDF print (only products with
-                            datasheet URLs are shown)
+                            Select datasheets to include in the PDF print
                           </p>
                         </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={selectAllDatasheets}
-                            className="print:hidden"
-                          >
-                            Select All
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={clearAllDatasheets}
-                            className="print:hidden"
-                          >
-                            Clear All
-                          </Button>
-                        </div>
+                        {selectedDatasheets.size > 0 && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-blue-700 font-medium">
+                              {selectedDatasheets.size} selected
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={clearAllDatasheets}
+                              className="print:hidden h-7 px-2 text-xs"
+                            >
+                              Clear All
+                            </Button>
+                          </div>
+                        )}
                       </div>
 
-                      <div className="space-y-3">
-                        {availableDatasheets.map(datasheet => (
-                          <div
-                            key={datasheet.productId}
-                            className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                id={`datasheet-${datasheet.productId}`}
-                                checked={selectedDatasheets.has(datasheet.productId)}
-                                onChange={() => toggleDatasheet(datasheet.productId)}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded print:hidden"
-                              />
-                              <div className="flex-1">
-                                <div className="font-medium text-gray-900">
-                                  {datasheet.productName}
-                                </div>
-                                <div className="text-sm text-gray-500">SKU: {datasheet.sku}</div>
-                                <div className="text-xs text-blue-600 mt-1 break-all">
-                                  📄 {datasheet.datasheetPath}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setPreviewDatasheet(datasheet.datasheetPath)}
-                                className="print:hidden"
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                          <thead className="bg-gradient-to-r from-gray-50 to-gray-100 print:bg-white">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium text-gray-700 w-8">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedDatasheets.size === availableDatasheets.length}
+                                  onChange={
+                                    selectedDatasheets.size === availableDatasheets.length
+                                      ? clearAllDatasheets
+                                      : selectAllDatasheets
+                                  }
+                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded print:hidden"
+                                />
+                              </th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-700">
+                                Product
+                              </th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-700">SKU</th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-700">
+                                Datasheet
+                              </th>
+                              <th className="px-3 py-2 text-center font-medium text-gray-700 w-20">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {availableDatasheets.map((datasheet, index) => (
+                              <tr
+                                key={datasheet.productId}
+                                className={`hover:bg-gray-50 transition-colors ${
+                                  selectedDatasheets.has(datasheet.productId) ? 'bg-blue-50' : ''
+                                }`}
                               >
-                                <EyeIcon className="h-4 w-4 mr-1" />
-                                Preview
-                              </Button>
-                              <span className="text-sm text-gray-500">
-                                {selectedDatasheets.has(datasheet.productId)
-                                  ? 'Selected'
-                                  : 'Not selected'}
-                              </span>
-                              <DocumentIcon className="h-4 w-4 text-gray-400" />
-                            </div>
-                          </div>
-                        ))}
+                                <td className="px-3 py-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedDatasheets.has(datasheet.productId)}
+                                    onChange={() => toggleDatasheet(datasheet.productId)}
+                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded print:hidden"
+                                  />
+                                </td>
+                                <td className="px-3 py-3">
+                                  <div
+                                    className="font-medium text-gray-900 truncate max-w-xs"
+                                    title={datasheet.productName}
+                                  >
+                                    {datasheet.productName}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <span className="text-gray-600 font-mono text-xs">
+                                    {datasheet.sku}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <DocumentIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                                    <span
+                                      className="text-blue-600 text-xs truncate max-w-xs"
+                                      title={datasheet.datasheetPath}
+                                    >
+                                      {datasheet.datasheetPath.split('/').pop() || 'Datasheet'}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3 text-center">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPreviewDatasheet(datasheet.datasheetPath)}
+                                    className="print:hidden h-7 px-2 text-xs"
+                                  >
+                                    <EyeIcon className="h-3 w-3 mr-1" />
+                                    View
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
 
                       {selectedDatasheets.size > 0 && (
-                        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                          <div className="flex items-center gap-2 text-blue-800">
-                            <DocumentIcon className="h-4 w-4" />
-                            <span className="font-medium">
-                              {selectedDatasheets.size} datasheet
-                              {selectedDatasheets.size !== 1 ? 's' : ''} selected
+                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-blue-800">
+                              <DocumentIcon className="h-4 w-4" />
+                              <span className="font-medium text-sm">
+                                {selectedDatasheets.size} datasheet
+                                {selectedDatasheets.size !== 1 ? 's' : ''} selected
+                              </span>
+                            </div>
+                            <span className="text-xs text-blue-600">
+                              Will be included in PDF print
                             </span>
                           </div>
-                          <p className="text-sm text-blue-700 mt-1">
-                            Selected datasheets will be included as additional pages in the PDF
-                            print.
-                          </p>
                         </div>
                       )}
                     </motion.div>
