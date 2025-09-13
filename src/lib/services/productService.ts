@@ -1228,8 +1228,8 @@ export class ProductService {
       const uploadPath = `/uploads/products/${fileName}`;
 
       // Ensure uploads directory exists
-      const fs = require('fs');
-      const path = require('path');
+      const fs = await import('node:fs');
+      const path = await import('node:path');
       const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'products');
 
       if (!fs.existsSync(uploadDir)) {
@@ -1327,8 +1327,8 @@ export class ProductService {
 
       // Delete the actual file from filesystem
       try {
-        const fs = require('fs');
-        const path = require('path');
+        const fs = await import('node:fs');
+        const path = await import('node:path');
         const filePath = path.join(process.cwd(), 'public', imageUrl);
 
         if (fs.existsSync(filePath)) {

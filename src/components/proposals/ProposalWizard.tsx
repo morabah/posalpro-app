@@ -289,14 +289,18 @@ export function ProposalWizard({
       // Wait for any in-flight section creations/edits to settle
       try {
         await flushPendingSectionCreatesAndUpdates();
-      } catch {}
+      } catch (error) {
+        console.warn('Error flushing pending section updates:', error);
+      }
       const payload = buildWizardPayload();
       await http.put(`/api/proposals/${proposalId}`, payload);
       // After products persisted (ids stable), flush any pending assignments
       try {
         const { assignmentsDirty, flushPendingAssignments } = useSectionAssignmentStore.getState();
         if (assignmentsDirty) await flushPendingAssignments(proposalId);
-      } catch {}
+      } catch (error) {
+        console.warn('Error flushing pending assignments:', error);
+      }
       // ✅ IMPROVED: Add small delay to ensure cache invalidation completes
       await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -358,14 +362,18 @@ export function ProposalWizard({
         // Wait for any in-flight section creations/edits to settle
         try {
           await flushPendingSectionCreatesAndUpdates();
-        } catch {}
+        } catch (error) {
+          console.warn('Error flushing pending section updates:', error);
+        }
         const payload = buildWizardPayload();
         await http.put(`/api/proposals/${proposalId}`, payload);
         // After products persisted (ids stable), flush any pending assignments
         try {
           const { assignmentsDirty, flushPendingAssignments } = useSectionAssignmentStore.getState();
           if (assignmentsDirty) await flushPendingAssignments(proposalId);
-        } catch {}
+        } catch (error) {
+          console.warn('Error flushing pending assignments:', error);
+        }
 
         // ✅ IMPROVED: Invalidate caches BEFORE verification to ensure fresh data
         try {

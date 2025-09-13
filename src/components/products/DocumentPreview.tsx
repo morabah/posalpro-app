@@ -520,7 +520,10 @@ export function DocumentPreview({
       cancelled = true;
       try {
         renderTask?.cancel?.();
-      } catch {}
+      } catch (error) {
+        // Ignore cancellation errors
+        console.warn('PDF render task cancellation error:', error);
+      }
     };
   }, [useCanvasPage, pdfDocProxy, isExpanded, handlePdfLoadError, productId, productName]);
 

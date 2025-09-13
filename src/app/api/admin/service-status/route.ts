@@ -318,9 +318,9 @@ async function checkPythonServices(): Promise<ServiceStatus> {
           const version = stdout.trim().match(/Python (\d+\.\d+\.\d+)/)?.[1] || 'Unknown';
 
           // Check for running Python services on common ports
-          const checkPythonService = (port: number, serviceName: string) => {
-            return new Promise<boolean>(resolve => {
-              const net = require('net');
+          const checkPythonService = (port: number, _serviceName: string) => {
+            return new Promise<boolean>(async (resolve) => {
+              const net = await import('node:net');
               const socket = new net.Socket();
 
               socket.setTimeout(1000);

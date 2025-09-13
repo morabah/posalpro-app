@@ -9,7 +9,7 @@
  */
 
 import { http } from '@/lib/http';
-import { ImageUpload, ProductImages } from '@/features/products/schemas';
+// import { ImageUpload, ProductImages } from '@/features/products/schemas';
 
 export interface ImageUploadResponse {
   imageUrl: string;

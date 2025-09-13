@@ -566,7 +566,9 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
       try {
         const refreshed = await refetchSections();
         newCount = ((refreshed.data as any) || sectionsData || []).length;
-      } catch {}
+      } catch (error) {
+        console.warn('Error refreshing sections count:', error);
+      }
 
       // Show success message regardless of whether it was created or already existed
       toast.success(`Section '${input.title}' ready (${newCount} total)`);
