@@ -511,11 +511,12 @@ export function useTemplatesCache(config: Partial<TemplatesCacheConfig> = {}) {
             });
             break;
 
-          case 'categories':
+          case 'categories': {
             // Warm templates by categories
             const allCategories = getAllCategories();
             await Promise.all(allCategories.map(category => prefetchTemplatesByCategory(category)));
             break;
+          }
         }
 
         logInfo('Template cache warming completed', {

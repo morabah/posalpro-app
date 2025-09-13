@@ -382,8 +382,7 @@ export function useProposalSectionsCache(config: Partial<ProposalSectionsCacheCo
           queryClient.invalidateQueries({ queryKey: sectionKeys.byProposal(proposalId) });
           queryClient.invalidateQueries({
             predicate: query =>
-              query.queryKey[0] === 'proposal-sections' &&
-              query.queryKey[1] === 'bulk-operations',
+              query.queryKey[0] === 'proposal-sections' && query.queryKey[1] === 'bulk-operations',
           });
           break;
 
@@ -448,13 +447,14 @@ export function useProposalSectionsCache(config: Partial<ProposalSectionsCacheCo
             });
             break;
 
-          case 'bulk':
+          case 'bulk': {
             // Warm bulk operation cache
             const pendingOperations = getPendingBulkOperations();
             for (const operation of pendingOperations) {
               await cacheBulkOperation(operation.id, operation.data);
             }
             break;
+          }
         }
 
         logInfo('Proposal sections cache warming completed', {
@@ -475,7 +475,13 @@ export function useProposalSectionsCache(config: Partial<ProposalSectionsCacheCo
         });
       }
     },
-    [queryClient, finalConfig.enablePrefetching, prefetchProposalSections, prefetchMultipleProposalSections, cacheBulkOperation]
+    [
+      queryClient,
+      finalConfig.enablePrefetching,
+      prefetchProposalSections,
+      prefetchMultipleProposalSections,
+      cacheBulkOperation,
+    ]
   );
 
   // ====================
@@ -501,7 +507,8 @@ export function useProposalSectionsCache(config: Partial<ProposalSectionsCacheCo
         const data = query.state.data;
         if (data && typeof data === 'object' && 'timestamp' in data) {
           const age = Date.now() - (data as any).timestamp;
-          if (age > 1800000) { // Remove operations older than 30 minutes
+          if (age > 1800000) {
+            // Remove operations older than 30 minutes
             queryClient.removeQueries({ queryKey: query.queryKey });
           }
         }
@@ -514,9 +521,9 @@ export function useProposalSectionsCache(config: Partial<ProposalSectionsCacheCo
     });
 
     // Update memory usage
-    const memoryUsage = (performance as any).memory ?
-      `${Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024)}MB` :
-      'Unknown';
+    const memoryUsage = (performance as any).memory
+      ? `${Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024)}MB`
+      : 'Unknown';
 
     metricsRef.current.memoryUsage = memoryUsage;
     metricsRef.current.lastCleanup = Date.now();
@@ -538,9 +545,7 @@ export function useProposalSectionsCache(config: Partial<ProposalSectionsCacheCo
     const cache = queryClient.getQueryCache();
     const queries = cache.getAll();
 
-    const sectionQueries = queries.filter(query =>
-      query.queryKey[0] === 'proposal-sections'
-    );
+    const sectionQueries = queries.filter(query => query.queryKey[0] === 'proposal-sections');
 
     const totalQueries = sectionQueries.length;
     const activeQueries = sectionQueries.filter(query => query.getObserversCount() > 0).length;
@@ -627,9 +632,24 @@ export function useProposalSectionsCache(config: Partial<ProposalSectionsCacheCo
 async function getProposalSections(proposalId: string): Promise<any[]> {
   // Mock implementation - would typically call the proposal sections service
   return [
-    { id: `${proposalId}-section-1`, title: 'Executive Summary', content: 'Summary content', order: 1 },
-    { id: `${proposalId}-section-2`, title: 'Technical Details', content: 'Technical content', order: 2 },
-    { id: `${proposalId}-section-3`, title: 'Implementation Plan', content: 'Plan content', order: 3 },
+    {
+      id: `${proposalId}-section-1`,
+      title: 'Executive Summary',
+      content: 'Summary content',
+      order: 1,
+    },
+    {
+      id: `${proposalId}-section-2`,
+      title: 'Technical Details',
+      content: 'Technical content',
+      order: 2,
+    },
+    {
+      id: `${proposalId}-section-3`,
+      title: 'Implementation Plan',
+      content: 'Plan content',
+      order: 3,
+    },
   ];
 }
 

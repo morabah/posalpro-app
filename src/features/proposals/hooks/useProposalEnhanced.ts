@@ -90,6 +90,21 @@ export function useProposalEnhanced(
   // Context-Aware Data Loading
   // ====================
 
+  // Always call hooks at the top level to avoid conditional hook calls
+  const dashboardProposals = useInfiniteProposals({
+    limit: 20,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+  });
+
+  const listProposals = useInfiniteProposals({
+    limit: 50,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+  });
+
+  const stats = useProposalStats();
+
   const contextAwareQueries = useMemo(() => {
     const startTime = performance.now();
 
@@ -100,21 +115,6 @@ export function useProposalEnhanced(
       userStory: 'US-3.2',
       hypothesis: 'H4',
     });
-
-    // Always call hooks at the top level to avoid conditional hook calls
-    const dashboardProposals = useInfiniteProposals({
-      limit: 20,
-      sortBy: 'createdAt',
-      sortOrder: 'desc',
-    });
-
-    const listProposals = useInfiniteProposals({
-      limit: 50,
-      sortBy: 'createdAt',
-      sortOrder: 'desc',
-    });
-
-    const stats = useProposalStats();
 
     let queries: any = {};
 
@@ -156,7 +156,7 @@ export function useProposalEnhanced(
     });
 
     return { queries, loadTime };
-  }, [context]);
+  }, [context, dashboardProposals, listProposals, stats]);
 
   // ====================
   // Performance Monitoring
@@ -172,7 +172,8 @@ export function useProposalEnhanced(
       const proposalQueries = allQueries.filter(q => q.queryKey[0] === 'proposals');
 
       const errorQueries = proposalQueries.filter(q => q.state.status === 'error');
-      const errorRate = proposalQueries.length > 0 ? (errorQueries.length / proposalQueries.length) * 100 : 0;
+      const errorRate =
+        proposalQueries.length > 0 ? (errorQueries.length / proposalQueries.length) * 100 : 0;
 
       const newMetrics: PerformanceMetrics = {
         loadTime: contextAwareQueries.loadTime,
@@ -186,17 +187,21 @@ export function useProposalEnhanced(
       setPerformanceMetrics(newMetrics);
 
       // Track performance analytics
-      analytics.trackOptimized('proposal_performance_metrics', {
-        component: 'useProposalEnhanced',
-        context,
-        loadTime: Math.round(newMetrics.loadTime),
-        cacheHitRate: Math.round(newMetrics.cacheHitRate),
-        errorRate: Math.round(newMetrics.errorRate),
-        memoryUsage: newMetrics.memoryUsage,
-        queryCount: newMetrics.queryCount,
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
-      }, 'medium');
+      analytics.trackOptimized(
+        'proposal_performance_metrics',
+        {
+          component: 'useProposalEnhanced',
+          context,
+          loadTime: Math.round(newMetrics.loadTime),
+          cacheHitRate: Math.round(newMetrics.cacheHitRate),
+          errorRate: Math.round(newMetrics.errorRate),
+          memoryUsage: newMetrics.memoryUsage,
+          queryCount: newMetrics.queryCount,
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        },
+        'medium'
+      );
 
       logDebug('Performance metrics updated', {
         component: 'useProposalEnhanced',
@@ -216,7 +221,14 @@ export function useProposalEnhanced(
         hypothesis: 'H4',
       });
     }
-  }, [finalConfig.enablePerformanceMonitoring, proposalCache, queryClient, contextAwareQueries.loadTime, analytics, context]);
+  }, [
+    finalConfig.enablePerformanceMonitoring,
+    proposalCache,
+    queryClient,
+    contextAwareQueries.loadTime,
+    analytics,
+    context,
+  ]);
 
   // ====================
   // Health Checks
@@ -239,17 +251,25 @@ export function useProposalEnhanced(
 
       // Check performance metrics
       if (performanceMetrics.loadTime > finalConfig.performanceThreshold) {
-        issues.push(`Load time ${Math.round(performanceMetrics.loadTime)}ms exceeds threshold ${finalConfig.performanceThreshold}ms`);
-        recommendations.push('Consider enabling more aggressive caching or reducing data complexity');
+        issues.push(
+          `Load time ${Math.round(performanceMetrics.loadTime)}ms exceeds threshold ${finalConfig.performanceThreshold}ms`
+        );
+        recommendations.push(
+          'Consider enabling more aggressive caching or reducing data complexity'
+        );
       }
 
       if (performanceMetrics.cacheHitRate < 70) {
-        issues.push(`Cache hit rate ${Math.round(performanceMetrics.cacheHitRate)}% is below optimal 70%`);
+        issues.push(
+          `Cache hit rate ${Math.round(performanceMetrics.cacheHitRate)}% is below optimal 70%`
+        );
         recommendations.push('Review cache configuration and prefetching strategies');
       }
 
       if (performanceMetrics.errorRate > 5) {
-        issues.push(`Error rate ${Math.round(performanceMetrics.errorRate)}% is above acceptable 5%`);
+        issues.push(
+          `Error rate ${Math.round(performanceMetrics.errorRate)}% is above acceptable 5%`
+        );
         recommendations.push('Investigate and fix underlying data or network issues');
       }
 
@@ -277,15 +297,19 @@ export function useProposalEnhanced(
       setHealthStatus(newHealthStatus);
 
       // Track health status
-      analytics.trackOptimized('proposal_health_check', {
-        component: 'useProposalEnhanced',
-        context,
-        isHealthy,
-        issueCount: issues.length,
-        recommendationCount: recommendations.length,
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
-      }, isHealthy ? 'low' : 'high');
+      analytics.trackOptimized(
+        'proposal_health_check',
+        {
+          component: 'useProposalEnhanced',
+          context,
+          isHealthy,
+          issueCount: issues.length,
+          recommendationCount: recommendations.length,
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        },
+        isHealthy ? 'low' : 'high'
+      );
 
       logInfo('Health check completed', {
         component: 'useProposalEnhanced',
@@ -307,7 +331,13 @@ export function useProposalEnhanced(
         hypothesis: 'H4',
       });
     }
-  }, [finalConfig.enableHealthChecks, finalConfig.performanceThreshold, performanceMetrics, analytics, context]);
+  }, [
+    finalConfig.enableHealthChecks,
+    finalConfig.performanceThreshold,
+    performanceMetrics,
+    analytics,
+    context,
+  ]);
 
   // ====================
   // Context-Aware Optimization
@@ -388,19 +418,25 @@ export function useProposalEnhanced(
   // ====================
 
   // Enhanced proposal functions (without hooks inside callbacks)
-  const enhanceProposalData = useCallback((proposalData: any) => {
-    if (proposalData?.customerId) {
-      proposalCache.prefetchRelatedProposals(proposalData.customerId);
-    }
-    return proposalData;
-  }, [proposalCache]);
+  const enhanceProposalData = useCallback(
+    (proposalData: any) => {
+      if (proposalData?.customerId) {
+        proposalCache.prefetchRelatedProposals(proposalData.customerId);
+      }
+      return proposalData;
+    },
+    [proposalCache]
+  );
 
-  const enhanceProposalsData = useCallback((proposalsData: any[]) => {
-    if (proposalsData.length > 0) {
-      proposalCache.prefetchProposalStats();
-    }
-    return proposalsData;
-  }, [proposalCache]);
+  const enhanceProposalsData = useCallback(
+    (proposalsData: any[]) => {
+      if (proposalsData.length > 0) {
+        proposalCache.prefetchProposalStats();
+      }
+      return proposalsData;
+    },
+    [proposalCache]
+  );
 
   // ====================
   // Setup and Cleanup
@@ -412,12 +448,18 @@ export function useProposalEnhanced(
 
     // Set up health check interval
     if (finalConfig.enableHealthChecks) {
-      healthCheckIntervalRef.current = setInterval(performHealthCheck, finalConfig.healthCheckInterval);
+      healthCheckIntervalRef.current = setInterval(
+        performHealthCheck,
+        finalConfig.healthCheckInterval
+      );
     }
 
     // Set up optimization interval
     if (finalConfig.enableContextOptimization) {
-      optimizationIntervalRef.current = setInterval(performContextOptimization, finalConfig.optimizationInterval);
+      optimizationIntervalRef.current = setInterval(
+        performContextOptimization,
+        finalConfig.optimizationInterval
+      );
     }
 
     return () => {
@@ -447,22 +489,30 @@ export function useProposalEnhanced(
   useEffect(() => {
     const totalTime = Date.now() - startTimeRef.current;
 
-    analytics.trackOptimized('proposal_enhanced_lifecycle', {
-      component: 'useProposalEnhanced',
-      context,
-      totalTime,
-      userStory: 'US-3.2',
-      hypothesis: 'H4',
-    }, 'low');
+    analytics.trackOptimized(
+      'proposal_enhanced_lifecycle',
+      {
+        component: 'useProposalEnhanced',
+        context,
+        totalTime,
+        userStory: 'US-3.2',
+        hypothesis: 'H4',
+      },
+      'low'
+    );
 
     return () => {
       // Track cleanup
-      analytics.trackOptimized('proposal_enhanced_cleanup', {
-        component: 'useProposalEnhanced',
-        context,
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
-      }, 'low');
+      analytics.trackOptimized(
+        'proposal_enhanced_cleanup',
+        {
+          component: 'useProposalEnhanced',
+          context,
+          userStory: 'US-3.2',
+          hypothesis: 'H4',
+        },
+        'low'
+      );
     };
   }, [analytics, context]);
 
