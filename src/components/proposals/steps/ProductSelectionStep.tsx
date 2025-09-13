@@ -13,7 +13,11 @@ import { Input } from '@/components/ui/forms/Input';
 import { Tooltip } from '@/components/ui/Tooltip';
 import type { Product } from '@/features/products';
 import { useUnifiedProductSelectionData } from '@/features/products/hooks';
-import { useCreateSectionMutation, useDeleteSectionMutation, useProposalSections } from '@/features/proposal-sections/hooks';
+import {
+  useCreateSectionMutation,
+  useDeleteSectionMutation,
+  useProposalSections,
+} from '@/features/proposal-sections/hooks';
 import { CreateBomSectionSchema } from '@/features/proposal-sections/schemas';
 import { useSectionAssignmentStore } from '@/features/proposal-sections/store';
 import { useUpdateProposal, type WizardProposalUpdateData } from '@/features/proposals';
@@ -744,10 +748,15 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         ) : (
           <div className="space-y-2">
             {sectionsData.map(s => (
-              <div key={s.id} className="flex items-center justify-between p-2 border rounded bg-gray-50">
+              <div
+                key={s.id}
+                className="flex items-center justify-between p-2 border rounded bg-gray-50"
+              >
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-900">{s.title}</span>
-                  <span className="text-xs text-gray-500">({sectionCounts[s.id] || 0} products)</span>
+                  <span className="text-xs text-gray-500">
+                    ({sectionCounts[s.id] || 0} products)
+                  </span>
                 </div>
                 <Button
                   variant="outline"
@@ -861,7 +870,9 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                   <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
                     <h4 className="text-lg font-semibold text-gray-900">{section.title}</h4>
                     <div className="text-right">
-                      <div className="text-sm text-gray-500">{products.length} product{products.length !== 1 ? 's' : ''}</div>
+                      <div className="text-sm text-gray-500">
+                        {products.length} product{products.length !== 1 ? 's' : ''}
+                      </div>
                       <div className="text-lg font-bold text-gray-900">${total.toFixed(2)}</div>
                     </div>
                   </div>
@@ -879,7 +890,10 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
 
                     {/* Product rows */}
                     {products.map(sp => (
-                      <div key={sp.id} className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50">
+                      <div
+                        key={sp.id}
+                        className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50"
+                      >
                         <div className="col-span-4 min-w-0">
                           <div className="font-medium text-gray-900 truncate">{sp.name}</div>
                           <div className="text-xs text-gray-500 truncate">
@@ -900,7 +914,9 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                               type="number"
                               min="1"
                               value={sp.quantity}
-                              onChange={e => handleQuantityChange(sp.productId, parseInt(e.target.value) || 1)}
+                              onChange={e =>
+                                handleQuantityChange(sp.productId, parseInt(e.target.value) || 1)
+                              }
                               className="w-12 h-6 text-center text-sm"
                             />
                             <Button
@@ -966,9 +982,15 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                 <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
                   <h4 className="text-lg font-semibold text-gray-900">Unassigned Products</h4>
                   <div className="text-right">
-                    <div className="text-sm text-gray-500">{groupedProductsBySection.unassignedProducts.length} product{groupedProductsBySection.unassignedProducts.length !== 1 ? 's' : ''}</div>
+                    <div className="text-sm text-gray-500">
+                      {groupedProductsBySection.unassignedProducts.length} product
+                      {groupedProductsBySection.unassignedProducts.length !== 1 ? 's' : ''}
+                    </div>
                     <div className="text-lg font-bold text-gray-900">
-                      ${groupedProductsBySection.unassignedProducts.reduce((sum, p) => sum + (p.total || 0), 0).toFixed(2)}
+                      $
+                      {groupedProductsBySection.unassignedProducts
+                        .reduce((sum, p) => sum + (p.total || 0), 0)
+                        .toFixed(2)}
                     </div>
                   </div>
                 </div>
@@ -986,7 +1008,10 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
 
                   {/* Unassigned product rows */}
                   {groupedProductsBySection.unassignedProducts.map(sp => (
-                    <div key={sp.id} className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50">
+                    <div
+                      key={sp.id}
+                      className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50"
+                    >
                       <div className="col-span-4 min-w-0">
                         <div className="font-medium text-gray-900 truncate">{sp.name}</div>
                         <div className="text-xs text-gray-500 truncate">
@@ -1007,7 +1032,9 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                             type="number"
                             min="1"
                             value={sp.quantity}
-                            onChange={e => handleQuantityChange(sp.productId, parseInt(e.target.value) || 1)}
+                            onChange={e =>
+                              handleQuantityChange(sp.productId, parseInt(e.target.value) || 1)
+                            }
                             className="w-12 h-6 text-center text-sm"
                           />
                           <Button

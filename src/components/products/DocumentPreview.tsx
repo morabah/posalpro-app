@@ -14,9 +14,9 @@ import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } fr
 const reactPdfModulePromise: Promise<typeof import('react-pdf')> = import('react-pdf').then(
   async module => {
     // Wait for worker init done by QueryProvider, if available
-    const globalWorkerPromise = (typeof window !== 'undefined'
-      ? (window as any).pdfWorkerPromise
-      : null) as Promise<any> | null;
+    const globalWorkerPromise = (
+      typeof window !== 'undefined' ? (window as any).pdfWorkerPromise : null
+    ) as Promise<any> | null;
     if (globalWorkerPromise) {
       try {
         await globalWorkerPromise;
@@ -481,7 +481,10 @@ export function DocumentPreview({
   const fileAccessible = isFileAccessible(datasheetPath);
 
   // Memoize proxied URL to avoid unnecessary re-renders of Document component
-  const proxiedUrlMemo = useMemo(() => getProxiedUrl(datasheetPath), [datasheetPath, getProxiedUrl]);
+  const proxiedUrlMemo = useMemo(
+    () => getProxiedUrl(datasheetPath),
+    [datasheetPath, getProxiedUrl]
+  );
 
   // Render first page to canvas (safe mode)
   useEffect(() => {
@@ -659,7 +662,9 @@ export function DocumentPreview({
                                 operation: 'pdf_page_render_error',
                               });
                               handlePdfLoadError(
-                                new Error(`PDF rendering failed: ${error?.message || 'Unknown error'}`)
+                                new Error(
+                                  `PDF rendering failed: ${error?.message || 'Unknown error'}`
+                                )
                               );
                             }}
                           />

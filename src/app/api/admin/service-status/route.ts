@@ -319,7 +319,7 @@ async function checkPythonServices(): Promise<ServiceStatus> {
 
           // Check for running Python services on common ports
           const checkPythonService = (port: number, _serviceName: string) => {
-            return new Promise<boolean>(async (resolve) => {
+            return new Promise<boolean>(async resolve => {
               const net = await import('node:net');
               const socket = new net.Socket();
 

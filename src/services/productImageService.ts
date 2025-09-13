@@ -54,13 +54,18 @@ export const productImageClient = {
    */
   deleteImage: async (productId: string, imageUrl: string): Promise<ImageDeleteResponse> => {
     const encodedImageUrl = encodeURIComponent(imageUrl);
-    return http.delete<ImageDeleteResponse>(`/api/products/${productId}/images?imageUrl=${encodedImageUrl}`);
+    return http.delete<ImageDeleteResponse>(
+      `/api/products/${productId}/images?imageUrl=${encodedImageUrl}`
+    );
   },
 
   /**
    * Update product images array
    */
-  updateImages: async (productId: string, images: string[]): Promise<{ ok: boolean; data: any }> => {
+  updateImages: async (
+    productId: string,
+    images: string[]
+  ): Promise<{ ok: boolean; data: any }> => {
     return http.put(`/api/products/${productId}`, { images });
   },
 };
