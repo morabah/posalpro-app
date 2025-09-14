@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
     chromium = (await import('@sparticuz/chromium')) as any;
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     puppeteer = (await import('puppeteer-core')) as any;
-  } catch (e: any) {
+  } catch (error: any) {
     const message =
       'PDF rendering dependencies not installed: install puppeteer-core and @sparticuz/chromium';
     return new Response(
@@ -364,11 +364,14 @@ export async function GET(req: NextRequest) {
               const doc = await PDFDocument.load(bytes);
               const pages = await merged.copyPages(doc, doc.getPageIndices());
               pages.forEach(p => merged.addPage(p));
-            } catch {}
+            } catch (error) {
+              console.error('Failed to merge PDF page:', error);
+            }
           }
           pdfBuffer = await merged.save();
-        } catch (e) {
+        } catch (error) {
           // pdf-lib not available; keep main pdf only
+          console.error('PDF merge failed:', error);
         }
       }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface DatasheetItem {
   productName: string;
@@ -33,7 +33,10 @@ export function PrintDatasheets({ items, onReady }: PrintDatasheetsProps) {
       try {
         const filename = encodeURIComponent(item.url.split('/').pop() || 'datasheet.pdf');
         const params = new URLSearchParams({ url: encodeURIComponent(item.url), filename });
-        return { ...item, proxiedUrl: `${origin}/api/documents?${params.toString()}` } as DatasheetItem & {
+        return {
+          ...item,
+          proxiedUrl: `${origin}/api/documents?${params.toString()}`,
+        } as DatasheetItem & {
           proxiedUrl: string;
         };
       } catch {
@@ -125,7 +128,7 @@ export function PrintDatasheets({ items, onReady }: PrintDatasheetsProps) {
 
             setRenderedCount(prev => prev + 1);
           }
-        } catch (err) {
+        } catch (error) {
           // Fallback UI
           const fallback = document.createElement('div');
           fallback.className = 'print-datasheet-fallback';
@@ -150,7 +153,10 @@ export function PrintDatasheets({ items, onReady }: PrintDatasheetsProps) {
       cancelled = true;
 
       // Clean up PDF documents and loading tasks
-      loadingTasksRef.current.forEach(loadingTask => {
+      const loadingTasks = loadingTasksRef.current;
+      const pdfDocuments = pdfDocumentsRef.current;
+
+      loadingTasks.forEach(loadingTask => {
         try {
           if (loadingTask && typeof loadingTask.destroy === 'function') {
             loadingTask.destroy();
@@ -159,9 +165,9 @@ export function PrintDatasheets({ items, onReady }: PrintDatasheetsProps) {
           console.warn('Error destroying PDF loading task:', error);
         }
       });
-      loadingTasksRef.current.clear();
+      loadingTasks.clear();
 
-      pdfDocumentsRef.current.forEach(pdf => {
+      pdfDocuments.forEach(pdf => {
         try {
           if (pdf && typeof pdf.destroy === 'function') {
             pdf.destroy();
@@ -170,7 +176,7 @@ export function PrintDatasheets({ items, onReady }: PrintDatasheetsProps) {
           console.warn('Error destroying PDF document:', error);
         }
       });
-      pdfDocumentsRef.current.clear();
+      pdfDocuments.clear();
     };
   }, [proxiedItems, onReady]);
 
@@ -178,7 +184,10 @@ export function PrintDatasheets({ items, onReady }: PrintDatasheetsProps) {
   useEffect(() => {
     return () => {
       // Clean up any remaining PDF documents and loading tasks
-      loadingTasksRef.current.forEach(loadingTask => {
+      const loadingTasks = loadingTasksRef.current;
+      const pdfDocuments = pdfDocumentsRef.current;
+
+      loadingTasks.forEach(loadingTask => {
         try {
           if (loadingTask && typeof loadingTask.destroy === 'function') {
             loadingTask.destroy();
@@ -187,9 +196,9 @@ export function PrintDatasheets({ items, onReady }: PrintDatasheetsProps) {
           console.warn('Error destroying PDF loading task on unmount:', error);
         }
       });
-      loadingTasksRef.current.clear();
+      loadingTasks.clear();
 
-      pdfDocumentsRef.current.forEach(pdf => {
+      pdfDocuments.forEach(pdf => {
         try {
           if (pdf && typeof pdf.destroy === 'function') {
             pdf.destroy();
@@ -198,7 +207,7 @@ export function PrintDatasheets({ items, onReady }: PrintDatasheetsProps) {
           console.warn('Error destroying PDF document on unmount:', error);
         }
       });
-      pdfDocumentsRef.current.clear();
+      pdfDocuments.clear();
     };
   }, []);
 

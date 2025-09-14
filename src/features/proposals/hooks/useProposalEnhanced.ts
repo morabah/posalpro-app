@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logDebug, logInfo, logWarn } from '@/lib/logger';
-import { useProposalCache, type CacheMetrics } from './useProposalCache';
+import { useProposalCache } from './useProposalCache';
 import {
   useInfiniteProposals,
   useProposal,
@@ -418,25 +418,25 @@ export function useProposalEnhanced(
   // ====================
 
   // Enhanced proposal functions (without hooks inside callbacks)
-  const enhanceProposalData = useCallback(
-    (proposalData: any) => {
-      if (proposalData?.customerId) {
-        proposalCache.prefetchRelatedProposals(proposalData.customerId);
-      }
-      return proposalData;
-    },
-    [proposalCache]
-  );
+  // const enhanceProposalData = useCallback(
+  //   (proposalData: any) => {
+  //     if (proposalData?.customerId) {
+  //       proposalCache.prefetchRelatedProposals(proposalData.customerId);
+  //     }
+  //     return proposalData;
+  //   },
+  //   [proposalCache]
+  // );
 
-  const enhanceProposalsData = useCallback(
-    (proposalsData: any[]) => {
-      if (proposalsData.length > 0) {
-        proposalCache.prefetchProposalStats();
-      }
-      return proposalsData;
-    },
-    [proposalCache]
-  );
+  // const enhanceProposalsData = useCallback(
+  //   (proposalsData: any[]) => {
+  //     if (proposalsData.length > 0) {
+  //       proposalCache.prefetchProposalStats();
+  //     }
+  //     return proposalsData;
+  //   },
+  //   [proposalCache]
+  // );
 
   // ====================
   // Setup and Cleanup

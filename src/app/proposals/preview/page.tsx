@@ -12,6 +12,7 @@ import { processError } from '@/lib/errors/ErrorHandlingService';
 import { logError, logInfo } from '@/lib/logger';
 import { CheckCircleIcon, DocumentIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { AnimatePresence, motion } from 'framer-motion';
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import './print-styles.css';
 
@@ -79,12 +80,12 @@ interface PreviewData {
   }>;
 }
 
-interface LoadingState {
-  isLoading: boolean;
-  isHydrating: boolean;
-  hasError: boolean;
-  errorMessage?: string;
-}
+// interface LoadingState {
+//   isLoading: boolean;
+//   isHydrating: boolean;
+//   hasError: boolean;
+//   errorMessage?: string;
+// }
 
 // Animation variants
 const fadeInUp = {
@@ -93,21 +94,21 @@ const fadeInUp = {
   exit: { opacity: 0, y: -20 },
 };
 
-const staggerChildren = {
-  animate: {
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
-};
+// const staggerChildren = {
+//   animate: {
+//     transition: {
+//       staggerChildren: 0.1,
+//     },
+//   },
+// };
 
 // Loading skeleton component with shimmer animation
-const SkeletonLoader = ({ className = '' }: { className?: string }) => (
-  <div
-    className={`animate-pulse bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] rounded ${className}`}
-    style={{ animation: 'shimmer 1.5s ease-in-out infinite' }}
-  />
-);
+// const SkeletonLoader = ({ className = '' }: { className?: string }) => (
+//   <div
+//     className={`animate-pulse bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] rounded ${className}`}
+//     style={{ animation: 'shimmer 1.5s ease-in-out infinite' }}
+//   />
+// );
 
 // Add shimmer keyframes to document
 if (typeof document !== 'undefined' && !document.getElementById('shimmer-styles')) {
@@ -128,7 +129,7 @@ export default function ProposalPreviewPage() {
   const [autoPrint, setAutoPrint] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedDatasheets, setSelectedDatasheets] = useState<Set<string>>(new Set());
-  const [showDatasheetSelector, setShowDatasheetSelector] = useState<boolean>(false);
+  // const [showDatasheetSelector, setShowDatasheetSelector] = useState<boolean>(false);
   const [previewDatasheet, setPreviewDatasheet] = useState<string | null>(null);
   const [printReady, setPrintReady] = useState<boolean>(false);
   const [selectedStep5Ids, setSelectedStep5Ids] = useState<Set<string>>(new Set());
@@ -271,28 +272,32 @@ export default function ProposalPreviewPage() {
           setPrintOptions(prev => ({ ...prev, ...parsed }));
         }
       }
-    } catch {}
+    } catch (error) {
+      console.error('Failed to load print options:', error);
+    }
   }, []);
 
   // Persist print options
   useEffect(() => {
     try {
       localStorage.setItem('proposal-print-options', JSON.stringify(printOptions));
-    } catch {}
+    } catch (error) {
+      console.error('Failed to save print options:', error);
+    }
   }, [printOptions]);
 
   // Reorder helpers for print blocks
-  const movePrintBlock = (key: SectionKey, dir: 'up' | 'down') => {
-    setPrintOptions(prev => {
-      const order = [...(prev.order || [])];
-      const i = order.indexOf(key);
-      if (i < 0) return prev;
-      const j = dir === 'up' ? i - 1 : i + 1;
-      if (j < 0 || j >= order.length) return prev;
-      [order[i], order[j]] = [order[j], order[i]];
-      return { ...prev, order };
-    });
-  };
+  // const movePrintBlock = (key: SectionKey, dir: 'up' | 'down') => {
+  //   setPrintOptions(prev => {
+  //     const order = [...(prev.order || [])];
+  //     const i = order.indexOf(key);
+  //     if (i < 0) return prev;
+  //     const j = dir === 'up' ? i - 1 : i + 1;
+  //     if (j < 0 || j >= order.length) return prev;
+  //     [order[i], order[j]] = [order[j], order[i]];
+  //     return { ...prev, order };
+  //   });
+  // };
 
   // Handle datasheet selection
   const toggleDatasheet = (productId: string) => {
@@ -444,7 +449,7 @@ export default function ProposalPreviewPage() {
       );
       if (needsHydration.length === 0) return;
 
-      const startTime = performance.now();
+      // const startTime = performance.now();
       try {
         const ids = needsHydration.map((p: any) => p.id).join(',');
         interface BatchProduct {
@@ -575,7 +580,7 @@ export default function ProposalPreviewPage() {
                 {printOptions.header && (
                   <div className="print-only print-header-bar">
                     <div className="flex items-center gap-2">
-                      <img src="/icons/icon.svg" alt="Logo" className="print-logo" />
+                      <Image src="/icons/icon.svg" alt="Logo" className="print-logo" width={24} height={24} />
                       <span className="text-xs text-gray-700">
                         {data.company?.name || 'Proposal'}
                       </span>

@@ -267,14 +267,15 @@ function AdminSystemInner() {
   const refetchUsers = usersResult.refetch;
 
   // Mock functions for updateUser and deleteUser since they're not available in the query result
-  const updateUser = async (id: string, userData: any) => {
+  const updateUser = useCallback(async (id: string, userData: any) => {
     console.log('Update user:', id, userData);
     // TODO: Implement actual update logic
-  };
-  const deleteUser = async (id: string) => {
+  }, []);
+
+  const deleteUser = useCallback(async (id: string) => {
     console.log('Delete user:', id);
     // TODO: Implement actual delete logic
-  };
+  }, []);
 
   const metricsResult = useSystemMetrics();
   const metrics = metricsResult.data;

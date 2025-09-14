@@ -310,7 +310,7 @@ export class HttpClient {
     requestId: string,
     startTime: number
   ): Promise<T> {
-    const duration = Date.now() - startTime;
+    // const duration = Date.now() - startTime;
     const contentType = response.headers.get('content-type');
 
     // Parse response body
@@ -335,7 +335,7 @@ export class HttpClient {
             : String(data).substring(0, 200),
         requestId,
       });
-    } catch (error) {
+    } catch (parseError) {
       throw new HttpClientError(
         'Failed to parse response',
         response.status,

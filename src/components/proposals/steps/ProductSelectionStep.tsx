@@ -55,7 +55,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   data,
   onNext,
   onBack,
-  onUpdate,
+  // onUpdate,
   proposalId,
 }: ProductSelectionStepProps) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
@@ -64,7 +64,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   const { data: sectionsData, refetch: refetchSections } = useProposalSections(proposalId);
   const createSection = useCreateSectionMutation(proposalId || '');
   const deleteSection = useDeleteSectionMutation(proposalId || '');
-  const { setAssignment, pendingAssignments, assignmentsDirty, setSectionsPending } =
+  const { setAssignment, pendingAssignments, setSectionsPending } =
     useSectionAssignmentStore();
   const sectionsPending = useSectionAssignmentStore(s => s.sectionsDirty);
   const toast = useToast();
@@ -305,15 +305,15 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   }, [STORAGE_KEY, search, sortBy, sortOrder, category, showSelectedOnly]);
 
   // Debounced search for API fetch
-  const [debouncedSearch, setDebouncedSearch] = useState(search);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => setDebouncedSearch(search), 400);
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    };
-  }, [search]);
+  // const [debouncedSearch, setDebouncedSearch] = useState(search);
+  // const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // useEffect(() => {
+  //   if (debounceTimer.current) clearTimeout(debounceTimer.current);
+  //   debounceTimer.current = setTimeout(() => setDebouncedSearch(search), 400);
+  //   return () => {
+  //     if (debounceTimer.current) clearTimeout(debounceTimer.current);
+  //   };
+  // }, [search]);
 
   // 🚀 OPTIMIZATION: Use unified hook for parallel loading
   const { products, categories } = useUnifiedProductSelectionData();
@@ -323,9 +323,9 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
     data: productsData,
     isLoading: productsLoading,
     error: productsError,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
+    // fetchNextPage,
+    // hasNextPage,
+    // isFetchingNextPage,
   } = products;
 
   // Extract categories data
@@ -674,7 +674,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         }
       };
     }
-  }, [productsWithSections, setStepData, proposalId, updateProposalMutation]);
+  }, [productsWithSections, setStepData, proposalId, updateProposalMutation, selectedProducts]);
 
   // Handler: create new section
   const handleCreateSection = useCallback(async () => {
@@ -689,7 +689,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
       // Remove client-side duplicate check - let API handle it gracefully
       // The API returns status 200 for duplicates (idempotent operation)
 
-      const result = await createSection.mutateAsync(input as any);
+      await createSection.mutateAsync(input as any);
 
       // Force refresh and show success toast
       let newCount = (sectionsData || []).length;
@@ -979,7 +979,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
             <Controller
               name="showSelectedOnly"
               control={control}
-              render={({ field: { value, ...field } }) => (
+              render={({ field: { ...field } }) => (
                 <input
                   {...field}
                   id="show-selected-only"

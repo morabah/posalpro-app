@@ -14,7 +14,7 @@
 import { useSearchCache } from './useSearchCache';
 import { useSuggestions } from './useSuggestions';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
-import { logDebug, logInfo, logWarn } from '@/lib/logger';
+import { logDebug, logWarn } from '@/lib/logger';
 import { useMemo, useEffect, useState } from 'react';
 
 interface SearchEnhancedOptions {
@@ -52,7 +52,7 @@ export function useSearchEnhanced(options: SearchEnhancedOptions = {}) {
   const performanceMetrics = useMemo(() => {
     if (!enablePerformanceMonitoring) return null;
 
-    const startTime = Date.now();
+    // const startTime = Date.now();
     const loadTimes = {
       suggestions: suggestionsQuery.dataUpdatedAt ? Date.now() - suggestionsQuery.dataUpdatedAt : 0,
     };

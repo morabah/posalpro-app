@@ -38,7 +38,7 @@ export const DatasheetSelector = React.memo(function DatasheetSelector({
   onClearAll,
   className = '',
   showPreviewButton = true,
-  compact = false,
+  // compact = false,
 }: DatasheetSelectorProps) {
   const handleSelectAll = () => {
     if (selectedDatasheets.size === datasheets.length) {
@@ -127,7 +127,7 @@ export const DatasheetSelector = React.memo(function DatasheetSelector({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {datasheets.map((datasheet, index) => (
+            {datasheets.map((datasheet) => (
               <tr
                 key={datasheet.productId}
                 className={`hover:bg-gray-50 transition-colors ${
