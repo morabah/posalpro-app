@@ -67,10 +67,11 @@ export async function GET(req: NextRequest) {
 
   const isStrict = template === 'strict' || sp.get('strict') === '1' || sp.get('mode') === 'strict';
 
-  // Compose preview URL and capture cookies
-  const origin = getOrigin(req);
-  const previewUrl = `${origin}/proposals/preview?id=${encodeURIComponent(id)}`;
-  const cookieHeader = req.headers.get('cookie') || '';
+  try {
+    // Compose preview URL and capture cookies
+    const origin = getOrigin(req);
+    const previewUrl = `${origin}/proposals/preview?id=${encodeURIComponent(id)}`;
+    const cookieHeader = req.headers.get('cookie') || '';
 
   // Helper to call the Netlify PDF function
   async function renderPdfViaFunction(payload: Record<string, any>): Promise<Uint8Array> {
@@ -267,7 +268,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      return new Response(pdfBuffer, {
+      return new Response(Buffer.from(pdfBuffer), {
         status: 200,
         headers: {
           'content-type': 'application/pdf',
@@ -352,7 +353,7 @@ export async function GET(req: NextRequest) {
 
       const pdfBuffer = await renderPdfViaFunction({ mode: 'html', html, displayHeaderFooter: false });
 
-      return new Response(pdfBuffer, {
+      return new Response(Buffer.from(pdfBuffer), {
         status: 200,
         headers: {
           'content-type': 'application/pdf',
@@ -372,7 +373,7 @@ export async function GET(req: NextRequest) {
           displayHeaderFooter: false,
         });
 
-        return new Response(pdfBuffer, {
+        return new Response(Buffer.from(pdfBuffer), {
           status: 200,
           headers: {
             'content-type': 'application/pdf',
