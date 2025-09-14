@@ -791,6 +791,7 @@ model Product {
   tags              String[]
   attributes        Json?
   images            String[]
+  datasheetPath     String?                   // Optional path to product datasheet (network or local)
   stockQuantity     Int?                      @default(0)
   status            String?                   @default("ACTIVE")
   isActive          Boolean                   @default(true)
