@@ -580,7 +580,13 @@ export default function ProposalPreviewPage() {
                 {printOptions.header && (
                   <div className="print-only print-header-bar">
                     <div className="flex items-center gap-2">
-                      <Image src="/icons/icon.svg" alt="Logo" className="print-logo" width={24} height={24} />
+                      <Image
+                        src="/icons/icon.svg"
+                        alt="Logo"
+                        className="print-logo"
+                        width={24}
+                        height={24}
+                      />
                       <span className="text-xs text-gray-700">
                         {data.company?.name || 'Proposal'}
                       </span>

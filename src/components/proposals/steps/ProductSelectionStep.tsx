@@ -64,8 +64,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   const { data: sectionsData, refetch: refetchSections } = useProposalSections(proposalId);
   const createSection = useCreateSectionMutation(proposalId || '');
   const deleteSection = useDeleteSectionMutation(proposalId || '');
-  const { setAssignment, pendingAssignments, setSectionsPending } =
-    useSectionAssignmentStore();
+  const { setAssignment, pendingAssignments, setSectionsPending } = useSectionAssignmentStore();
   const sectionsPending = useSectionAssignmentStore(s => s.sectionsDirty);
   const toast = useToast();
   const sectionsCount = (sectionsData || []).length;
