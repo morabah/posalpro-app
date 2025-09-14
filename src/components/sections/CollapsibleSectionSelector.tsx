@@ -189,7 +189,7 @@ export function CollapsibleSectionSelector({
             <div className="space-y-3">
               {filteredSections.length > 0 ? (
                 filteredSections
-                  .sort((a, b) => a.order - b.order)
+                  .sort((a, b) => (a.order || 0) - (b.order || 0))
                   .map((section, index) => (
                     <motion.div
                       key={section.id}

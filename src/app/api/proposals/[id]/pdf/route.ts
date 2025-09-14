@@ -300,7 +300,7 @@ export async function GET(req: NextRequest) {
 
       const html = buildStrictHtml({
         company,
-        proposal: proposalInfo,
+        proposal: proposalInfo as any,
         sections,
         unassignedProducts,
         grandTotal,
@@ -397,17 +397,17 @@ export async function GET(req: NextRequest) {
       }
 
       const company = {
-        name: proposalInfo.company?.name || 'Company Name',
-        industry: proposalInfo.company?.industry || '',
-        contactPerson: proposalInfo.company?.contactPerson || '',
-        contactEmail: proposalInfo.company?.contactEmail || '',
-        contactPhone: proposalInfo.company?.contactPhone || '',
+        name: (proposalInfo as any).company?.name || 'Company Name',
+        industry: (proposalInfo as any).company?.industry || '',
+        contactPerson: (proposalInfo as any).company?.contactPerson || '',
+        contactEmail: (proposalInfo as any).company?.contactEmail || '',
+        contactPhone: (proposalInfo as any).company?.contactPhone || '',
       };
 
-      const sections = proposalInfo.sections || [];
-      const unassignedProducts = proposalInfo.unassignedProducts || [];
-      const step5Sections = proposalInfo.step5Sections || [];
-      const grandTotal = proposalInfo.totals?.amount || 0;
+      const sections = (proposalInfo as any).sections || [];
+      const unassignedProducts = (proposalInfo as any).unassignedProducts || [];
+      const step5Sections = (proposalInfo as any).step5Sections || [];
+      const grandTotal = (proposalInfo as any).totals?.amount || 0;
 
       // Parse include flags for preview template
       const include = {
@@ -448,7 +448,7 @@ export async function GET(req: NextRequest) {
 
       const html = buildStrictHtml({
         company,
-        proposal: proposalInfo,
+        proposal: proposalInfo as any,
         sections,
         unassignedProducts,
         grandTotal,
@@ -476,7 +476,7 @@ export async function GET(req: NextRequest) {
         await page.waitForSelector('.proposal-header h1', { timeout: 15_000 });
       } catch (error) {
         console.error('PDF generation error:', error);
-        throw new Error(`Failed to load preview page: ${error.message}`);
+        throw new Error(`Failed to load preview page: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 

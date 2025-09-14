@@ -978,7 +978,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
             <Controller
               name="showSelectedOnly"
               control={control}
-              render={({ field: { ...field } }) => (
+              render={({ field: { value, ...field } }) => (
                 <input
                   {...field}
                   id="show-selected-only"
