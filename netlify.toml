@@ -21,6 +21,8 @@
   NETLIFY_LINT = "false"
   # Configure specific Next.js flags for Netlify
   NEXT_USE_NETLIFY_EDGE = "false"
+  # Disable edge functions to avoid require() issues
+  NETLIFY_EDGE_FUNCTIONS = "false"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)
