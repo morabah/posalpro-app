@@ -28,6 +28,8 @@
     "type-check:fast": "NODE_OPTIONS=\"--max-old-space-size=4096\" tsc -p tsconfig.build.json --noEmit --skipLibCheck",
     "type-check:incremental": "NODE_OPTIONS=\"--max-old-space-size=4096\" tsc --build tsconfig.json",
     "type-check:monitor": "node scripts/ts-performance.js",
+    "validate:schema": "node scripts/validate-schema-consistency.js",
+    "pre-commit:schema": "node scripts/pre-commit-schema-check.js",
     "type-check:performance": "node scripts/ts-performance.js --check-only",
     "test": "jest",
     "test:watch": "jest --watch",
