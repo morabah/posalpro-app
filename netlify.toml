@@ -85,8 +85,13 @@
 # Functions are managed by @netlify/plugin-nextjs
 [functions]
   included_files = ["schema.prisma"]
-  # Optimize function size by excluding large dependencies
-  external_node_modules = ["@prisma/client", "prisma", "puppeteer-core", "@sparticuz/chromium", "pdf-lib"]
+  # Avoid forcing large deps into every function bundle
+  # Let the Next.js server handler bundle only what it actually imports.
+
+[functions.pdf]
+  # Bundle Puppeteer/Chromium only for the dedicated PDF function
+  node_bundler = "esbuild"
+  external_node_modules = ["puppeteer-core", "@sparticuz/chromium"]
 
 # Database initialization hook
 [dev]

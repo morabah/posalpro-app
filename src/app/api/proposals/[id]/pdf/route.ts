@@ -67,129 +67,25 @@ export async function GET(req: NextRequest) {
 
   const isStrict = template === 'strict' || sp.get('strict') === '1' || sp.get('mode') === 'strict';
 
-  // Compose preview URL (no auto window.print; we render via page.pdf)
+  // Compose preview URL and capture cookies
   const origin = getOrigin(req);
   const previewUrl = `${origin}/proposals/preview?id=${encodeURIComponent(id)}`;
+  const cookieHeader = req.headers.get('cookie') || '';
 
-  // Try dynamic imports so the route still loads without deps
-  let chromium: any;
-  let puppeteer: any;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    chromium = (await import('@sparticuz/chromium')) as any;
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    puppeteer = (await import('puppeteer-core')) as any;
-  } catch (error: any) {
-    const message =
-      'PDF rendering dependencies not installed: install puppeteer-core and @sparticuz/chromium';
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        code: 'PDF_DEPS_MISSING',
-        message,
-        hint: 'npm i -D puppeteer-core @sparticuz/chromium',
-      }),
-      { status: 501, headers: { 'content-type': 'application/json' } }
-    );
-  }
-
-  // Get Chromium executable path with multiple fallback strategies
-  let executablePath: string | undefined;
-
-  try {
-    // Try different ways to get the executable path
-    if (typeof chromium.executablePath === 'function') {
-      executablePath = await chromium.executablePath();
-    } else if (typeof chromium.executablePath === 'string') {
-      executablePath = chromium.executablePath;
-    } else if (chromium.executablePath && typeof chromium.executablePath.then === 'function') {
-      executablePath = await chromium.executablePath;
-    }
-
-    // Fallback to environment variable
-    if (!executablePath) {
-      executablePath = process.env.CHROME_PATH;
-    }
-
-    // Final fallback - try to find Chrome/Chromium in common locations
-    if (!executablePath) {
-      const { execSync } = await import('child_process');
-      try {
-        // Try to find Chrome/Chromium in PATH
-        const chromePath = execSync(
-          'which google-chrome || which chromium || which chromium-browser',
-          { encoding: 'utf8' }
-        ).trim();
-        if (chromePath) {
-          executablePath = chromePath;
-        }
-      } catch {
-        // Ignore errors from which command
-      }
-
-      // macOS specific fallback
-      if (!executablePath && process.platform === 'darwin') {
-        const macChromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-        try {
-          const fs = await import('fs');
-          if (fs.existsSync(macChromePath)) {
-            executablePath = macChromePath;
-          }
-        } catch {
-          // Ignore errors
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error getting Chromium executable path:', error);
-  }
-
-  if (!executablePath) {
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        code: 'CHROME_EXECUTABLE_MISSING',
-        message: 'Chrome executable not found',
-        hint: 'Ensure @sparticuz/chromium is properly installed or set CHROME_PATH environment variable',
-      }),
-      { status: 500, headers: { 'content-type': 'application/json' } }
-    );
-  }
-
-  let browser;
-  try {
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      headless: chromium.headless,
-      executablePath,
+  // Helper to call the Netlify PDF function
+  async function renderPdfViaFunction(payload: Record<string, any>): Promise<Uint8Array> {
+    const url = `${origin}/.netlify/functions/pdf`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
     });
-
-    const page = await browser.newPage();
-    // Attach user cookies from the incoming request to preserve auth
-    const cookieHeader = req.headers.get('cookie') || '';
-    if (cookieHeader) {
-      const hostname = new URL(origin).hostname;
-      const secure = origin.startsWith('https://');
-      const cookies = cookieHeader
-        .split(';')
-        .map(c => c.trim())
-        .filter(Boolean)
-        .map(pair => {
-          const eq = pair.indexOf('=');
-          const name = eq >= 0 ? pair.substring(0, eq) : pair;
-          const value = eq >= 0 ? pair.substring(eq + 1) : '';
-          return { name, value, domain: hostname, path: '/', secure, url: origin } as any;
-        });
-      if (cookies.length) {
-        await page.setCookie(...cookies);
-      }
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`PDF function failed: ${res.status} ${text}`);
     }
-    // Also set header to pass cookies on first navigation (some envs require this)
-    if (cookieHeader) {
-      await page.setExtraHTTPHeaders({ Cookie: cookieHeader });
-    }
-    await page.emulateMediaType('print');
+    return new Uint8Array(await res.arrayBuffer());
+  }
 
     if (isStrict) {
       // Strict server-rendered PDF (bypass UI)
@@ -309,28 +205,24 @@ export async function GET(req: NextRequest) {
         order,
         productOrder,
       });
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-
       const headerTemplate = include.header
         ? `<div style="font-size:8px;width:100%;text-align:center;padding:4px 10px;border-bottom:1px solid #999;">${escapeHtml(company.name)} — ${escapeHtml(proposalInfo.title)}</div>`
         : '<span></span>';
       const footerTemplate = include.footer
         ? `<div style="font-size:8px;width:100%;text-align:center;padding:4px 10px;border-top:1px solid #999;"><span class="pageNumber"></span> of <span class="totalPages"></span> | ${escapeHtml(proposalInfo.title)}</div>`
         : '<span></span>';
-
-      let pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        preferCSSPageSize: true,
+      let pdfBuffer = await renderPdfViaFunction({
+        mode: 'html',
+        html,
+        displayHeaderFooter: include.header || include.footer,
+        headerTemplate,
+        footerTemplate,
         margin: {
           top: include.header ? '0.5in' : '0.2in',
           right: '0.3in',
           bottom: include.footer ? '0.5in' : '0.2in',
           left: '0.3in',
         },
-        displayHeaderFooter: include.header || include.footer,
-        headerTemplate,
-        footerTemplate,
       });
 
       // Optionally append selected datasheets to the end when pdf-lib is available
@@ -458,44 +350,43 @@ export async function GET(req: NextRequest) {
         productOrder,
       });
 
-      await page.setContent(html, { waitUntil: 'networkidle0' });
+      const pdfBuffer = await renderPdfViaFunction({ mode: 'html', html, displayHeaderFooter: false });
+
+      return new Response(pdfBuffer, {
+        status: 200,
+        headers: {
+          'content-type': 'application/pdf',
+          'content-disposition': `inline; filename="proposal-${id}.pdf"`,
+          'cache-control': 'no-store',
+        },
+      });
     } else {
       // Default: render the existing preview UI
       try {
-        // Forward authentication cookies for preview template
-        const cookies = req.headers.get('cookie');
-        if (cookies) {
-          const cookiePairs = cookies.split(';').map(pair => {
-            const [name, value] = pair.trim().split('=');
-            return { name, value, domain: new URL(previewUrl).hostname, path: '/' };
-          });
-          await page.setCookie(...cookiePairs);
-        }
+        const pdfBuffer = await renderPdfViaFunction({
+          mode: 'url',
+          url: previewUrl,
+          cookies: cookieHeader || undefined,
+          waitForSelector: '.proposal-header h1',
+          timeoutMs: 60_000,
+          displayHeaderFooter: false,
+        });
 
-        await page.goto(previewUrl, { waitUntil: 'networkidle0', timeout: 60_000 });
-        await page.waitForSelector('.proposal-header h1', { timeout: 15_000 });
+        return new Response(pdfBuffer, {
+          status: 200,
+          headers: {
+            'content-type': 'application/pdf',
+            'content-disposition': `inline; filename="proposal-${id}.pdf"`,
+            'cache-control': 'no-store',
+          },
+        });
       } catch (error) {
         console.error('PDF generation error:', error);
-        throw new Error(`Failed to load preview page: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(
+          `Failed to load preview page: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
     }
-
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '0.2in', right: '0.2in', bottom: '0.2in', left: '0.2in' },
-      displayHeaderFooter: false,
-      preferCSSPageSize: true,
-    });
-
-    return new Response(pdfBuffer, {
-      status: 200,
-      headers: {
-        'content-type': 'application/pdf',
-        'content-disposition': `inline; filename="proposal-${id}.pdf"`,
-        'cache-control': 'no-store',
-      },
-    });
   } catch (error: any) {
     console.error('PDF generation error:', error);
     return new Response(
@@ -507,9 +398,5 @@ export async function GET(req: NextRequest) {
       }),
       { status: 500, headers: { 'content-type': 'application/json' } }
     );
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
   }
 }
