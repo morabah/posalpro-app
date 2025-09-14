@@ -6,8 +6,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require&pgbouncer=true&connection_limit=1"
-  directUrl = "postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul.gwc.azure.neon.tech/neondb?sslmode=require"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Tenant {
