@@ -6,13 +6,12 @@
 import { authOptions } from '@/lib/auth';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logDebug, logInfo } from '@/lib/logger';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCache, setCache, deleteCache } from '@/lib/redis';
 
-const prisma = new PrismaClient();
 
 // Redis cache configuration for user preferences
 const USER_PREFERENCES_CACHE_PREFIX = 'user_preferences';

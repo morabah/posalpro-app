@@ -12,7 +12,7 @@ import { ErrorHandlingService, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { DatabaseOptimizationService } from '@/lib/services/DatabaseOptimizationService';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/db/prisma';
 
 /**
  * Component Traceability Matrix
@@ -36,15 +36,15 @@ const PERFORMANCE_BASELINES = {
   H12: { metric: 'analytics_query_speed', baseline: 300, target: 150 }, // 50% improvement
 };
 
-let prisma: PrismaClient;
 let optimizationService: DatabaseOptimizationService;
 let errorHandlingService: ErrorHandlingService;
 
 // Initialize services
 function initializeServices() {
-  if (!prisma) {
-    prisma = new PrismaClient();
+  if (!optimizationService) {
     optimizationService = DatabaseOptimizationService.getInstance(prisma);
+  }
+  if (!errorHandlingService) {
     errorHandlingService = ErrorHandlingService.getInstance();
   }
 }

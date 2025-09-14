@@ -9,9 +9,7 @@
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logger } from '@/lib/logger';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/db/prisma';
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 export interface ProposalDenormalizationStats {

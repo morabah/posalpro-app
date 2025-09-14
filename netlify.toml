@@ -1,8 +1,7 @@
 [build]
   # ✅ CRITICAL: Build from source using production environment variables
-  # This ensures Prisma client is generated with Neon database URLs, not localhost
-
-  command = "npm run build"
+  # Ensure Prisma Client is freshly generated for Linux (no Data Proxy) before building
+  command = "npx prisma generate --schema=./prisma/schema.production.prisma && npm run build"
   publish = ".next"
 
   # Ensure clean build - remove any cached artifacts
@@ -30,15 +29,19 @@
   # Prefer configuring API_BASE_URL via Netlify UI; this is safe but optional
   # API_BASE_URL = "https://posalpro.netlify.app/api"
 
-  # Prisma engine settings (non-secrets)
+  # Prisma engine settings (non-secrets) - force native engines, not Data Proxy
   PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
   PRISMA_CLIENT_ENGINE_TYPE = "library"
   PRISMA_GENERATE_DATAPROXY = "false"
   PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x"
 
+  # Use production schema explicitly
+  PRISMA_SCHEMA = "prisma/schema.production.prisma"
+
   # Build toggles (non-secrets)
-  PRISMA_GENERATE_SKIP_DOWNLOAD = "true"
-  SKIP_PRISMA_GENERATE = "true"
+  # Do NOT skip Prisma generate in Netlify — we must regenerate for linux
+  PRISMA_GENERATE_SKIP_DOWNLOAD = "false"
+  SKIP_PRISMA_GENERATE = "false"
   NETLIFY_BUILD_TIME = "true"
   BUILD_MODE = "static"
 
@@ -59,6 +62,7 @@
   PRISMA_CLIENT_ENGINE_TYPE = "library"
   PRISMA_GENERATE_DATAPROXY = "false"
   PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x"
+  PRISMA_SCHEMA = "prisma/schema.production.prisma"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

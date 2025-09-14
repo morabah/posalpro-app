@@ -67,7 +67,7 @@
     "db:reset": "prisma migrate reset --force && npm run db:seed",
     "db:backup": "pg_dump --no-owner --format=c $DATABASE_URL > ./backups/backup_$(date +%F_%H-%M).sqlc",
     "db:backup:verify": "pg_restore -l ./backups/backup_latest.sqlc >/dev/null",
-    "postinstall": "prisma generate",
+    "postinstall": "PRISMA_CLIENT_ENGINE_TYPE=library PRISMA_GENERATE_DATAPROXY=false prisma generate",
     "production:setup": "./scripts/setup-production.sh",
     "production:validate": "./scripts/setup-production.sh validate",
     "production:seed": "./scripts/setup-production.sh seed-only",

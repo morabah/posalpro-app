@@ -12,13 +12,12 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { createApiErrorResponse } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/db/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 // Intentionally use a minimal input type for completion calculation to avoid
 // requiring full Proposal shape when denormalizing from Prisma
 
-const prisma = new PrismaClient();
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 /**
