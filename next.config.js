@@ -8,7 +8,7 @@ try {
   });
   withBundleAnalyzer = analyzer;
 } catch (err) {
-   
+
   console.log('[next.config] @next/bundle-analyzer not installed; proceeding without it');
 }
 
@@ -17,7 +17,7 @@ try {
   // Next.js has its own minifier; this is only an enhancement when available
   TerserPlugin = require('terser-webpack-plugin');
 } catch (err) {
-   
+
   console.log('[next.config] terser-webpack-plugin not installed; proceeding without it');
 }
 
@@ -43,7 +43,7 @@ const baseConfig = {
   // Following Lesson #30: Performance Optimization - Bundle Splitting
   experimental: {
     // Avoid optimizing React packages to prevent RSC/Fast Refresh edge cases in Chrome
-    optimizePackageImports: ['@prisma/client', 'next-auth', 'lucide-react'],
+    optimizePackageImports: ['next-auth', 'lucide-react'],
     webVitalsAttribution: ['CLS', 'LCP', 'FCP', 'FID', 'TTFB'],
   },
 
