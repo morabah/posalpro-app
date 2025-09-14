@@ -11,13 +11,14 @@ import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } fr
 // Dynamic imports for PDF and Word document libraries
 // ✅ NOTE: PDF.js worker is configured globally in QueryProvider
 // To avoid race conditions or duplicate module instances, share a single import promise
-const reactPdfModulePromise: Promise<typeof import('react-pdf')> = import('react-pdf').then(
-  async module => {
-    // Wait for worker init done by QueryProvider, if available
-    const globalWorkerPromise = (
-      typeof window !== 'undefined' ? (window as any).pdfWorkerPromise : null
-    ) as Promise<any> | null;
-    if (globalWorkerPromise) {
+const reactPdfModulePromise: Promise<typeof import('react-pdf')> | null =
+  typeof window !== 'undefined'
+    ? import('react-pdf').then(async module => {
+      // Wait for worker init done by QueryProvider, if available
+      const globalWorkerPromise = (
+        typeof window !== 'undefined' ? (window as any).pdfWorkerPromise : null
+      ) as Promise<any> | null;
+      if (globalWorkerPromise) {
       try {
         await globalWorkerPromise;
         logDebug('DocumentPreview: PDF worker initialized via global promise', {
@@ -53,12 +54,12 @@ const reactPdfModulePromise: Promise<typeof import('react-pdf')> = import('react
       operation: 'worker_status_check',
     });
 
-    return module;
-  }
-);
+      return module;
+    })
+    : null;
 
 const PDFViewer = React.lazy(() =>
-  reactPdfModulePromise.then(module => ({
+  (reactPdfModulePromise || import('react-pdf')).then(module => ({
     default: ({ file, onLoadSuccess, onLoadError, children }: any) => (
       <div className="relative">
         <module.Document
@@ -76,7 +77,7 @@ const PDFViewer = React.lazy(() =>
 );
 
 const PDFPage = React.lazy(() =>
-  reactPdfModulePromise.then(module => ({
+  (reactPdfModulePromise || import('react-pdf')).then(module => ({
     default: ({ pageNumber, scale, renderTextLayer, renderAnnotationLayer }: any) => (
       <module.Page
         pageNumber={pageNumber}

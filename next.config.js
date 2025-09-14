@@ -112,7 +112,17 @@ const baseConfig = {
         'puppeteer-core': 'commonjs puppeteer-core',
         '@sparticuz/chromium': 'commonjs @sparticuz/chromium',
         'pdf-lib': 'commonjs pdf-lib',
+        // Prevent server from bundling client-only PDF viewers
+        'react-pdf': 'commonjs react-pdf',
+        'pdfjs-dist': 'commonjs pdfjs-dist',
       });
+
+      // Stub client-only libraries on the server to avoid DOM usage like DOMMatrix
+      config.resolve.alias = {
+        ...(config.resolve.alias || {}),
+        'react-pdf': require('path').resolve(__dirname, 'src/server/stubs/react-pdf-stub.js'),
+        'pdfjs-dist': false,
+      };
     }
 
     // Exclude archived files from build
