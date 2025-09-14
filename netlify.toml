@@ -83,6 +83,10 @@
 # Functions are managed by @netlify/plugin-nextjs
 [functions]
   included_files = ["schema.prisma"]
+  # Optimize function size by excluding large dependencies
+  external_node_modules = ["@prisma/client", "prisma", "puppeteer-core", "@sparticuz/chromium", "pdf-lib"]
+  # Reduce function timeout to prevent large builds
+  timeout = 10
 
 # Database initialization hook
 [dev]

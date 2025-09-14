@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
+/* eslint-disable @typescript-eslint/no-require-imports, no-undef, @typescript-eslint/no-unused-vars */
 let withBundleAnalyzer = config => config;
 let TerserPlugin;
 try {
@@ -8,7 +8,7 @@ try {
   });
   withBundleAnalyzer = analyzer;
 } catch (err) {
-  // eslint-disable-next-line no-console
+   
   console.log('[next.config] @next/bundle-analyzer not installed; proceeding without it');
 }
 
@@ -17,7 +17,7 @@ try {
   // Next.js has its own minifier; this is only an enhancement when available
   TerserPlugin = require('terser-webpack-plugin');
 } catch (err) {
-  // eslint-disable-next-line no-console
+   
   console.log('[next.config] terser-webpack-plugin not installed; proceeding without it');
 }
 
@@ -48,7 +48,14 @@ const baseConfig = {
   },
 
   // 🚨 CRITICAL: Prevent database connections during build
-  serverExternalPackages: ['async_hooks'],
+  serverExternalPackages: [
+    'async_hooks',
+    '@prisma/client',
+    'prisma',
+    'puppeteer-core',
+    '@sparticuz/chromium',
+    'pdf-lib',
+  ],
 
   // ✅ CRITICAL: Optimize images for performance
   images: {
@@ -94,6 +101,18 @@ const baseConfig = {
         'node:os': false,
         os: false,
       };
+    }
+
+    // Optimize server bundle size for Netlify
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push({
+        '@prisma/client': 'commonjs @prisma/client',
+        prisma: 'commonjs prisma',
+        'puppeteer-core': 'commonjs puppeteer-core',
+        '@sparticuz/chromium': 'commonjs @sparticuz/chromium',
+        'pdf-lib': 'commonjs pdf-lib',
+      });
     }
 
     // Exclude archived files from build
