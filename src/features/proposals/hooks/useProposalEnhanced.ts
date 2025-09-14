@@ -521,8 +521,8 @@ export function useProposalEnhanced(
     queries: contextAwareQueries.queries,
 
     // Enhanced hooks
-    useEnhancedProposal,
-    useEnhancedProposalsByIds,
+    useProposal,
+    useProposalsByIds,
 
     // Performance monitoring
     performanceMetrics,

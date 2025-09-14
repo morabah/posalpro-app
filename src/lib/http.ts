@@ -169,6 +169,10 @@ export class HttpClient {
    */
   private buildUrl(input: RequestInfo): string {
     if (typeof input === 'string') {
+      // Prefer same-origin for internal API routes to avoid CORS when NEXT_PUBLIC_API_URL is set
+      if (input.startsWith('/api/')) {
+        return input;
+      }
       return input.startsWith('http') ? input : `${this.config.baseURL}${input}`;
     }
     return input.url;

@@ -12,7 +12,8 @@
     "src/components/**/*.ts",
     "src/components/**/*.tsx",
     "src/features/**/*.ts",
-    "src/features/**/*.tsx"
+    "src/features/**/*.tsx",
+    "src/server/**/*.ts"
   ],
   "exclude": [
     "node_modules",

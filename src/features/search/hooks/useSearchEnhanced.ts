@@ -188,10 +188,10 @@ export function useSearchEnhanced(options: SearchEnhancedOptions = {}) {
               component: 'useSearchEnhanced',
               operation: 'searchAllModules',
               query,
-              module,
+              module: searchModule,
               error: error instanceof Error ? error.message : String(error),
             });
-            results[module] = [];
+            results[searchModule] = [];
           }
         }
 

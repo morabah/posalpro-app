@@ -24,6 +24,8 @@ export function PrintDatasheets({ items, onReady }: PrintDatasheetsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isRendering, setIsRendering] = useState(false);
   const [renderedCount, setRenderedCount] = useState(0);
+  const loadingTasksRef = useRef<Set<any>>(new Set());
+  const pdfDocumentsRef = useRef<Set<any>>(new Set());
 
   const proxiedItems = useMemo(() => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -91,7 +93,10 @@ export function PrintDatasheets({ items, onReady }: PrintDatasheetsProps) {
           const arrayBuffer = await res.arrayBuffer();
 
           const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+          loadingTasksRef.current.add(loadingTask);
+
           const pdf = await loadingTask.promise;
+          pdfDocumentsRef.current.add(pdf);
           const totalPages = pdf.numPages;
 
           for (let pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
@@ -143,8 +148,59 @@ export function PrintDatasheets({ items, onReady }: PrintDatasheetsProps) {
 
     return () => {
       cancelled = true;
+
+      // Clean up PDF documents and loading tasks
+      loadingTasksRef.current.forEach(loadingTask => {
+        try {
+          if (loadingTask && typeof loadingTask.destroy === 'function') {
+            loadingTask.destroy();
+          }
+        } catch (error) {
+          console.warn('Error destroying PDF loading task:', error);
+        }
+      });
+      loadingTasksRef.current.clear();
+
+      pdfDocumentsRef.current.forEach(pdf => {
+        try {
+          if (pdf && typeof pdf.destroy === 'function') {
+            pdf.destroy();
+          }
+        } catch (error) {
+          console.warn('Error destroying PDF document:', error);
+        }
+      });
+      pdfDocumentsRef.current.clear();
     };
   }, [proxiedItems, onReady]);
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      // Clean up any remaining PDF documents and loading tasks
+      loadingTasksRef.current.forEach(loadingTask => {
+        try {
+          if (loadingTask && typeof loadingTask.destroy === 'function') {
+            loadingTask.destroy();
+          }
+        } catch (error) {
+          console.warn('Error destroying PDF loading task on unmount:', error);
+        }
+      });
+      loadingTasksRef.current.clear();
+
+      pdfDocumentsRef.current.forEach(pdf => {
+        try {
+          if (pdf && typeof pdf.destroy === 'function') {
+            pdf.destroy();
+          }
+        } catch (error) {
+          console.warn('Error destroying PDF document on unmount:', error);
+        }
+      });
+      pdfDocumentsRef.current.clear();
+    };
+  }, []);
 
   return (
     <div

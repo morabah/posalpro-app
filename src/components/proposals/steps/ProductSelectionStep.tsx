@@ -22,10 +22,11 @@ import { CreateBomSectionSchema } from '@/features/proposal-sections/schemas';
 import { useSectionAssignmentStore } from '@/features/proposal-sections/store';
 import { useUpdateProposal, type WizardProposalUpdateData } from '@/features/proposals';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
+import { http } from '@/lib/http';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { useProposalSetStepData, type ProposalProductData } from '@/lib/store/proposalStore';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from 'lucide-react';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -75,6 +76,131 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   const [newSectionTitle, setNewSectionTitle] = useState('');
   const [newSectionDesc, setNewSectionDesc] = useState('');
   const creatingRef = useRef(false);
+
+  // State for collapsible sections
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+
+  // State for drag and drop
+  const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
+  const [dragOverSectionId, setDragOverSectionId] = useState<string | null>(null);
+
+  // Toggle section collapse state
+  const toggleSectionCollapse = useCallback((sectionId: string) => {
+    setCollapsedSections(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(sectionId)) {
+        newSet.delete(sectionId);
+      } else {
+        newSet.add(sectionId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Drag and drop handlers
+  const handleDragStart = useCallback((e: React.DragEvent, sectionId: string) => {
+    setDraggedSectionId(sectionId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', sectionId);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, sectionId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverSectionId(sectionId);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only clear if we're leaving the entire section, not just moving between child elements
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOverSectionId(null);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent, targetSectionId: string) => {
+      e.preventDefault();
+      const draggedSectionId = e.dataTransfer.getData('text/plain');
+
+      if (!draggedSectionId || draggedSectionId === targetSectionId) {
+        setDraggedSectionId(null);
+        setDragOverSectionId(null);
+        return;
+      }
+
+      try {
+        // Get current sections data
+        const currentSections = sectionsData || [];
+
+        // Handle unassigned section - it's not a real section, so we can't reorder it
+        if (draggedSectionId === 'unassigned' || targetSectionId === 'unassigned') {
+          toast.info('Unassigned products section cannot be reordered');
+          setDraggedSectionId(null);
+          setDragOverSectionId(null);
+          return;
+        }
+
+        const draggedSection = currentSections.find(s => s.id === draggedSectionId);
+        const targetSection = currentSections.find(s => s.id === targetSectionId);
+
+        if (!draggedSection || !targetSection) return;
+
+        // Calculate new order
+        const sortedSections = currentSections.slice().sort((a, b) => a.order - b.order);
+        const draggedIndex = sortedSections.findIndex(s => s.id === draggedSectionId);
+        const targetIndex = sortedSections.findIndex(s => s.id === targetSectionId);
+
+        if (draggedIndex === -1 || targetIndex === -1) return;
+
+        // Remove dragged section and insert at new position
+        const newSections = [...sortedSections];
+        const [draggedItem] = newSections.splice(draggedIndex, 1);
+        newSections.splice(targetIndex, 0, draggedItem);
+
+        // Update order values
+        const updatedSections = newSections.map((section, index) => ({
+          ...section,
+          order: index + 1,
+        }));
+
+        // Update sections via individual PATCH requests to /api/proposals/[id]/sections/[sectionId]
+        for (const section of updatedSections) {
+          await http.patch(`/api/proposals/${proposalId}/sections/${section.id}`, {
+            order: section.order,
+          });
+        }
+
+        // Refresh sections data
+        await refetchSections();
+
+        logInfo('Section reordered successfully', {
+          component: 'ProductSelectionStep',
+          operation: 'reorder_section',
+          draggedSectionId,
+          targetSectionId,
+          newOrder: updatedSections.map(s => ({ id: s.id, order: s.order })),
+          userStory: 'US-4.1',
+          hypothesis: 'H6',
+        });
+      } catch (error) {
+        logError('Failed to reorder section', {
+          component: 'ProductSelectionStep',
+          operation: 'reorder_section',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          draggedSectionId,
+          targetSectionId,
+          userStory: 'US-4.1',
+          hypothesis: 'H6',
+        });
+
+        toast.error('Failed to reorder section. Please try again.');
+      } finally {
+        setDraggedSectionId(null);
+        setDragOverSectionId(null);
+      }
+    },
+    [sectionsData, proposalId, refetchSections, toast]
+  );
 
   // ✅ FIX: Removed client-side duplicate validation - API handles it gracefully
   // The API returns status 200 for existing sections (idempotent behavior)
@@ -747,29 +873,47 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
           <p className="text-gray-500">No sections yet. Click + to add a header section.</p>
         ) : (
           <div className="space-y-2">
-            {sectionsData.map(s => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between p-2 border rounded bg-gray-50"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-900">{s.title}</span>
-                  <span className="text-xs text-gray-500">
-                    ({sectionCounts[s.id] || 0} products)
-                  </span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                  onClick={() => handleDeleteSection(s.id, s.title)}
-                  disabled={deleteSection.isPending}
-                  aria-label={`Delete section ${s.title}`}
+            {sectionsData.map(s => {
+              const isDragging = draggedSectionId === s.id;
+              const isDragOver = dragOverSectionId === s.id;
+
+              return (
+                <div
+                  key={s.id}
+                  className={`flex items-center justify-between p-2 border rounded bg-gray-50 transition-all duration-200 ${
+                    isDragging ? 'opacity-50 scale-95' : ''
+                  } ${isDragOver ? 'border-blue-400 bg-blue-50' : ''}`}
+                  draggable
+                  onDragStart={e => handleDragStart(e, s.id)}
+                  onDragOver={e => handleDragOver(e, s.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={e => handleDrop(e, s.id)}
                 >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="cursor-grab hover:cursor-grabbing p-1 hover:bg-gray-200 rounded transition-colors"
+                      title="Drag to reorder"
+                    >
+                      <GripVertical className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">{s.title}</span>
+                    <span className="text-xs text-gray-500">
+                      ({sectionCounts[s.id] || 0} products)
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => handleDeleteSection(s.id, s.title)}
+                    disabled={deleteSection.isPending}
+                    aria-label={`Delete section ${s.title}`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         )}
         {sectionsLastUpdated && (
@@ -865,10 +1009,42 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
             {Object.values(groupedProductsBySection.grouped).map(({ section, products, total }) => {
               if (products.length === 0) return null;
 
+              const isCollapsed = collapsedSections.has(section.id);
+
+              const isDragging = draggedSectionId === section.id;
+              const isDragOver = dragOverSectionId === section.id;
+
               return (
-                <div key={section.id} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
-                    <h4 className="text-lg font-semibold text-gray-900">{section.title}</h4>
+                <div
+                  key={section.id}
+                  className={`border border-gray-200 rounded-lg p-4 transition-all duration-200 ${
+                    isDragging ? 'opacity-50 scale-95' : ''
+                  } ${isDragOver ? 'border-blue-400 bg-blue-50' : ''}`}
+                  draggable
+                  onDragStart={e => handleDragStart(e, section.id)}
+                  onDragOver={e => handleDragOver(e, section.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={e => handleDrop(e, section.id)}
+                >
+                  <div
+                    className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200 cursor-pointer hover:bg-gray-50 -m-4 p-4 rounded-t-lg transition-colors"
+                    onClick={() => toggleSectionCollapse(section.id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="cursor-grab hover:cursor-grabbing p-1 hover:bg-gray-200 rounded transition-colors"
+                        onClick={e => e.stopPropagation()}
+                        title="Drag to reorder"
+                      >
+                        <GripVertical className="w-4 h-4 text-gray-400" />
+                      </div>
+                      {isCollapsed ? (
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-400" />
+                      )}
+                      <h4 className="text-lg font-semibold text-gray-900">{section.title}</h4>
+                    </div>
                     <div className="text-right">
                       <div className="text-sm text-gray-500">
                         {products.length} product{products.length !== 1 ? 's' : ''}
@@ -877,6 +1053,153 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                     </div>
                   </div>
 
+                  {!isCollapsed && (
+                    <div className="space-y-2">
+                      {/* Header row */}
+                      <div className="grid grid-cols-12 gap-4 py-2 px-3 bg-gray-50 rounded text-sm font-medium text-gray-700">
+                        <div className="col-span-4">Product</div>
+                        <div className="col-span-2 text-center">Quantity</div>
+                        <div className="col-span-2 text-center">Unit Price</div>
+                        <div className="col-span-2 text-center">Total Price</div>
+                        <div className="col-span-1 text-center">Section</div>
+                        <div className="col-span-1 text-center">Action</div>
+                      </div>
+
+                      {/* Product rows */}
+                      {products.map(sp => (
+                        <div
+                          key={sp.id}
+                          className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50"
+                        >
+                          <div className="col-span-4 min-w-0">
+                            <div className="font-medium text-gray-900 truncate">{sp.name}</div>
+                            <div className="text-xs text-gray-500 truncate">
+                              {sp.category || 'General'}
+                            </div>
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center">
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => handleQuantityChange(sp.productId, sp.quantity - 1)}
+                              >
+                                -
+                              </Button>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={sp.quantity}
+                                onChange={e =>
+                                  handleQuantityChange(sp.productId, parseInt(e.target.value) || 1)
+                                }
+                                className="w-12 h-6 text-center text-sm"
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => handleQuantityChange(sp.productId, sp.quantity + 1)}
+                              >
+                                +
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center">
+                            <span className="text-sm font-medium text-gray-900">
+                              ${(sp.unitPrice || 0).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center">
+                            <span className="text-sm font-semibold text-gray-900">
+                              ${(sp.total || 0).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="col-span-1 flex items-center justify-center">
+                            <select
+                              aria-label={`Assign section for ${sp.name}`}
+                              className="border rounded px-2 py-1 text-sm w-full"
+                              disabled={!proposalId}
+                              value={currentAssignmentByRow[sp.id] ?? ''}
+                              onChange={e => setAssignment(sp.id, e.target.value || null)}
+                            >
+                              <option value="">Unassigned</option>
+                              {(sectionsData || [])
+                                .slice()
+                                .sort((a, b) => a.order - b.order)
+                                .map(s => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.title}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                          <div className="col-span-1 flex items-center justify-center">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleRemoveProduct(sp.productId)}
+                              aria-label={`Remove ${sp.name}`}
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Show unassigned products */}
+            {groupedProductsBySection.unassignedProducts.length > 0 && (
+              <div
+                className={`border border-gray-200 rounded-lg p-4 transition-all duration-200 ${
+                  draggedSectionId === 'unassigned' ? 'opacity-50 scale-95' : ''
+                } ${dragOverSectionId === 'unassigned' ? 'border-blue-400 bg-blue-50' : ''}`}
+                draggable
+                onDragStart={e => handleDragStart(e, 'unassigned')}
+                onDragOver={e => handleDragOver(e, 'unassigned')}
+                onDragLeave={handleDragLeave}
+                onDrop={e => handleDrop(e, 'unassigned')}
+              >
+                <div
+                  className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200 cursor-pointer hover:bg-gray-50 -m-4 p-4 rounded-t-lg transition-colors"
+                  onClick={() => toggleSectionCollapse('unassigned')}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="cursor-grab hover:cursor-grabbing p-1 hover:bg-gray-200 rounded transition-colors"
+                      onClick={e => e.stopPropagation()}
+                      title="Drag to reorder"
+                    >
+                      <GripVertical className="w-4 h-4 text-gray-400" />
+                    </div>
+                    {collapsedSections.has('unassigned') ? (
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                    )}
+                    <h4 className="text-lg font-semibold text-gray-900">Unassigned Products</h4>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-500">
+                      {groupedProductsBySection.unassignedProducts.length} product
+                      {groupedProductsBySection.unassignedProducts.length !== 1 ? 's' : ''}
+                    </div>
+                    <div className="text-lg font-bold text-gray-900">
+                      $
+                      {groupedProductsBySection.unassignedProducts
+                        .reduce((sum, p) => sum + (p.total || 0), 0)
+                        .toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                {!collapsedSections.has('unassigned') && (
                   <div className="space-y-2">
                     {/* Header row */}
                     <div className="grid grid-cols-12 gap-4 py-2 px-3 bg-gray-50 rounded text-sm font-medium text-gray-700">
@@ -888,8 +1211,8 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                       <div className="col-span-1 text-center">Action</div>
                     </div>
 
-                    {/* Product rows */}
-                    {products.map(sp => (
+                    {/* Unassigned product rows */}
+                    {groupedProductsBySection.unassignedProducts.map(sp => (
                       <div
                         key={sp.id}
                         className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50"
@@ -972,124 +1295,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                       </div>
                     ))}
                   </div>
-                </div>
-              );
-            })}
-
-            {/* Show unassigned products */}
-            {groupedProductsBySection.unassignedProducts.length > 0 && (
-              <div className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
-                  <h4 className="text-lg font-semibold text-gray-900">Unassigned Products</h4>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-500">
-                      {groupedProductsBySection.unassignedProducts.length} product
-                      {groupedProductsBySection.unassignedProducts.length !== 1 ? 's' : ''}
-                    </div>
-                    <div className="text-lg font-bold text-gray-900">
-                      $
-                      {groupedProductsBySection.unassignedProducts
-                        .reduce((sum, p) => sum + (p.total || 0), 0)
-                        .toFixed(2)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  {/* Header row */}
-                  <div className="grid grid-cols-12 gap-4 py-2 px-3 bg-gray-50 rounded text-sm font-medium text-gray-700">
-                    <div className="col-span-4">Product</div>
-                    <div className="col-span-2 text-center">Quantity</div>
-                    <div className="col-span-2 text-center">Unit Price</div>
-                    <div className="col-span-2 text-center">Total Price</div>
-                    <div className="col-span-1 text-center">Section</div>
-                    <div className="col-span-1 text-center">Action</div>
-                  </div>
-
-                  {/* Unassigned product rows */}
-                  {groupedProductsBySection.unassignedProducts.map(sp => (
-                    <div
-                      key={sp.id}
-                      className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50"
-                    >
-                      <div className="col-span-4 min-w-0">
-                        <div className="font-medium text-gray-900 truncate">{sp.name}</div>
-                        <div className="text-xs text-gray-500 truncate">
-                          {sp.category || 'General'}
-                        </div>
-                      </div>
-                      <div className="col-span-2 flex items-center justify-center">
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => handleQuantityChange(sp.productId, sp.quantity - 1)}
-                          >
-                            -
-                          </Button>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={sp.quantity}
-                            onChange={e =>
-                              handleQuantityChange(sp.productId, parseInt(e.target.value) || 1)
-                            }
-                            className="w-12 h-6 text-center text-sm"
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => handleQuantityChange(sp.productId, sp.quantity + 1)}
-                          >
-                            +
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="col-span-2 flex items-center justify-center">
-                        <span className="text-sm font-medium text-gray-900">
-                          ${(sp.unitPrice || 0).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="col-span-2 flex items-center justify-center">
-                        <span className="text-sm font-semibold text-gray-900">
-                          ${(sp.total || 0).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="col-span-1 flex items-center justify-center">
-                        <select
-                          aria-label={`Assign section for ${sp.name}`}
-                          className="border rounded px-2 py-1 text-sm w-full"
-                          disabled={!proposalId}
-                          value={currentAssignmentByRow[sp.id] ?? ''}
-                          onChange={e => setAssignment(sp.id, e.target.value || null)}
-                        >
-                          <option value="">Unassigned</option>
-                          {(sectionsData || [])
-                            .slice()
-                            .sort((a, b) => a.order - b.order)
-                            .map(s => (
-                              <option key={s.id} value={s.id}>
-                                {s.title}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                      <div className="col-span-1 flex items-center justify-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => handleRemoveProduct(sp.productId)}
-                          aria-label={`Remove ${sp.name}`}
-                        >
-                          ×
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                )}
               </div>
             )}
           </div>

@@ -186,6 +186,7 @@ export function DocumentPreview({
   const [loadStartTime, setLoadStartTime] = useState<number>(0);
   const [viewerKey, setViewerKey] = useState<number>(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const loadingTaskRef = useRef<any>(null);
 
   // Detect Safari to enable safer canvas-based rendering for first page
   const isSafari = useMemo(() => {
@@ -262,6 +263,9 @@ export function DocumentPreview({
       setNumPages(pages);
       setPdfDocProxy(doc || null);
       const loadTime = loadStartTime > 0 ? performance.now() - loadStartTime : 0;
+
+      // Store the document reference for cleanup
+      loadingTaskRef.current = doc;
 
       logInfo('PDF document loaded successfully', {
         component: 'DocumentPreview',
@@ -536,6 +540,21 @@ export function DocumentPreview({
       setLoadStartTime(performance.now());
     }
   }, [datasheetPath, fileType, fileAccessible]);
+
+  // Cleanup PDF documents on component unmount or datasheet change
+  useEffect(() => {
+    return () => {
+      // Clean up PDF document when component unmounts or datasheet changes
+      if (loadingTaskRef.current && typeof loadingTaskRef.current.destroy === 'function') {
+        try {
+          loadingTaskRef.current.destroy();
+        } catch (error) {
+          console.warn('Error destroying PDF document in DocumentPreview:', error);
+        }
+      }
+      loadingTaskRef.current = null;
+    };
+  }, [datasheetPath]);
 
   return (
     <Card className={`p-6 ${className}`}>

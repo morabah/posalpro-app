@@ -99,6 +99,23 @@ export const GET = createRoute(
           }, 0),
         },
         terms: [], // TODO: Add terms from proposal metadata if needed
+        // Step 5 section assignments from proposal sections (actual Step 5 sections from edit page)
+        step5Sections: proposal.sections
+          .filter(section => section.type !== 'PRODUCTS') // Exclude Step 4 product sections
+          .map(section => ({
+            id: section.id,
+            title: section.title,
+            content: section.content,
+            order: section.order,
+            type: section.type,
+            isRequired: true, // Default to required for Step 5 sections
+            required: true,
+            estimatedHours: 8, // Default estimated hours
+            assignedTo: 'Team Member', // Default assignee
+            status: 'not_started' as const,
+            description: section.content,
+            priority: 'medium' as const,
+          })) || [],
       };
 
       logInfo('proposal_preview_fetched', {

@@ -33,13 +33,104 @@
 
   /* Page setup for professional printing */
   @page {
-    margin: 0.75in;
+    margin: 0.2in;
     size: A4;
+  }
+
+  /* Page frame for print - sleek, close to paper edge */
+  body {
+    margin: 0;
+    padding: 42pt 0 34pt 0; /* space for header/footer in print */
+    min-height: 100vh;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+  /* Create page border using pseudo-element */
+  html::before,
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 1pt solid rgba(0, 0, 0, 0.75);
+    pointer-events: none;
+    z-index: 1000;
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Inner content frame */
+  .max-w-4xl {
+    border: 0; /* remove inner frame for a cleaner, modern look */
+    margin: 8pt;
+    padding: 8pt;
+    position: relative;
+    z-index: 1;
   }
 
   /* Hide interactive elements */
   .print\\:hidden {
     display: none !important;
+  }
+
+  /* Hide only interactive UI elements (avoid hiding content rows) */
+  button,
+  input,
+  select,
+  textarea,
+  [role="button"],
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Hide decorative icons and UI glyphs in print */
+  svg,
+  [data-icon],
+  img[alt*="icon" i],
+  img[class*="icon" i] {
+    display: none !important;
+  }
+
+  /* Hide small decorative dots in headings */
+  .company-info h2 .rounded-full,
+  .section-container h2 .rounded-full {
+    display: none !important;
+  }
+
+  /* Removed broad table-hiding rule to keep section product tables visible */
+
+  /* Hide UI elements within sections but keep content (use no-print in markup) */
+
+  /* Hide specific UI containers */
+  .mt-3.p-3.bg-blue-50,
+  .grid.grid-cols-3.gap-4.pt-4.border-t.border-green-200 {
+    display: none !important;
+  }
+
+  /* Section visibility is now controlled in markup; keep defaults */
+
+  /* Ensure product tables are visible (fix display semantics) */
+  .section-container table,
+  .section-container .compact-table,
+  .section-container .min-w-full {
+    display: table !important;
+  }
+  .section-container thead {
+    display: table-header-group !important;
+  }
+  .section-container tbody {
+    display: table-row-group !important;
+  }
+  .section-container tr {
+    display: table-row !important;
+  }
+  .section-container th,
+  .section-container td {
+    display: table-cell !important;
   }
 
   /* Optimize backgrounds for print */
@@ -54,13 +145,19 @@
     box-shadow: none !important;
   }
 
-  /* Enhanced typography for print - Ultra-compact */
+  /* Remove any remaining shadows in print */
+  [class*="shadow"],
+  .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+    box-shadow: none !important;
+  }
+
+  /* Enhanced typography for print - slim and elegant */
   body {
     font-size: 10pt;
     line-height: 1.2;
     color: black;
     margin: 0;
-    padding: 0;
+    padding: 42pt 0 34pt 0; /* ensure padding remains after overrides */
   }
 
   h1 { font-size: 18pt; margin-bottom: 8pt; line-height: 1.1; }
@@ -72,6 +169,8 @@
     margin-top: 0;
     margin-bottom: 0;
   }
+
+  /* Numbering now handled in JSX for reliability across browsers */
 
   /* Add minimal margins only where needed */
   .section-container {
@@ -267,8 +366,28 @@
     break-before: page;
   }
 
+  /* Neutralize circular UI badges (keep text only) */
+  .section-container td .rounded-full,
+  .section-container .rounded-full {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  .section-container td .rounded-full.w-8.h-8,
+  .section-container .rounded-full.w-8.h-8 {
+    width: auto !important;
+    height: auto !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+
   /* Hide datasheet selector in print */
-  .print\\:hidden {
+  .print\\:hidden { display: none !important; }
+
+  /* Datasheet selection visibility handled via .no-print in markup */
+
+  /* Hide fallback "No Datasheets Available" block */
+  .rounded-xl.border.border-gray-200.bg-gray-50.p-8.mb-6 {
     display: none !important;
   }
 
@@ -339,6 +458,59 @@
 }
 
 /* Enhanced animations for web view */
+/* Print utility classes */
+@media screen {
+  .print-only { display: none !important; }
+}
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: revert !important; }
+
+  /* Print header and footer */
+  .print-header-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 36pt;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6pt 12pt;
+    background: #fff;
+    border-bottom: 1pt solid rgba(0,0,0,0.6);
+    z-index: 1001;
+  }
+
+  .print-header-bar .print-logo {
+    height: 18pt;
+    width: auto;
+    display: inline-block;
+  }
+
+  .print-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 28pt;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4pt 12pt;
+    background: #fff;
+    border-top: 1pt solid rgba(0,0,0,0.6);
+    z-index: 1001;
+    font-size: 9pt;
+    color: #444;
+    text-align: center;
+  }
+
+  .print-footer .page-number::after {
+    content: counter(page) " of " counter(pages) " | " attr(data-title);
+  }
+}
+
 @keyframes slideInRight {
   from {
     opacity: 0;
