@@ -15,6 +15,7 @@ model Tenant {
   name         String
   domain       String   @unique
   subdomain    String?  @unique
+  stripeCustomerId String? @unique
   status       String   @default("ACTIVE")
   settings     Json?
   createdAt    DateTime @default(now())
