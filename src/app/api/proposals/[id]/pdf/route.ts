@@ -73,20 +73,20 @@ export async function GET(req: NextRequest) {
     const previewUrl = `${origin}/proposals/preview?id=${encodeURIComponent(id)}`;
     const cookieHeader = req.headers.get('cookie') || '';
 
-  // Helper to call the Netlify PDF function
-  async function renderPdfViaFunction(payload: Record<string, any>): Promise<Uint8Array> {
-    const url = `${origin}/.netlify/functions/pdf`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`PDF function failed: ${res.status} ${text}`);
+    // Helper to call the Netlify PDF function
+    async function renderPdfViaFunction(payload: Record<string, any>): Promise<Uint8Array> {
+      const url = `${origin}/.netlify/functions/pdf`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`PDF function failed: ${res.status} ${text}`);
+      }
+      return new Uint8Array(await res.arrayBuffer());
     }
-    return new Uint8Array(await res.arrayBuffer());
-  }
 
     if (isStrict) {
       // Strict server-rendered PDF (bypass UI)
@@ -351,7 +351,11 @@ export async function GET(req: NextRequest) {
         productOrder,
       });
 
-      const pdfBuffer = await renderPdfViaFunction({ mode: 'html', html, displayHeaderFooter: false });
+      const pdfBuffer = await renderPdfViaFunction({
+        mode: 'html',
+        html,
+        displayHeaderFooter: false,
+      });
 
       return new Response(Buffer.from(pdfBuffer), {
         status: 200,
