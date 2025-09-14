@@ -21,10 +21,12 @@ model Tenant {
   updatedAt    DateTime @updatedAt
 
   // Relations
-  customers    Customer[]
-  products     Product[]
-  proposals    Proposal[]
-  users        User[]
+  customers     Customer[]
+  products      Product[]
+  proposals     Proposal[]
+  users         User[]
+  subscriptions Subscription[]
+  entitlements  Entitlement[]
 
   @@index([status])
   @@index([createdAt])
@@ -1419,4 +1421,62 @@ model Outbox {
   @@index([createdAt])
   @@index([type])
   @@index([status, createdAt])
+}
+
+enum PlanTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+}
+
+model Plan {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  tier      PlanTier
+  features  Json?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id         String             @id @default(cuid())
+  tenantId   String
+  planId     String
+  status     SubscriptionStatus @default(ACTIVE)
+  seats      Int                @default(5)
+  stripeSubscriptionId String?  @unique
+  validUntil DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  @@index([tenantId])
+  @@index([planId])
+  @@index([status])
+}
+
+model Entitlement {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String
+  enabled   Boolean  @default(true)
+  value     String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
 }
