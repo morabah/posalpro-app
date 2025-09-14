@@ -577,6 +577,7 @@ model Customer {
   phone        String?
   website      String?
   address      String?
+  country      String?
   industry     String?
   companySize  String?
   revenue      Decimal?
