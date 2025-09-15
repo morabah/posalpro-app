@@ -28,7 +28,7 @@ export async function validatePrismaConfiguration(): Promise<PrismaConfigValidat
     isDataProxyMode: false,
     isDirectConnection: false,
     errors: [],
-    warnings: []
+    warnings: [],
   };
 
   try {
@@ -49,7 +49,9 @@ export async function validatePrismaConfiguration(): Promise<PrismaConfigValidat
     } else if (databaseUrl.startsWith('postgresql://')) {
       result.isDirectConnection = true;
     } else {
-      result.errors.push(`Invalid DATABASE_URL scheme. Expected 'postgresql://' or 'prisma://', got: ${databaseUrl.split('://')[0]}://`);
+      result.errors.push(
+        `Invalid DATABASE_URL scheme. Expected 'postgresql://' or 'prisma://', got: ${databaseUrl.split('://')[0]}://`
+      );
       result.isValid = false;
     }
 
@@ -62,26 +64,34 @@ export async function validatePrismaConfiguration(): Promise<PrismaConfigValidat
 
       if (clientInfo) {
         // Check if it's a Data Proxy client
-        if (clientInfo.constructor.name.includes('DataProxy') ||
-            clientInfo.constructor.name.includes('Proxy')) {
+        if (
+          clientInfo.constructor.name.includes('DataProxy') ||
+          clientInfo.constructor.name.includes('Proxy')
+        ) {
           result.engineType = 'none';
           result.isDataProxyMode = true;
         } else if (clientInfo.constructor.name.includes('Binary')) {
           result.engineType = 'binary';
-        } else if (clientInfo.constructor.name.includes('Library') ||
-                   clientInfo.constructor.name.includes('NodeAPI')) {
+        } else if (
+          clientInfo.constructor.name.includes('Library') ||
+          clientInfo.constructor.name.includes('NodeAPI')
+        ) {
           result.engineType = 'library';
         }
       }
 
       // Validate configuration consistency
       if (result.isDataProxyMode && result.isDirectConnection) {
-        result.errors.push('Configuration mismatch: DATABASE_URL uses postgresql:// but client appears to be in Data Proxy mode');
+        result.errors.push(
+          'Configuration mismatch: DATABASE_URL uses postgresql:// but client appears to be in Data Proxy mode'
+        );
         result.isValid = false;
       }
 
       if (!result.isDataProxyMode && !result.isDirectConnection) {
-        result.errors.push('Configuration mismatch: DATABASE_URL uses prisma:// but client appears to be in direct connection mode');
+        result.errors.push(
+          'Configuration mismatch: DATABASE_URL uses prisma:// but client appears to be in direct connection mode'
+        );
         result.isValid = false;
       }
 
@@ -91,29 +101,40 @@ export async function validatePrismaConfiguration(): Promise<PrismaConfigValidat
       const cliQueryEngineType = process.env.PRISMA_CLI_QUERY_ENGINE_TYPE;
 
       if (generateDataProxy === 'true' && result.isDirectConnection) {
-        result.warnings.push('PRISMA_GENERATE_DATAPROXY=true but DATABASE_URL uses postgresql:// (should be prisma://)');
+        result.warnings.push(
+          'PRISMA_GENERATE_DATAPROXY=true but DATABASE_URL uses postgresql:// (should be prisma://)'
+        );
       }
 
       if (generateDataProxy === 'false' && result.isDataProxyMode) {
-        result.warnings.push('PRISMA_GENERATE_DATAPROXY=false but DATABASE_URL uses prisma:// (should be postgresql://)');
+        result.warnings.push(
+          'PRISMA_GENERATE_DATAPROXY=false but DATABASE_URL uses prisma:// (should be postgresql://)'
+        );
       }
 
       if (clientEngineType === 'binary' && result.engineType !== 'binary') {
-        result.warnings.push(`PRISMA_CLIENT_ENGINE_TYPE=binary but detected engine type: ${result.engineType}`);
+        result.warnings.push(
+          `PRISMA_CLIENT_ENGINE_TYPE=binary but detected engine type: ${result.engineType}`
+        );
       }
 
       if (clientEngineType === 'library' && result.engineType !== 'library') {
-        result.warnings.push(`PRISMA_CLIENT_ENGINE_TYPE=library but detected engine type: ${result.engineType}`);
+        result.warnings.push(
+          `PRISMA_CLIENT_ENGINE_TYPE=library but detected engine type: ${result.engineType}`
+        );
       }
 
       await prisma.$disconnect();
     } catch (error) {
-      result.errors.push(`Failed to instantiate Prisma client: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      result.errors.push(
+        `Failed to instantiate Prisma client: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
       result.isValid = false;
     }
-
   } catch (error) {
-    result.errors.push(`Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    result.errors.push(
+      `Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
     result.isValid = false;
   }
 
@@ -142,7 +163,7 @@ export async function validatePrismaConfigurationOrThrow(): Promise<void> {
       `  PRISMA_GENERATE_DATAPROXY: ${process.env.PRISMA_GENERATE_DATAPROXY || 'not set'}`,
       `  PRISMA_CLIENT_ENGINE_TYPE: ${process.env.PRISMA_CLIENT_ENGINE_TYPE || 'not set'}`,
       `  PRISMA_CLI_QUERY_ENGINE_TYPE: ${process.env.PRISMA_CLI_QUERY_ENGINE_TYPE || 'not set'}`,
-      `  PRISMA_ENGINE_TYPE: ${process.env.PRISMA_ENGINE_TYPE || 'not set'}`
+      `  PRISMA_ENGINE_TYPE: ${process.env.PRISMA_ENGINE_TYPE || 'not set'}`,
     ].join('\n');
 
     throw new Error(errorMessage);
@@ -176,8 +197,14 @@ export async function logPrismaConfiguration(): Promise<void> {
   }
 
   console.log('  Environment Variables:');
-  console.log(`    PRISMA_GENERATE_DATAPROXY: ${process.env.PRISMA_GENERATE_DATAPROXY || 'not set'}`);
-  console.log(`    PRISMA_CLIENT_ENGINE_TYPE: ${process.env.PRISMA_CLIENT_ENGINE_TYPE || 'not set'}`);
-  console.log(`    PRISMA_CLI_QUERY_ENGINE_TYPE: ${process.env.PRISMA_CLI_QUERY_ENGINE_TYPE || 'not set'}`);
+  console.log(
+    `    PRISMA_GENERATE_DATAPROXY: ${process.env.PRISMA_GENERATE_DATAPROXY || 'not set'}`
+  );
+  console.log(
+    `    PRISMA_CLIENT_ENGINE_TYPE: ${process.env.PRISMA_CLIENT_ENGINE_TYPE || 'not set'}`
+  );
+  console.log(
+    `    PRISMA_CLI_QUERY_ENGINE_TYPE: ${process.env.PRISMA_CLI_QUERY_ENGINE_TYPE || 'not set'}`
+  );
   console.log(`    PRISMA_ENGINE_TYPE: ${process.env.PRISMA_ENGINE_TYPE || 'not set'}`);
 }

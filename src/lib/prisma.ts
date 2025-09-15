@@ -4,7 +4,10 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { validatePrismaConfigurationOrThrow, logPrismaConfiguration } from './validation/prisma-config-validator';
+import {
+  logPrismaConfiguration,
+  validatePrismaConfigurationOrThrow,
+} from './validation/prisma-config-validator';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
