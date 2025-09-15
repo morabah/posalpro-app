@@ -26,7 +26,8 @@ rm -rf node_modules/.prisma
 
 # Generate Prisma client with production schema
 echo "🚀 Generating Prisma client..."
-npx prisma generate --schema=./prisma/schema.production.prisma
+# Force library engine type by explicitly setting it in the command
+PRISMA_GENERATE_DATAPROXY=false PRISMA_CLIENT_ENGINE_TYPE=library PRISMA_CLI_QUERY_ENGINE_TYPE=library npx prisma generate --schema=./prisma/schema.production.prisma
 
 # Verify the generated client
 echo "✅ Verifying Prisma client generation..."
