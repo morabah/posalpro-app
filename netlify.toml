@@ -43,9 +43,6 @@
   # API_BASE_URL = "https://posalpro.netlify.app/api"
 
   # Prisma engine settings (non-secrets) - force native engines, not Data Proxy
-  PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
-  PRISMA_CLIENT_ENGINE_TYPE = "library"
-  PRISMA_GENERATE_DATAPROXY = "false"
   PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x"
 
   # Use production schema explicitly
