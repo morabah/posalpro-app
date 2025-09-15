@@ -12,7 +12,6 @@ import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Component Traceability Matrix

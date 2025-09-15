@@ -19,7 +19,6 @@ import { SearchFilters, searchService } from '@/lib/services/searchService';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // GET /api/search - Unified search across all entities with cursor pagination

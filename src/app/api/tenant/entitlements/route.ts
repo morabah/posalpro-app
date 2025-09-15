@@ -4,7 +4,6 @@ export const runtime = "nodejs";
 import { EntitlementService } from '@/lib/services/EntitlementService';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // GET /api/tenant/entitlements - Return current tenant entitlements (auth required)

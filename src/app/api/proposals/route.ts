@@ -12,7 +12,7 @@
 
 // Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = 'nodejs';
-
+export const dynamic = 'force-dynamic';
 
 import { createRoute } from '@/lib/api/route';
 import { logDebug, logError, logInfo } from '@/lib/logger';
@@ -23,8 +23,6 @@ import { assertIdempotent } from '@/server/api/idempotency';
 
 // Import consolidated schemas from feature folder
 import {
-
-export const dynamic = 'force-dynamic';
   ProposalCreateSchema,
   ProposalListSchema,
   ProposalQuerySchema,

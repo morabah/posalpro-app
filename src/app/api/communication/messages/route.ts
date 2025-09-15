@@ -20,7 +20,6 @@ import { StandardError } from '@/lib/errors/StandardError';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Initialize error handling service

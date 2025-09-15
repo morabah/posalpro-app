@@ -16,7 +16,6 @@ import { logInfo } from '@/lib/logger';
 import { versionHistoryService } from '@/services/versionHistoryService';
 import { z } from 'zod';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // ====================

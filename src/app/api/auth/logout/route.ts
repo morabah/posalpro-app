@@ -12,7 +12,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes, StandardError } from '@/lib/errors';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {

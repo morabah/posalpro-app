@@ -12,7 +12,6 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 import { logDebug, logInfo, logError } from '@/lib/logger';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Component Traceability Matrix

@@ -9,7 +9,6 @@ export const runtime = "nodejs";
 import { ErrorHandlingService } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Component Traceability Matrix

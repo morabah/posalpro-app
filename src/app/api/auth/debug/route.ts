@@ -12,7 +12,6 @@ import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSecret } from '@/lib/auth/secret';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Type definitions for auth debug data

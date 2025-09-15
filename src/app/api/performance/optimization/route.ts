@@ -22,7 +22,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { logWarn } from '@/lib/logger';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**

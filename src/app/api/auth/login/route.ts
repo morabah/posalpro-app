@@ -13,7 +13,6 @@ import { LoginSchema, ROLE_REDIRECTION_MAP, getDefaultRedirect } from '@/feature
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { StandardError } from '@/lib/errors';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {

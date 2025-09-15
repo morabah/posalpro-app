@@ -17,7 +17,6 @@ import { logDebug, logError, logInfo } from '@/lib/logger';
 import { dashboardService } from '@/lib/services/dashboardService';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // ✅ TYPES: Define proper interface for dashboard stats cache

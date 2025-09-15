@@ -11,7 +11,6 @@ import { logError } from '@/lib/logger';
 import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {

@@ -18,7 +18,6 @@ import { analyticsService } from '@/lib/services/analyticsService';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
-export const runtime = 'nodejs';
 
 // Ensure this route is not statically evaluated during build
 export const dynamic = 'force-dynamic';

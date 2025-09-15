@@ -9,7 +9,6 @@ import { getServerSession } from 'next-auth/next';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // System configuration schema

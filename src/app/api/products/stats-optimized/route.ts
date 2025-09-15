@@ -6,7 +6,6 @@ import { optimizedProductService } from '@/lib/services/OptimizedProductService'
 import { NextResponse } from 'next/server';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 // Permission checks are enforced via createRoute roles and entitlements
 

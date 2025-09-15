@@ -10,7 +10,6 @@ export const runtime = "nodejs";
 
 import { logDebug, logError, logInfo } from '@/lib/logger';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Supported file extensions for document preview

@@ -68,8 +68,8 @@ function checkRuntimeGuards(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
   const relativePath = path.relative(projectRoot, filePath);
 
-  const hasRuntime = content.includes("export const runtime = 'nodejs'");
-  const hasDynamic = content.includes("export const dynamic = 'force-dynamic'");
+  const hasRuntime = content.includes("export const runtime = 'nodejs'") || content.includes('export const runtime = "nodejs"');
+  const hasDynamic = content.includes("export const dynamic = 'force-dynamic'") || content.includes('export const dynamic = "force-dynamic"');
 
   return {
     filePath: relativePath,

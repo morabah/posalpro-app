@@ -18,7 +18,6 @@ import { dashboardService } from '@/lib/services/dashboardService';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 // import { getCache, setCache } from '@/lib/redis'; // Temporarily disabled due to Redis connection issues
 

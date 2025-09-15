@@ -5,7 +5,6 @@ import { logDebug, logInfo, logError } from '@/lib/logger';
 import { getErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes, StandardError } from '@/lib/errors';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
