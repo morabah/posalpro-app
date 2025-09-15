@@ -13,8 +13,10 @@
   node_bundler = "esbuild"
   # External Prisma modules to prevent bundling issues
   external_node_modules = ["@prisma/client", "prisma"]
-  # Include Prisma generated files
-  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**"]
+  # Include Prisma generated files and schema
+  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**", "schema.prisma"]
+  # Avoid forcing large deps into every function bundle
+  # Let the Next.js server handler bundle only what it actually imports.
 
 # Edge Functions completely disabled - using Node.js runtime for all routes
 # Middleware temporarily disabled to prevent Edge Function conflicts
@@ -109,10 +111,6 @@
     Cache-Control = "public, max-age=31536000, immutable"
 
 # Functions are managed by @netlify/plugin-nextjs
-[functions]
-  included_files = ["schema.prisma"]
-  # Avoid forcing large deps into every function bundle
-  # Let the Next.js server handler bundle only what it actually imports.
 
 [functions.pdf]
   # Bundle Puppeteer/Chromium only for the dedicated PDF function
