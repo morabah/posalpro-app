@@ -14,10 +14,44 @@
 
 import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
+import fs from 'fs';
 
-// Load environment variables
-dotenv.config({ path: '.env.local' });
-dotenv.config({ path: '.env' });
+// Load environment variables in priority order (later files override earlier ones)
+console.log('📁 Loading environment files...');
+
+// 1. Base environment (.env)
+if (fs.existsSync('.env')) {
+  dotenv.config({ path: '.env' });
+  console.log('   ✅ Loaded .env');
+} else {
+  console.log('   ⚠️  .env not found');
+}
+
+// 2. Production environment variables (if present)
+if (fs.existsSync('production-env-vars.env')) {
+  dotenv.config({ path: 'production-env-vars.env' });
+  console.log('   ✅ Loaded production-env-vars.env');
+} else {
+  console.log('   ℹ️  production-env-vars.env not found');
+}
+
+// 3. Production environment file (if present)
+if (fs.existsSync('.env.production')) {
+  dotenv.config({ path: '.env.production' });
+  console.log('   ✅ Loaded .env.production');
+} else {
+  console.log('   ℹ️  .env.production not found');
+}
+
+// 4. Local environment (highest priority - overrides all others)
+if (fs.existsSync('.env.local')) {
+  dotenv.config({ path: '.env.local' });
+  console.log('   ✅ Loaded .env.local');
+} else {
+  console.log('   ℹ️  .env.local not found');
+}
+
+console.log('');
 
 console.log('🔍 Prisma Client Configuration Verification');
 console.log('==========================================\n');
