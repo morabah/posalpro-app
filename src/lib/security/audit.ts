@@ -14,6 +14,7 @@
  */
 
 import { logDebug, logError, logInfo, logWarn } from '@/lib/logger';
+import { prisma } from '@/lib/db/prisma';
 
 // ====================
 // TypeScript Interfaces
@@ -205,36 +206,76 @@ class SecurityAuditManager {
   // ====================
 
   /**
+   * Store audit logs to persistent database
+   */
+  private async storeAuditLogs(logs: SecurityAuditLog[]): Promise<void> {
+    if (logs.length === 0) return;
+
+    try {
+      // Transform SecurityAuditLog to database format
+      const dbLogs = logs.map(log => ({
+        userId: log.userId || null,
+        resource: log.resource,
+        action: log.action,
+        scope: log.scope,
+        success: log.success,
+        timestamp: new Date(log.timestamp),
+        error: log.error || null,
+        metadata: log.metadata as any || undefined,
+        ip: (log.metadata as any)?.ip || null,
+        userAgent: (log.metadata as any)?.userAgent || null,
+      }));
+
+      // Batch insert for performance
+      await prisma.securityAuditLog.createMany({
+        data: dbLogs,
+        skipDuplicates: true,
+      });
+
+      logInfo('Security Audit: Successfully stored audit logs', {
+        component: 'SecurityAuditManager',
+        operation: 'storeAuditLogs',
+        batchSize: logs.length,
+      });
+    } catch (error) {
+      logError('Security Audit: Failed to store audit logs', {
+        component: 'SecurityAuditManager',
+        operation: 'storeAuditLogs',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        batchSize: logs.length,
+      });
+      throw error; // Re-throw to trigger retry logic
+    }
+  }
+
+  /**
    * Flush audit logs to storage
    */
   private async flushAuditLogs(): Promise<void> {
     if (this.auditLogs.length === 0) return;
 
-    try {
-      const logsToFlush = [...this.auditLogs];
-      this.auditLogs = [];
+    const logsToFlush = [...this.auditLogs];
+    this.auditLogs = [];
 
-      // In a real implementation, this would send to a secure audit storage
-      // For now, we'll just log the batch
+    try {
       logInfo('Security Audit: Flushing audit logs', {
         component: 'SecurityAuditManager',
         operation: 'flushAuditLogs',
         batchSize: logsToFlush.length,
-        logs: logsToFlush,
       });
 
-      // TODO: Implement actual audit storage
-      // await this.storeAuditLogs(logsToFlush);
+      // Store to persistent database
+      await this.storeAuditLogs(logsToFlush);
     } catch (error) {
       logError('Security Audit: Failed to flush audit logs', {
         component: 'SecurityAuditManager',
         operation: 'flushAuditLogs',
         error: error instanceof Error ? error.message : 'Unknown error',
-        batchSize: this.auditLogs.length,
+        batchSize: logsToFlush.length,
       });
 
-      // Restore logs to queue for retry
-      this.auditLogs.unshift(...this.auditLogs);
+      // Restore logs to queue for retry (prepend to maintain order)
+      this.auditLogs.unshift(...logsToFlush);
     }
   }
 
@@ -262,64 +303,154 @@ class SecurityAuditManager {
   }
 
   /**
-   * Get audit logs for a specific user
+   * Get audit logs for a specific user from database
    */
-  getUserAuditLogs(userId: string, limit = 100): SecurityAuditLog[] {
-    return this.auditLogs
-      .filter(log => log.userId === userId)
-      .slice(-limit)
-      .reverse();
+  async getUserAuditLogs(userId: string, limit = 100): Promise<SecurityAuditLog[]> {
+    try {
+      const dbLogs = await prisma.securityAuditLog.findMany({
+        where: { userId },
+        orderBy: { timestamp: 'desc' },
+        take: limit,
+      });
+
+      return dbLogs.map((log: any) => ({
+        userId: log.userId || undefined,
+        resource: log.resource,
+        action: log.action,
+        scope: log.scope,
+        success: log.success,
+        timestamp: log.timestamp.toISOString(),
+        error: log.error || undefined,
+        metadata: log.metadata as Record<string, unknown> || undefined,
+      }));
+    } catch (error) {
+      logError('Security Audit: Failed to get user audit logs', {
+        component: 'SecurityAuditManager',
+        operation: 'getUserAuditLogs',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+      });
+      return [];
+    }
   }
 
   /**
-   * Get audit logs for a specific resource
+   * Get audit logs for a specific resource from database
    */
-  getResourceAuditLogs(resource: string, limit = 100): SecurityAuditLog[] {
-    return this.auditLogs
-      .filter(log => log.resource === resource)
-      .slice(-limit)
-      .reverse();
+  async getResourceAuditLogs(resource: string, limit = 100): Promise<SecurityAuditLog[]> {
+    try {
+      const dbLogs = await prisma.securityAuditLog.findMany({
+        where: { resource },
+        orderBy: { timestamp: 'desc' },
+        take: limit,
+      });
+
+      return dbLogs.map((log: any) => ({
+        userId: log.userId || undefined,
+        resource: log.resource,
+        action: log.action,
+        scope: log.scope,
+        success: log.success,
+        timestamp: log.timestamp.toISOString(),
+        error: log.error || undefined,
+        metadata: log.metadata as Record<string, unknown> || undefined,
+      }));
+    } catch (error) {
+      logError('Security Audit: Failed to get resource audit logs', {
+        component: 'SecurityAuditManager',
+        operation: 'getResourceAuditLogs',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        resource,
+      });
+      return [];
+    }
   }
 
   /**
-   * Clear old audit logs based on retention policy
+   * Clear old audit logs based on retention policy from database
    */
-  clearOldAuditLogs(): void {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - this.config.retentionDays);
+  async clearOldAuditLogs(): Promise<void> {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - this.config.retentionDays);
 
-    this.auditLogs = this.auditLogs.filter(log => {
-      const logDate = new Date(log.timestamp);
-      return logDate > cutoffDate;
-    });
+      const result = await prisma.securityAuditLog.deleteMany({
+        where: {
+          timestamp: {
+            lt: cutoffDate,
+          },
+        },
+      });
 
-    logInfo('Security Audit: Cleared old audit logs', {
-      component: 'SecurityAuditManager',
-      operation: 'clearOldAuditLogs',
-      retentionDays: this.config.retentionDays,
-      remainingLogs: this.auditLogs.length,
-    });
+      logInfo('Security Audit: Cleared old audit logs', {
+        component: 'SecurityAuditManager',
+        operation: 'clearOldAuditLogs',
+        retentionDays: this.config.retentionDays,
+        deletedCount: result.count,
+        cutoffDate: cutoffDate.toISOString(),
+      });
+    } catch (error) {
+      logError('Security Audit: Failed to clear old audit logs', {
+        component: 'SecurityAuditManager',
+        operation: 'clearOldAuditLogs',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        retentionDays: this.config.retentionDays,
+      });
+    }
   }
 
   /**
-   * Get audit statistics
+   * Get audit statistics from database
    */
-  getAuditStats(): {
+  async getAuditStats(): Promise<{
     totalLogs: number;
     successCount: number;
     failureCount: number;
     recentActivity: SecurityAuditLog[];
-  } {
-    const recentActivity = this.auditLogs.slice(-10).reverse();
-    const successCount = this.auditLogs.filter(log => log.success).length;
-    const failureCount = this.auditLogs.filter(log => !log.success).length;
+  }> {
+    try {
+      const [totalLogs, successCount, failureCount, recentLogs] = await Promise.all([
+        prisma.securityAuditLog.count(),
+        prisma.securityAuditLog.count({ where: { success: true } }),
+        prisma.securityAuditLog.count({ where: { success: false } }),
+        prisma.securityAuditLog.findMany({
+          orderBy: { timestamp: 'desc' },
+          take: 10,
+        }),
+      ]);
 
-    return {
-      totalLogs: this.auditLogs.length,
-      successCount,
-      failureCount,
-      recentActivity,
-    };
+      const recentActivity = recentLogs.map((log: any) => ({
+        userId: log.userId || undefined,
+        resource: log.resource,
+        action: log.action,
+        scope: log.scope,
+        success: log.success,
+        timestamp: log.timestamp.toISOString(),
+        error: log.error || undefined,
+        metadata: log.metadata as Record<string, unknown> || undefined,
+      }));
+
+      return {
+        totalLogs,
+        successCount,
+        failureCount,
+        recentActivity,
+      };
+    } catch (error) {
+      logError('Security Audit: Failed to get audit stats', {
+        component: 'SecurityAuditManager',
+        operation: 'getAuditStats',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      // Return empty stats on error
+      return {
+        totalLogs: 0,
+        successCount: 0,
+        failureCount: 0,
+        recentActivity: [],
+      };
+    }
   }
 }
 
@@ -330,9 +461,3 @@ class SecurityAuditManager {
 export const securityAuditManager = SecurityAuditManager.getInstance();
 
 export { SecurityAuditManager };
-
-
-
-
-
-
