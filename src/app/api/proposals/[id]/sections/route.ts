@@ -15,6 +15,8 @@ import { logError, logInfo } from '@/lib/logger';
 import { z } from 'zod';
 import { SectionType } from '@prisma/client';
 
+export const dynamic = 'force-dynamic';
+
 const CreateSectionSchema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(120, 'Title too long'),
   description: z.string().trim().max(1000).optional(),

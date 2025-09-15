@@ -16,6 +16,8 @@ import { logError, logInfo } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
 import { ProposalBulkDeleteSchema } from '@/features/proposals/schemas';
 
+export const dynamic = 'force-dynamic';
+
 // POST /api/proposals/bulk-delete - Delete multiple proposals
 export const POST = createRoute(
   {

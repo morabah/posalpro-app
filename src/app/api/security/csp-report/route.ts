@@ -6,6 +6,9 @@ import { setCache } from '@/lib/redis';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes, StandardError } from '@/lib/errors';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 interface LegacyCspReport {
   'csp-report'?: {
     'document-uri'?: string;

@@ -11,6 +11,9 @@ import { z } from 'zod';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes, StandardError } from '@/lib/errors';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // Validation schema for email verification
 const verifyEmailSchema = z.object({
   token: z.string().min(1, 'Verification token is required'),

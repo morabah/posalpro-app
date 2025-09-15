@@ -17,6 +17,8 @@ import { ErrorCodes } from '@/lib/errors';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { Decimal } from '@prisma/client/runtime/library';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-3.1 (Product Management), US-3.2 (Product Selection)

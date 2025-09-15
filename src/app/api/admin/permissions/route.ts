@@ -19,6 +19,8 @@ import { z } from 'zod';
 // Import centralized schemas
 import { PermissionsQuerySchema, PermissionUpdateSchema } from '@/features/admin/schemas';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix
  */

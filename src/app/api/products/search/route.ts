@@ -19,6 +19,8 @@ import { productService } from '@/lib/services';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 // Initialize error handling service
 const errorHandlingService = ErrorHandlingService.getInstance();
 

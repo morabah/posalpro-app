@@ -20,6 +20,8 @@ import { Prisma } from '@prisma/client';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { StandardError } from '@/lib/errors';
 
+export const dynamic = 'force-dynamic';
+
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {

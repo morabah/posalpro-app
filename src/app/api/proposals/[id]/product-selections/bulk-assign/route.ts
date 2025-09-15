@@ -12,6 +12,8 @@ import { proposalService } from '@/lib/services/proposalService';
 import { ErrorCodes, badRequest, errorHandlingService } from '@/lib/errors';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 const BulkAssignSchema = z.object({
   assignments: z
     .array(

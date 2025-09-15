@@ -17,6 +17,8 @@ import { ProductBulkDeleteSchema } from '@/features/products/schemas';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes } from '@/lib/errors';
 
+export const dynamic = 'force-dynamic';
+
 // ====================
 // Validation Schema
 // ====================

@@ -15,6 +15,8 @@ import { logDebug, logError, logInfo } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix
  */

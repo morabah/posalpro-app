@@ -18,6 +18,9 @@ import { searchService } from '@/lib/services/searchService';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-1.1 (Content Discovery), US-1.2 (Advanced Search)

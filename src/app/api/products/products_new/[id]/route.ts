@@ -22,6 +22,8 @@ import { ErrorCodes, StandardError } from '@/lib/errors';
 // Import consolidated schemas from feature folder
 import { ProductSchema, ProductUpdateSchema } from '@/features/products/schemas';
 
+export const dynamic = 'force-dynamic';
+
 // ====================
 // GET Route - Get Product by ID
 // ====================

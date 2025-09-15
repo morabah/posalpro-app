@@ -19,6 +19,8 @@ import { getServerSession } from 'next-auth';
 // Import centralized schemas
 import { UserCreateSchema, UserUpdateSchema } from '@/features/admin/schemas';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix
  */

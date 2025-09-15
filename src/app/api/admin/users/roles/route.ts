@@ -15,6 +15,8 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { NextRequest, NextResponse } from 'next/server';
 import { RoleAssignmentSchema, RoleRemovalSchema } from '@/features/admin';
 
+export const dynamic = 'force-dynamic';
+
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 // Use standardized RBAC check

@@ -9,6 +9,8 @@ import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { logDebug } from '@/lib/logger';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const errorHandler = getErrorHandler({
     component: 'UserAuthTestRoute',

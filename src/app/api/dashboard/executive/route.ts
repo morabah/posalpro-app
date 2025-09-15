@@ -17,6 +17,9 @@ import { logDebug, logError, logInfo } from '@/lib/logger';
 import { dashboardService } from '@/lib/services/dashboardService';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 // import { getCache, setCache } from '@/lib/redis'; // Temporarily disabled due to Redis connection issues
 
 // Import centralized types from dashboard schemas (CORE_REQUIREMENTS.md compliance)

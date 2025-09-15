@@ -23,6 +23,8 @@ import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 // Validation schema for profile updates
 const profileUpdateSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),

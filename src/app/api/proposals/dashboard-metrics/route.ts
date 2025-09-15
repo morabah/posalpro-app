@@ -12,6 +12,8 @@ import { createRoute } from '@/lib/api/route';
 import { prisma } from '@/lib/prisma';
 import { logInfo } from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 // Type definition for proposal metrics data (matches Prisma query result)
 type ProposalMetricsData = {
   id: string;

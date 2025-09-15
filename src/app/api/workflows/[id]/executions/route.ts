@@ -24,6 +24,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-4.1 (Timeline Management), US-4.3 (Task Prioritization)

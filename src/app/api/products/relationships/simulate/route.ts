@@ -10,6 +10,9 @@ import { ProductRelationshipEngine } from '@/lib/services/productRelationshipEng
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes, StandardError } from '@/lib/errors';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 // Request body schema coming from ProductSimulator (centralized)

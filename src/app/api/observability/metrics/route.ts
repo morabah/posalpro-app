@@ -5,6 +5,9 @@ import { getRequestMeta } from '@/lib/logging/structuredLogger';
 import { snapshot } from '@/lib/observability/metricsStore';
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   // Observability metrics are generally internal; allowPublic not set. Use lightweight gate.
   const auth = await rbacIntegration.authorizeApiRoute(request, ['analytics:read']);

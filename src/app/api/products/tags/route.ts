@@ -14,6 +14,8 @@ import { prisma } from '@/lib/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-3.1 (Product Management), US-3.2 (Product Selection)

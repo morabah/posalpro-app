@@ -9,6 +9,8 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logDebug, logInfo, logWarn } from '@/lib/logger';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+
+export const dynamic = 'force-dynamic';
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 // Transform database ContentType enum to frontend enum values

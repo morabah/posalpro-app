@@ -18,6 +18,8 @@ import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-4.1 (Customer Management), US-4.2 (Customer Search)

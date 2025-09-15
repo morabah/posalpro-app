@@ -10,6 +10,9 @@ import { createRoute } from '@/lib/api/route';
 import { ok } from '@/lib/api/response';
 import { logInfo } from '@/lib/logger';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix
  */

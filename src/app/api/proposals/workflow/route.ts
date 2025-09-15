@@ -17,6 +17,8 @@ import { createRoute } from '@/lib/api/route';
 import { prisma } from '@/lib/prisma';
 import { logError, logInfo } from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 // Validation schemas for workflow operations (centralized)
 const WorkflowStatusUpdateSchema = ProposalWorkflowStatusUpdateSchema;
 const WorkflowBulkUpdateSchema = ProposalWorkflowBulkUpdateSchema;

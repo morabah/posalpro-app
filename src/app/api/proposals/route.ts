@@ -23,6 +23,8 @@ import { assertIdempotent } from '@/server/api/idempotency';
 
 // Import consolidated schemas from feature folder
 import {
+
+export const dynamic = 'force-dynamic';
   ProposalCreateSchema,
   ProposalListSchema,
   ProposalQuerySchema,

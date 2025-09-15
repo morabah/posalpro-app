@@ -15,6 +15,8 @@ import { prisma } from '@/lib/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+export const dynamic = 'force-dynamic';
+
 // ====================
 // Body Schema
 // ====================

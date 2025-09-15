@@ -16,6 +16,8 @@ import { authOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {

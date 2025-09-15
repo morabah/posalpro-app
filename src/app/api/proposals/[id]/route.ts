@@ -17,6 +17,8 @@ import { logError, logInfo } from '@/lib/logger';
 import { ProposalService } from '@/lib/services/proposalService';
 import { Prisma, SectionType } from '@prisma/client';
 
+export const dynamic = 'force-dynamic';
+
 // Type definitions for proposal data
 type ProposalProductWithRelations = {
   id: string;

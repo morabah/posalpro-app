@@ -8,6 +8,8 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { validatePrismaConfiguration } from '@/lib/validation/prisma-config-validator';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const validation = await validatePrismaConfiguration();

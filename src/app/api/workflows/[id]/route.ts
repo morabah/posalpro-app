@@ -17,6 +17,8 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 // Type definitions for workflow data
 interface WorkflowExecution {
   id: string;

@@ -13,6 +13,8 @@ import { ErrorCodes, badRequest, errorHandlingService } from '@/lib/errors';
 import { z } from 'zod';
 import { SectionType } from '@prisma/client';
 
+export const dynamic = 'force-dynamic';
+
 const UpdateSectionSchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
   description: z.string().trim().max(1000).optional(),

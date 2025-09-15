@@ -7,6 +7,8 @@ import { prisma } from '@/lib/prisma';
 import { BillingSyncService } from '@/lib/services/BillingSyncService';
 import { NextRequest } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 // Type definitions for Stripe webhook data
 interface StripeWebhookData {
   id?: string;

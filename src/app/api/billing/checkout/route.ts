@@ -8,6 +8,8 @@ import { prisma } from '@/lib/prisma';
 import { getErrorHandler } from '@/server/api/errorHandler';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 const Body = z.object({
   priceId: z.string().min(1),
   successUrl: z.string().url().optional(),

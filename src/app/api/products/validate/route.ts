@@ -12,6 +12,9 @@ import { createRoute } from '@/lib/api/route';
 import { ValidationEngine } from '../../../../lib/validation/ValidationEngine';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export const POST = createRoute(
   {
     roles: ['admin', 'sales', 'manager'],

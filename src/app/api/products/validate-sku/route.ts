@@ -17,6 +17,8 @@ import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-3.1 (Product Management)

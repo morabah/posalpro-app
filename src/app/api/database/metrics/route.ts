@@ -18,6 +18,8 @@ import { DatabaseOptimizationService } from '@/lib/services/DatabaseOptimization
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix
  */

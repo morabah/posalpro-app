@@ -8,6 +8,8 @@ import { prisma } from '@/lib/prisma';
 import { BillingSyncService } from '@/lib/services/BillingSyncService';
 import { getActiveSubscriptionForTenant } from '@/lib/services/subscriptionService';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/admin/billing/subscription
 export const GET = createRoute({ requireAuth: true, roles: ['Administrator', 'System Administrator'], apiVersion: '1' }, async ({ user }) => {
   const tenantId = (user as any).tenantId;

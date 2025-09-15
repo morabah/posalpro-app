@@ -23,6 +23,8 @@ import { CustomerListSchema, CustomerQuerySchema, CustomerSchema } from '@/featu
 import { CustomerFilters, CustomerStatus, CustomerTier } from '@/types/entities/customer';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 // POST /api/customers - Create new customer
 export const POST = createRoute(
   {

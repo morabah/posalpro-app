@@ -21,6 +21,8 @@ import { spawn } from 'child_process';
 import { NextRequest } from 'next/server';
 import { createClient } from 'redis';
 
+export const dynamic = 'force-dynamic';
+
 export interface ServiceStatus {
   name: string;
   status: 'online' | 'offline' | 'degraded' | 'maintenance';

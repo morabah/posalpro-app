@@ -10,6 +10,8 @@ import { logDebug, logError, logInfo } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+export const dynamic = 'force-dynamic';
+
 export const GET = createRoute(
   {
     // Auth required by default; fine-grained permission validated below

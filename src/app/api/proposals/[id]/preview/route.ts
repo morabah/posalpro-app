@@ -12,6 +12,8 @@ import { badRequest, errorHandlingService } from '@/lib/errors';
 import { logInfo } from '@/lib/logger';
 import { proposalService } from '@/lib/services/proposalService';
 
+export const dynamic = 'force-dynamic';
+
 function getProposalIdFromUrl(req: Request): string | undefined {
   const parts = new URL(req.url).pathname.split('/').filter(Boolean);
   const idx = parts.indexOf('proposals');

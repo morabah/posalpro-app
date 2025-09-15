@@ -13,6 +13,8 @@ import { logDebug, logError, logInfo } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix
  */

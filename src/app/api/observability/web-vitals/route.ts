@@ -4,6 +4,9 @@ export const runtime = "nodejs";
 import { NextResponse } from 'next/server';
 import { recordWebVital } from '@/lib/observability/metricsStore';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 interface MetricPayload {
   name: 'FCP' | 'LCP' | 'CLS' | 'TTFB' | 'INP';
   value: number;

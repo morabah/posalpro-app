@@ -22,6 +22,8 @@ import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandle
 
 // Import consolidated schemas from feature folder
 import {
+
+export const dynamic = 'force-dynamic';
   ProductCreateSchema,
   ProductListSchema,
   ProductQuerySchema,

@@ -19,6 +19,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { shouldSkipDatabase, getBuildTimeResponse } from '@/lib/buildGuard';
 
+export const runtime = 'nodejs';
+
 // Ensure this route is not statically evaluated during build
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;

@@ -18,6 +18,8 @@ import { ErrorCodes, errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
 import { ProductService } from '@/lib/services/productService';
 
+export const dynamic = 'force-dynamic';
+
 // POST /api/products/[id]/images - Upload new image(s) for a product
 export const POST = createRoute(
   { roles: ['admin', 'manager', 'System Administrator', 'Administrator'] },

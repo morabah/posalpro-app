@@ -16,6 +16,8 @@ import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/profile - Get current user profile
  * Retrieves profile data from both User table and UserPreferences.dashboardLayout.profile

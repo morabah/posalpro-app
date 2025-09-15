@@ -6,6 +6,8 @@ import { createRoute } from '@/lib/api/route';
 import { getStripe, isStripeReady } from '@/lib/billing/stripe';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 export const POST = createRoute({ requireAuth: true, apiVersion: '1' }, async ({ user }) => {
   if (!isStripeReady()) return new Response('Billing not configured', { status: 501 });
   const stripe = await getStripe();

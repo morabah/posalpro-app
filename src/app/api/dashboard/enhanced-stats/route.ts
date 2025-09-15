@@ -11,6 +11,8 @@ import { recordError, recordLatency } from '@/lib/observability/metricsStore';
 import { prisma } from '@/lib/prisma';
 import { dashboardService } from '@/lib/services/dashboardService';
 
+export const dynamic = 'force-dynamic';
+
 // ✅ TYPES: Define proper interfaces for enhanced dashboard stats
 interface ProposalStatusData {
   status: string;

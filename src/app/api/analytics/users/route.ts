@@ -18,6 +18,9 @@ import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandle
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // ✅ TYPES: Define proper interface for analytics filters
 interface AnalyticsFilters {
   userId?: string;

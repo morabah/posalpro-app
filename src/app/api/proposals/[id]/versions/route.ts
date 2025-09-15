@@ -6,6 +6,9 @@ import { logInfo } from '@/lib/logger';
 import { versionHistoryService } from '@/services/versionHistoryService';
 import { VersionHistoryQuerySchema } from '@/features/version-history/schemas';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // GET /api/proposals/[id]/versions - list versions for specific proposal
 export const GET = createRoute(
   {

@@ -14,6 +14,8 @@ import { logError, logInfo } from '@/lib/logger';
 import { getCache, setCache } from '@/lib/redis';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+export const dynamic = 'force-dynamic';
+
 // ✅ TYPES: Define proper interfaces for proposal stats
 interface ProposalStatusCount {
   status: string;

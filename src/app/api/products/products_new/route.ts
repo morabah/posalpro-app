@@ -26,6 +26,8 @@ import {
 } from '@/features/products/schemas';
 import { Decimal } from '@prisma/client/runtime/library';
 
+export const dynamic = 'force-dynamic';
+
 // Define proper type for Prisma product query result
 type ProductQueryResult = {
   id: string;

@@ -16,6 +16,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getCache, setCache, deleteCache } from '@/lib/redis';
 
+export const dynamic = 'force-dynamic';
+
 
 // Redis cache configuration for user preferences
 const USER_PREFERENCES_CACHE_PREFIX = 'user_preferences';

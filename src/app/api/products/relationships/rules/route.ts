@@ -15,6 +15,8 @@ import { RuleStatus } from '@prisma/client';
 import { z } from 'zod';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+export const dynamic = 'force-dynamic';
+
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 export const GET = createRoute(

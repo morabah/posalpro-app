@@ -1,4 +1,7 @@
 import { logError } from '@/lib/logger';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 // Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = "nodejs";
 

@@ -19,6 +19,8 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 // Intentionally use a minimal input type for completion calculation to avoid
 // requiring full Proposal shape when denormalizing from Prisma
 

@@ -12,6 +12,9 @@ import { z } from 'zod';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes, StandardError } from '@/lib/errors';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // Validation schemas
 const requestResetSchema = z.object({
   email: z.string().email('Invalid email address'),

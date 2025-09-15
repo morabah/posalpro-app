@@ -17,6 +17,8 @@ import { ProductBulkDeleteSchema } from '@/features/products/schemas';
 import type { Prisma } from '@prisma/client';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+export const dynamic = 'force-dynamic';
+
 // Define proper types for bulk delete operations
 type ProductForDeletion = {
   id: string;

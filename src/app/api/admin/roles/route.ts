@@ -16,6 +16,8 @@ import { z } from 'zod';
 // Import schemas
 import { RoleCreateSchema, RolesQuerySchema, RoleUpdateSchema } from '@/features/admin/schemas';
 
+export const dynamic = 'force-dynamic';
+
 // Using imported schemas from @/features/admin/schemas
 
 /**

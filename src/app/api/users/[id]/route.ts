@@ -23,6 +23,8 @@ import { parseFieldsParam } from '@/lib/utils/selectiveHydration';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 // Type definitions for user data and activity
 interface UserWithPermissions {
   id: string;

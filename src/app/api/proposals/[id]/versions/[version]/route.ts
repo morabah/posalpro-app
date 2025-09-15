@@ -5,6 +5,9 @@ import { ok } from '@/lib/api/response';
 import { logInfo } from '@/lib/logger';
 import { versionHistoryService } from '@/services/versionHistoryService';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // GET /api/proposals/[id]/versions/[version] - get a specific version detail with diff
 export const GET = createRoute(
   {

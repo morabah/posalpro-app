@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 // Force Node.js runtime to avoid Edge Function conflicts
 export const runtime = "nodejs";
 

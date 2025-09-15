@@ -16,6 +16,8 @@ import { logError, logInfo } from '@/lib/logger';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes } from '@/lib/errors';
 
+export const dynamic = 'force-dynamic';
+
 // ====================
 // Validation Schema
 // ====================

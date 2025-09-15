@@ -23,6 +23,8 @@ import { RegisterSchema } from '@/features/auth';
 import { z } from 'zod';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+export const dynamic = 'force-dynamic';
+
 // Rate limiting configuration (5 attempts per minute)
 // Uses established Redis-based infrastructure from src/lib/security.ts
 

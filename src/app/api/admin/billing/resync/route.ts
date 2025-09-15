@@ -7,6 +7,8 @@ import { createRoute } from '@/lib/api/route';
 import { prisma } from '@/lib/prisma';
 import { BillingSyncService } from '@/lib/services/BillingSyncService';
 
+export const dynamic = 'force-dynamic';
+
 const Body = z.object({
   /** Optional: resync a specific tenant (Admins only). Defaults to current tenant. */
   tenantId: z.string().min(1).optional(),

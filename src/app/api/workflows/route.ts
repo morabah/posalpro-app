@@ -17,6 +17,8 @@ import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandle
 import { EntityType, Prisma } from '@prisma/client';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 // Type definitions for workflow data and statistics
 interface WorkflowExecutionStats {
   successRate?: number;

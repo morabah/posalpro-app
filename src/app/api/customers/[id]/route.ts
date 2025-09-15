@@ -21,6 +21,8 @@ import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandle
 import { CustomerSchema, CustomerUpdateSchema } from '@/features/customers/schemas';
 import { Decimal } from '@prisma/client/runtime/library';
 
+export const dynamic = 'force-dynamic';
+
 // Define proper types for complex Prisma query results
 type CustomerProposal = {
   id: string;

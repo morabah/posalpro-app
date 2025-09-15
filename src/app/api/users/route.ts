@@ -19,6 +19,9 @@ import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandle
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-2.1 (User Profile Management), US-2.2 (User Activity Tracking), US-6.1 (Performance Optimization)

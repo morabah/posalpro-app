@@ -27,6 +27,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-1.1 (Customer Management)

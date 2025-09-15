@@ -21,6 +21,8 @@ import { getServerSession } from 'next-auth';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 // Type definitions for proposal statistics
 interface ProposalStatisticsData {
   status: string;

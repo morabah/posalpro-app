@@ -22,6 +22,9 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { logWarn } from '@/lib/logger';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * Component Traceability Matrix:
  * - User Stories: US-6.1 (Performance Monitoring), US-6.2 (Memory Optimization)

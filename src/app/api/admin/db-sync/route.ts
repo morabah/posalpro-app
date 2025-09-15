@@ -17,6 +17,8 @@ import { prisma } from '@/lib/prisma';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { z } from 'zod';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Schema validation for sync operation request - Enhanced for bidirectional sync
  */

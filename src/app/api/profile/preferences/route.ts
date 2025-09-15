@@ -4,6 +4,9 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // Validation schema for preferences
 const preferencesSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']),

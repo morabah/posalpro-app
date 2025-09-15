@@ -10,6 +10,8 @@ import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 // Define proper types for Prisma query results
 type AssignedUser = {
   id: string;

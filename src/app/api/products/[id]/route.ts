@@ -31,6 +31,8 @@ import { z } from 'zod';
 import { ProductSchema, ProductUpdateSchema } from '@/features/products/schemas';
 import { Decimal } from '@prisma/client/runtime/library';
 
+export const dynamic = 'force-dynamic';
+
 // Define proper types for complex Prisma query results
 type ProductProposal = {
   proposal: {

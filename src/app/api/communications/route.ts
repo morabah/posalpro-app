@@ -18,6 +18,8 @@ import {
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
+export const dynamic = 'force-dynamic';
+
 const errorHandlingService = ErrorHandlingService.getInstance();
 
 export async function GET(request: NextRequest) {
