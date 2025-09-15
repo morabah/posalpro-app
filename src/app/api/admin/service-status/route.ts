@@ -301,6 +301,16 @@ async function checkPythonServices(): Promise<ServiceStatus> {
     return new Promise(resolve => {
       // First check if Python is available
       const pythonProcess = spawn('python3', ['--version']);
+      let resolved = false;
+
+      const cleanup = () => {
+        if (!resolved) {
+          resolved = true;
+          pythonProcess.removeAllListeners();
+          pythonProcess.stdout?.removeAllListeners();
+          pythonProcess.stderr?.removeAllListeners();
+        }
+      };
 
       let stdout = '';
       let stderr = '';
@@ -314,6 +324,7 @@ async function checkPythonServices(): Promise<ServiceStatus> {
       });
 
       pythonProcess.on('close', (code: number) => {
+        cleanup();
         if (code === 0) {
           const version = stdout.trim().match(/Python (\d+\.\d+\.\d+)/)?.[1] || 'Unknown';
 
@@ -322,17 +333,27 @@ async function checkPythonServices(): Promise<ServiceStatus> {
             return new Promise<boolean>(async resolve => {
               const net = await import('node:net');
               const socket = new net.Socket();
+              let resolved = false;
+
+              const cleanup = () => {
+                if (!resolved) {
+                  resolved = true;
+                  socket.removeAllListeners();
+                  socket.destroy();
+                }
+              };
 
               socket.setTimeout(1000);
               socket.on('connect', () => {
-                socket.destroy();
+                cleanup();
                 resolve(true);
               });
               socket.on('timeout', () => {
-                socket.destroy();
+                cleanup();
                 resolve(false);
               });
               socket.on('error', () => {
+                cleanup();
                 resolve(false);
               });
 
@@ -422,6 +443,7 @@ async function checkPythonServices(): Promise<ServiceStatus> {
       });
 
       pythonProcess.on('error', (error: Error) => {
+        cleanup();
         resolve({
           name: 'Python Services',
           status: 'offline',

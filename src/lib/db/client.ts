@@ -1,13 +1,16 @@
-import { logger } from '@/lib/logger'; /**
+/**
  * PosalPro MVP2 - Database Client Configuration
  * Production-ready Prisma client with optimized connection management
  */
 
 import { PrismaClient } from '@prisma/client';
+import { logger } from '@/lib/logger';
+import { safeAddListener, safeSetMaxListeners } from '@/lib/performance/EventListenerManager';
 
-// Global variable to prevent multiple Prisma clients in development
+// Global variables to prevent multiple instances
 declare global {
   var __prisma: PrismaClient | undefined;
+  var __dbHealthCheckInterval: NodeJS.Timeout | undefined;
 }
 
 // Create Prisma client with optimized configuration
@@ -39,10 +42,19 @@ const gracefulShutdown = async () => {
   logger.info('✅ Database connection closed');
 };
 
-// Handle process termination
-process.on('SIGINT', gracefulShutdown);
-process.on('SIGTERM', gracefulShutdown);
-process.on('beforeExit', gracefulShutdown);
+// Handle process termination (only add listeners once)
+if (!process.listenerCount('SIGINT')) {
+  safeAddListener(process, 'SIGINT', gracefulShutdown, 'database-client');
+}
+if (!process.listenerCount('SIGTERM')) {
+  safeAddListener(process, 'SIGTERM', gracefulShutdown, 'database-client');
+}
+if (!process.listenerCount('beforeExit')) {
+  safeAddListener(process, 'beforeExit', gracefulShutdown, 'database-client');
+}
+
+// Set max listeners for process to prevent warnings
+safeSetMaxListeners(process, 20);
 
 // Database health check utility
 export const checkDatabaseHealth = async (): Promise<{
@@ -180,11 +192,13 @@ if (process.env.NODE_ENV === 'development') {
 if (process.env.NODE_ENV === 'production') {
   logger.info('🗄️  Production database client initialized');
 
-  // Periodic health checks in production
-  setInterval(async () => {
-    const health = await checkDatabaseHealth();
-    if (health.status === 'unhealthy') {
-      logger.error('❌ Database health check failed:', health.error);
-    }
-  }, 60000); // Check every minute
+  // Periodic health checks in production (only create one interval)
+  if (!global.__dbHealthCheckInterval) {
+    global.__dbHealthCheckInterval = setInterval(async () => {
+      const health = await checkDatabaseHealth();
+      if (health.status === 'unhealthy') {
+        logger.error('❌ Database health check failed:', health.error);
+      }
+    }, 60000); // Check every minute
+  }
 }

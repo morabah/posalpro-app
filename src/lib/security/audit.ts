@@ -13,8 +13,8 @@
  * ✅ Security audit trail
  */
 
-import { logDebug, logError, logInfo, logWarn } from '@/lib/logger';
 import { prisma } from '@/lib/db/prisma';
+import { logDebug, logError, logInfo, logWarn } from '@/lib/logger';
 
 // ====================
 // TypeScript Interfaces
@@ -221,7 +221,7 @@ class SecurityAuditManager {
         success: log.success,
         timestamp: new Date(log.timestamp),
         error: log.error || null,
-        metadata: log.metadata as any || undefined,
+        metadata: (log.metadata as any) || undefined,
         ip: (log.metadata as any)?.ip || null,
         userAgent: (log.metadata as any)?.userAgent || null,
       }));
@@ -285,6 +285,7 @@ class SecurityAuditManager {
   private startFlushTimer(): void {
     if (this.flushTimer) {
       clearInterval(this.flushTimer);
+      this.flushTimer = null;
     }
 
     this.flushTimer = setInterval(() => {
@@ -321,7 +322,7 @@ class SecurityAuditManager {
         success: log.success,
         timestamp: log.timestamp.toISOString(),
         error: log.error || undefined,
-        metadata: log.metadata as Record<string, unknown> || undefined,
+        metadata: (log.metadata as Record<string, unknown>) || undefined,
       }));
     } catch (error) {
       logError('Security Audit: Failed to get user audit logs', {
@@ -353,7 +354,7 @@ class SecurityAuditManager {
         success: log.success,
         timestamp: log.timestamp.toISOString(),
         error: log.error || undefined,
-        metadata: log.metadata as Record<string, unknown> || undefined,
+        metadata: (log.metadata as Record<string, unknown>) || undefined,
       }));
     } catch (error) {
       logError('Security Audit: Failed to get resource audit logs', {
@@ -427,7 +428,7 @@ class SecurityAuditManager {
         success: log.success,
         timestamp: log.timestamp.toISOString(),
         error: log.error || undefined,
-        metadata: log.metadata as Record<string, unknown> || undefined,
+        metadata: (log.metadata as Record<string, unknown>) || undefined,
       }));
 
       return {
