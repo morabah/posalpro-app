@@ -76,63 +76,44 @@ async function verifyPrismaClient() {
       hasErrors = true;
     }
 
-    // Check Prisma client instantiation and detect Data Proxy clients
-    console.log('\n🔧 Prisma Client Instantiation & Data Proxy Detection:');
+  // Check Prisma client instantiation and detect Data Proxy clients
+  console.log('\n🔧 Prisma Client Instantiation & Data Proxy Detection:');
+
+  // Declare prisma outside try block to ensure it's available in finally
+  let prisma = null;
+
+  try {
+    prisma = new PrismaClient();
+    console.log('   ✅ Prisma client created successfully');
+
+    // Detect if this is a Data Proxy client by checking for Data Proxy specific errors
+    console.log('\n🔍 Detecting client type...');
+
+    // Test basic connectivity to detect Data Proxy vs direct connection
+    console.log('\n🔗 Testing database connectivity...');
     try {
-      const prisma = new PrismaClient();
+      const result = await prisma.$queryRaw`SELECT 1 as test, NOW() as timestamp`;
+      console.log('   ✅ Database connectivity test successful');
+      console.log('   📊 Result:', result);
 
-      console.log('   ✅ Prisma client created successfully');
+      // Check client configuration
+      console.log('\n⚙️  Client Configuration:');
+      console.log('   📦 Client type: Standard PrismaClient (not Data Proxy)');
+      console.log('   🔗 Connection: Direct PostgreSQL connection');
+      console.log('   🚫 Data Proxy: Disabled');
 
-      // Detect if this is a Data Proxy client by checking for Data Proxy specific errors
-      console.log('\n🔍 Detecting client type...');
+      console.log('\n✅ Prisma client verification complete!');
+      console.log('✅ Client is properly configured for direct PostgreSQL connections');
+    } catch (connectError) {
+      console.log('   ❌ Database connectivity test failed');
+      console.log('   🔍 Error details:', connectError.message);
 
-      // Test basic connectivity to detect Data Proxy vs direct connection
-      console.log('\n🔗 Testing database connectivity...');
-      try {
-        const result = await prisma.$queryRaw`SELECT 1 as test, NOW() as timestamp`;
-        console.log('   ✅ Database connectivity test successful');
-        console.log('   📊 Result:', result);
-
-        // Check client configuration
-        console.log('\n⚙️  Client Configuration:');
-        console.log('   📦 Client type: Standard PrismaClient (not Data Proxy)');
-        console.log('   🔗 Connection: Direct PostgreSQL connection');
-        console.log('   🚫 Data Proxy: Disabled');
-
-        console.log('\n✅ Prisma client verification complete!');
-        console.log('✅ Client is properly configured for direct PostgreSQL connections');
-      } catch (connectError) {
-        console.log('   ❌ Database connectivity test failed');
-        console.log('   🔍 Error details:', connectError.message);
-
-        // Check if this is a Data Proxy configuration error
-        if (connectError.message.includes('prisma://') ||
-            connectError.message.includes('Data Proxy') ||
-            connectError.message.includes('the URL must start with the protocol')) {
-          console.log('\n❌ CRITICAL: Data Proxy client detected!');
-          console.log('   💡 The Prisma client was generated for Data Proxy mode but is being used with a direct connection.');
-          console.log('   🔧 To fix this:');
-          console.log('   1. Ensure PRISMA_GENERATE_DATAPROXY=false');
-          console.log('   2. Set PRISMA_CLIENT_ENGINE_TYPE=binary or library');
-          console.log('   3. Regenerate the Prisma client: npx prisma generate');
-          console.log('   4. Use a postgresql:// URL, not prisma://');
-          hasErrors = true;
-        } else {
-          console.log('   ⚠️  Database connectivity issue (may be network/credentials related)');
-          hasWarnings = true;
-        }
-      }
-
-      await prisma.$disconnect();
-    } catch (error) {
-      console.log('   ❌ Error creating Prisma client');
-      console.log('   🔍 Error details:', error.message);
-
-      if (error.message.includes('prisma://') ||
-          error.message.includes('Data Proxy') ||
-          error.message.includes('the URL must start with the protocol')) {
+      // Check if this is a Data Proxy configuration error
+      if (connectError.message.includes('prisma://') ||
+          connectError.message.includes('Data Proxy') ||
+          connectError.message.includes('the URL must start with the protocol')) {
         console.log('\n❌ CRITICAL: Data Proxy client detected!');
-        console.log('   💡 The Prisma client was generated for Data Proxy mode.');
+        console.log('   💡 The Prisma client was generated for Data Proxy mode but is being used with a direct connection.');
         console.log('   🔧 To fix this:');
         console.log('   1. Ensure PRISMA_GENERATE_DATAPROXY=false');
         console.log('   2. Set PRISMA_CLIENT_ENGINE_TYPE=binary or library');
@@ -140,10 +121,41 @@ async function verifyPrismaClient() {
         console.log('   4. Use a postgresql:// URL, not prisma://');
         hasErrors = true;
       } else {
-        console.log('   ⚠️  Prisma client creation issue (may be configuration related)');
+        console.log('   ⚠️  Database connectivity issue (may be network/credentials related)');
         hasWarnings = true;
       }
     }
+  } catch (error) {
+    console.log('   ❌ Error creating Prisma client');
+    console.log('   🔍 Error details:', error.message);
+
+    if (error.message.includes('prisma://') ||
+        error.message.includes('Data Proxy') ||
+        error.message.includes('the URL must start with the protocol')) {
+      console.log('\n❌ CRITICAL: Data Proxy client detected!');
+      console.log('   💡 The Prisma client was generated for Data Proxy mode.');
+      console.log('   🔧 To fix this:');
+      console.log('   1. Ensure PRISMA_GENERATE_DATAPROXY=false');
+      console.log('   2. Set PRISMA_CLIENT_ENGINE_TYPE=binary or library');
+      console.log('   3. Regenerate the Prisma client: npx prisma generate');
+      console.log('   4. Use a postgresql:// URL, not prisma://');
+      hasErrors = true;
+    } else {
+      console.log('   ⚠️  Prisma client creation issue (may be configuration related)');
+      hasWarnings = true;
+    }
+  } finally {
+    // Always disconnect the Prisma client, even if there were errors
+    if (prisma) {
+      try {
+        await prisma.$disconnect();
+        console.log('   🔌 Prisma client disconnected successfully');
+      } catch (disconnectError) {
+        console.log('   ⚠️  Warning: Error disconnecting Prisma client:', disconnectError.message);
+        // Don't fail the build for disconnect errors, but log them
+      }
+    }
+  }
     // Final validation summary and exit logic
     console.log('\n📊 Verification Summary:');
     if (hasErrors) {
