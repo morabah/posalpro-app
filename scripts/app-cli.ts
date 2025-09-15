@@ -81,7 +81,7 @@ import path from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
 import readline from 'readline';
 import { URLSearchParams } from 'url';
-import { prisma } from '../src/lib/db/prisma';
+import { prisma } from '../src/lib/prisma';
 
 // ✅ ENHANCED: Structured logging integration
 import { logDebug, logError, logInfo, logWarn } from '../src/lib/logger';
@@ -1217,7 +1217,7 @@ async function handleHealth(api: ApiClient) {
       'package.json',
       'prisma/schema.prisma',
       'src/app/api/proposals/route.ts',
-      'src/lib/db/prisma.ts',
+      'src/lib/prisma.ts',
       'src/lib/logger.ts',
     ];
 
