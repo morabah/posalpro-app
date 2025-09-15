@@ -12,7 +12,7 @@ import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { logInfo } from '@/lib/logger';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 

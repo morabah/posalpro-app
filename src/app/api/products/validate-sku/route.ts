@@ -10,7 +10,7 @@ export const runtime = 'nodejs';
 import { SKUValidationSchema } from '@/features/products/schemas';
 import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { ErrorCodes, StandardError } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { getPrismaErrorMessage, isPrismaError } from '@/lib/utils/errorUtils';

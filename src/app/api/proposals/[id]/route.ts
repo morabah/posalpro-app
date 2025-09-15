@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 import { ProposalSchema, WizardProposalUpdateSchema } from '@/features/proposals/schemas';
 import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { ErrorCodes, errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
 import { ProposalService } from '@/lib/services/proposalService';

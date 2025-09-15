@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { ProductBulkDeleteSchema } from '@/features/products/schemas';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';

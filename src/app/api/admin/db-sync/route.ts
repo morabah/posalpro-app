@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { z } from 'zod';
 

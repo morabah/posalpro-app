@@ -3,7 +3,7 @@
 export const runtime = 'nodejs';
 
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,

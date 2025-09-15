@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 import { createRoute } from '@/lib/api/route';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,

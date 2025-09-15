@@ -12,7 +12,7 @@ import { ok } from '@/lib/api/response';
 import { RBACMiddleware } from '@/lib/auth';
 import { badRequest, forbidden } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 
 /**

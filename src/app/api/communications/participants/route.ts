@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { getServerSession } from 'next-auth';

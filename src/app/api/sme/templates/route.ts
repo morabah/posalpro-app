@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 
 
 import { authOptions } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import {
   customerQueries,

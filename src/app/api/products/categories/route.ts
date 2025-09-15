@@ -12,7 +12,7 @@ import { recordError, recordLatency } from '@/lib/observability/metricsStore';
  */
 
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { ErrorCodes } from '@/lib/errors';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { Decimal } from '@prisma/client/runtime/library';

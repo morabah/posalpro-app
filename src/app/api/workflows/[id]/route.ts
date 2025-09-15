@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger'; /**
 
 import { authOptions } from '@/lib/auth';
 // import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';

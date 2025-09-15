@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 import { EmailValidationSchema } from '@/features/customers';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
 import {
   createApiErrorResponse,

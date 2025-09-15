@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 import { CustomerSearchApiSchema } from '@/features/customers/schemas';
 import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { ErrorCodes, StandardError } from '@/lib/errors';
 import { getRequestMeta, logger } from '@/lib/logging/structuredLogger';
 import { recordError, recordLatency } from '@/lib/observability/metricsStore';
