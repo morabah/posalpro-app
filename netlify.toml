@@ -14,7 +14,7 @@
   # External Prisma modules to prevent bundling issues
   external_node_modules = ["@prisma/client", "prisma"]
   # Include Prisma generated files and schema
-  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**", "schema.prisma"]
+  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**", "prisma/schema.production.prisma"]
   # Avoid forcing large deps into every function bundle
   # Let the Next.js server handler bundle only what it actually imports.
 
