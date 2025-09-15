@@ -1,4 +1,6 @@
 import { comparePassword } from '@/lib/auth/passwordUtils';
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 import { logDebug } from '@/lib/logger';
 import { getUserByEmail } from '@/lib/services/userService';
 import { NextRequest, NextResponse } from 'next/server';

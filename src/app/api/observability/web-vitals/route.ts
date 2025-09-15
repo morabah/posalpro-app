@@ -1,4 +1,6 @@
 import { createRoute } from '@/lib/api/route';
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 import { NextResponse } from 'next/server';
 import { recordWebVital } from '@/lib/observability/metricsStore';
 

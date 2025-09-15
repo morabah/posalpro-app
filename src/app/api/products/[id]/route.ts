@@ -4,6 +4,10 @@
  * Component Traceability: US-3.1, US-3.2, H3, H4
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { createRoute } from '@/lib/api/route';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';

@@ -1,3 +1,7 @@
+
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
 import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';

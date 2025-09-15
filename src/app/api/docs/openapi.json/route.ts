@@ -1,4 +1,6 @@
 import { logError } from '@/lib/logger';
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 
 // Simple OpenAPI route without environment dependencies
 export const GET = async () => {

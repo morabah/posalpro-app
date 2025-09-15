@@ -1,4 +1,6 @@
 import { logger } from '@/lib/logger';
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 /**
  * PosalPro MVP2 - Logout API Route
  * Session cleanup and security logging

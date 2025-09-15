@@ -5,6 +5,10 @@
  * Hypothesis: H7 (Deadline Management - 40% improvement)
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 // Dynamic imports to avoid build-time database connections
 // import { authOptions } from '@/lib/auth';
 // import { validateApiPermission } from '@/lib/auth/apiAuthorization';

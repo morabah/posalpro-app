@@ -1,4 +1,6 @@
 /**
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
  * PosalPro MVP2 - Analytics Dashboard API Route - Service Layer Architecture
  * Following CORE_REQUIREMENTS.md service layer patterns
  * Component Traceability: US-6.1, US-6.2, H6, H7, H8

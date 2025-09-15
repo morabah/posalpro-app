@@ -1,4 +1,6 @@
 // Document Serving API Route - Option 2: Network URLs for Document Preview
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 // User Story: US-4.1 (Product Management)
 // Hypothesis: H5 (Modern data fetching improves performance and user experience)
 //

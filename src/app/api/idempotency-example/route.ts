@@ -1,4 +1,6 @@
 /**
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
  * Example API route demonstrating idempotency protection
  * This simulates a sensitive operation that should not be duplicated
  */

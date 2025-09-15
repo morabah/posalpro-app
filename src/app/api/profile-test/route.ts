@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+// Force Node.js runtime to avoid Edge Function conflicts
+export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   try {

@@ -1,4 +1,6 @@
 /**
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
  * PosalPro MVP2 - Admin Health API Route
  * Token-protected health endpoint for admin checks with modern createRoute wrapper
  * Based on ADMIN_MIGRATION_ASSESSMENT.md and CORE_REQUIREMENTS.md

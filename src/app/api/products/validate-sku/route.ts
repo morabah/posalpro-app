@@ -3,6 +3,10 @@
  * Handles SKU uniqueness validation for product creation/updates
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { SKUValidationSchema } from '@/features/products/schemas';
 import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';

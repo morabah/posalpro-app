@@ -1,4 +1,6 @@
 /**
+// Force Node.js runtime to avoid Edge Function conflicts
+export const runtime = "nodejs";
  * Favicon Redirect Route
  * Avoids 404 for /favicon.ico by redirecting to existing PWA icon.
  */

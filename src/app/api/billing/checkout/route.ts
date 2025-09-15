@@ -1,3 +1,7 @@
+
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
 import { createRoute } from '@/lib/api/route';
 import { getStripe, isStripeReady } from '@/lib/billing/stripe';
 import { prisma } from '@/lib/db/prisma';

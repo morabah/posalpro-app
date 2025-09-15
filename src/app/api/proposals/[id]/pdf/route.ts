@@ -7,6 +7,10 @@
  * it returns 501 with setup instructions.
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { proposalService } from '@/lib/services/proposalService';
 import { buildStrictHtml, escapeHtml } from '@/server/pdf/strictTemplate';
 import {

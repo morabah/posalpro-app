@@ -1,3 +1,7 @@
+
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
 import { logger } from '@/lib/logger'; /**
  * PosalPro MVP2 - Workflow Executions API Routes
  * Enhanced workflow execution management with authentication and analytics

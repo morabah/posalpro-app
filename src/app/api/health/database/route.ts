@@ -1,3 +1,7 @@
+
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
 import { prisma } from '@/lib/prisma';
 import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { NextRequest, NextResponse } from 'next/server';

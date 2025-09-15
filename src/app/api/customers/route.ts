@@ -10,6 +10,9 @@
  * ✅ ERROR HANDLING: Integrated standardized error handling
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
 import { createRoute } from '@/lib/api/route';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { customerService } from '@/lib/services/customerService';

@@ -1,4 +1,6 @@
 /**
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
  * Auth Debug Endpoint (Development Only)
  * Returns sanitized token and session for troubleshooting NextAuth.
  */

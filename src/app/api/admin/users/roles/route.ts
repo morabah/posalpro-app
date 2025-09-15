@@ -3,6 +3,10 @@
  * Assign and remove roles for users
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
 import prisma from '@/lib/prisma';

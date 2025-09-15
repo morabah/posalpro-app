@@ -1,4 +1,6 @@
 import { logger } from '@/lib/logger';
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 /**
  * Product Validation API Endpoint
  * Handles validation requests for product configurations

@@ -1,4 +1,6 @@
 /**
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
  * PosalPro MVP2 - Custom Login API Route
  * Based on LOGIN_SCREEN.md wireframe
  * Role-based redirection and analytics integration

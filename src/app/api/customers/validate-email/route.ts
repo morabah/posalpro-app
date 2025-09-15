@@ -5,6 +5,10 @@
  * Hypothesis: H1 (Customer Experience)
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { EmailValidationSchema } from '@/features/customers';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';

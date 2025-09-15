@@ -1,4 +1,6 @@
 /**
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
  * PosalPro MVP2 - Performance Optimization API
  * Memory profiling, database query optimization, and asset compression
  * Component Traceability: US-6.1, US-6.2, H8, H9

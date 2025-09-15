@@ -4,6 +4,10 @@
  * Hypothesis: H4 (Cross-Department Coordination)
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import {
   ProposalWorkflowBulkUpdateSchema,
   ProposalWorkflowStatusUpdateSchema,

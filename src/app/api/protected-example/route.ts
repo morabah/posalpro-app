@@ -1,4 +1,6 @@
 /**
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
  * Example API route demonstrating API key authentication
  * This route requires API key with 'read:protected' scope
  */

@@ -10,6 +10,10 @@
  * - Test Cases: TC-H8-001
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { ErrorCodes, StandardError } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';

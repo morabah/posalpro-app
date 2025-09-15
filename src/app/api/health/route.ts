@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 import { logDebug, logInfo, logError } from '@/lib/logger';
 import { getErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes, StandardError } from '@/lib/errors';

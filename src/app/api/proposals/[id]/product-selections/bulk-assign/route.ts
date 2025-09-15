@@ -3,6 +3,10 @@
  * - POST: { assignments: [{ proposalProductId, sectionId|null }] }
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { createRoute } from '@/lib/api/route';
 import { proposalService } from '@/lib/services/proposalService';
 import { ErrorCodes, badRequest, errorHandlingService } from '@/lib/errors';

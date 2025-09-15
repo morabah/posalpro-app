@@ -1,4 +1,6 @@
 import { rbacIntegration } from '@/lib/auth/rbacIntegration';
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 import { getRequestMeta } from '@/lib/logging/structuredLogger';
 import { snapshot } from '@/lib/observability/metricsStore';
 import { NextRequest, NextResponse } from 'next/server';

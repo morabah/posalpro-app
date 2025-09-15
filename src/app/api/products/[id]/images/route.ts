@@ -8,6 +8,10 @@
  * ✅ DELEGATES: to ProductService for business logic
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { ImageUploadSchema } from '@/features/products/schemas';
 import { createRoute } from '@/lib/api/route';
 import { ErrorCodes, errorHandlingService } from '@/lib/errors';

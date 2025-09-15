@@ -1,4 +1,6 @@
 import { authOptions } from '@/lib/auth';
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
 import { logError } from '@/lib/logger';

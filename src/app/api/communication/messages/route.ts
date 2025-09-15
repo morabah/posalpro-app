@@ -1,4 +1,6 @@
 /**
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
  * PosalPro MVP2 - Communication Messages API
  * Real-time messaging and collaboration endpoints
  * Based on CORE_REQUIREMENTS.md patterns

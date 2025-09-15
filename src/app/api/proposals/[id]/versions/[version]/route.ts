@@ -1,4 +1,6 @@
 import { createRoute } from '@/lib/api/route';
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 import { ok } from '@/lib/api/response';
 import { logInfo } from '@/lib/logger';
 import { versionHistoryService } from '@/services/versionHistoryService';

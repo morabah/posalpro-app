@@ -1,4 +1,6 @@
 import { logger } from '@/lib/logger';import { getServerSession } from 'next-auth';
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 

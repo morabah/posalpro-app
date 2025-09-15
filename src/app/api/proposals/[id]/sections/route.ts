@@ -4,6 +4,10 @@
  * - POST: create a new section (title unique per proposal, case-insensitive)
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { createRoute } from '@/lib/api/route';
 import { proposalService } from '@/lib/services/proposalService';
 import { ErrorCodes, StandardError, badRequest, errorHandlingService } from '@/lib/errors';

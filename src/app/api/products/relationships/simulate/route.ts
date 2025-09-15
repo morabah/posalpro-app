@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = "nodejs";
 import { ProductRelationshipsSimulateSchema } from '@/features/products/schemas';
 import { z } from 'zod';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';

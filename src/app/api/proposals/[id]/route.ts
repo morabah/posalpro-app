@@ -4,6 +4,10 @@
  * Hypothesis: H4 (Cross-Department Coordination), H7 (Deadline Management)
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { ProposalSchema, WizardProposalUpdateSchema } from '@/features/proposals/schemas';
 import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';

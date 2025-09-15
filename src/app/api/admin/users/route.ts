@@ -4,6 +4,10 @@
  * Based on ADMIN_MIGRATION_ASSESSMENT.md and CORE_REQUIREMENTS.md
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { ok } from '@/lib/api/response';
 import { RBACMiddleware } from '@/lib/auth';
 import { badRequest, forbidden } from '@/lib/errors';

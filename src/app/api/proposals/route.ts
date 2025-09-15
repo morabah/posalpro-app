@@ -10,6 +10,10 @@
  * ✅ CACHING ABSTRACTION: Cache logic belongs in service layer
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+
+
 import { createRoute } from '@/lib/api/route';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { getCache, setCache } from '@/lib/redis';
