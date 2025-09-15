@@ -5,7 +5,7 @@
  * excessive listener accumulation that causes production warnings.
  */
 
-import { logWarn, logError, logInfo } from '@/lib/logger';
+import { logError, logInfo, logWarn } from '@/lib/logger';
 
 interface ListenerInfo {
   emitter: NodeJS.EventEmitter;

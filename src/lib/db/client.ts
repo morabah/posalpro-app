@@ -3,9 +3,9 @@
  * Production-ready Prisma client with optimized connection management
  */
 
-import { PrismaClient } from '@prisma/client';
 import { logger } from '@/lib/logger';
 import { safeAddListener, safeSetMaxListeners } from '@/lib/performance/EventListenerManager';
+import { PrismaClient } from '@prisma/client';
 
 // Global variables to prevent multiple instances
 declare global {
