@@ -62,15 +62,8 @@ const redactUrl = (urlStr: string): string => {
   }
 };
 
-// Detect Prisma engine mode flags possibly forcing Data Proxy behavior
-const prismaClientEngineType = (process.env['PRISMA_CLIENT_ENGINE_TYPE'] || '').toLowerCase();
-const prismaGenerateDataproxy = (process.env['PRISMA_GENERATE_DATAPROXY'] || '').toLowerCase();
-const prismaAccelerateUrl = process.env['PRISMA_ACCELERATE_URL'];
-const isDataProxyMode =
-  prismaClientEngineType === 'dataproxy' ||
-  (prismaGenerateDataproxy === 'true' && prismaClientEngineType !== 'binary') ||
-  !!prismaAccelerateUrl ||
-  databaseUrl.startsWith('prisma://');
+// Simple database URL validation - no Data Proxy/Accelerate support
+const isDataProxyMode = false; // Force binary/library engine mode
 
 // Validate protocol vs engine expectations early with a clear, actionable error
 const isPrismaProtocol = databaseUrl.startsWith('prisma://');
@@ -80,22 +73,13 @@ const isPostgresProtocol =
 if (process.env.NODE_ENV !== 'production') {
   // Helpful diagnostics in dev only
   logger.info('Prisma datasource diagnostics', {
-    engineTypeEnv: prismaClientEngineType || '<unset>',
-    generateDataproxyEnv: prismaGenerateDataproxy || '<unset>',
-    accelerateConfigured: Boolean(prismaAccelerateUrl),
     urlProtocol: isPrismaProtocol ? 'prisma://' : isPostgresProtocol ? 'postgresql://' : 'unknown',
     urlRedacted: redactUrl(databaseUrl),
+    engineMode: 'binary/library',
   });
 }
 
-if (isDataProxyMode && isPostgresProtocol) {
-  // Prisma client expects prisma:// in Data Proxy/Accelerate mode
-  throw new Error(
-    'Prisma configuration mismatch: Data Proxy/Accelerate appears enabled (via PRISMA_* env vars), but DATABASE_URL is a postgres URL. ' +
-      'Either disable Data Proxy for local dev (unset PRISMA_CLIENT_ENGINE_TYPE, PRISMA_GENERATE_DATAPROXY, PRISMA_ACCELERATE_URL) ' +
-      'or switch DATABASE_URL to a prisma:// connection string. See docs/CORE_REQUIREMENTS.md → Environment & Database.'
-  );
-}
+// Using binary/library engine mode - no Data Proxy validation needed
 
 if (!isDataProxyMode && isPrismaProtocol) {
   // Local/standard mode but prisma:// provided

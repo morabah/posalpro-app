@@ -3,13 +3,13 @@
 # Generate Prisma client with explicit binary engine configuration
 # This script ensures the Prisma client is generated with the correct engine type
 
-echo "🔧 Generating Prisma client with binary engine..."
+echo "🔧 Generating Prisma client with library engine..."
 
 # Set environment variables explicitly
 export PRISMA_GENERATE_DATAPROXY=false
-export PRISMA_CLIENT_ENGINE_TYPE=binary
-export PRISMA_CLI_QUERY_ENGINE_TYPE=binary
-export PRISMA_ENGINE_TYPE=binary
+export PRISMA_CLIENT_ENGINE_TYPE=library
+export PRISMA_CLI_QUERY_ENGINE_TYPE=library
+export PRISMA_ENGINE_TYPE=library
 
 # Display current environment variables
 echo "Environment variables:"

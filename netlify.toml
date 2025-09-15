@@ -30,11 +30,11 @@
   NETLIFY_EDGE_FUNCTIONS_DISABLED = "true"
   # Disable middleware Edge Function compilation
   NETLIFY_MIDDLEWARE_EDGE = "false"
-  # Force Prisma binary engine generation
+  # Force Prisma library engine generation (Node-API)
   PRISMA_GENERATE_DATAPROXY = "false"
-  PRISMA_CLIENT_ENGINE_TYPE = "binary"
-  PRISMA_CLI_QUERY_ENGINE_TYPE = "binary"
-  PRISMA_ENGINE_TYPE = "binary"
+  PRISMA_CLIENT_ENGINE_TYPE = "library"
+  PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
+  PRISMA_ENGINE_TYPE = "library"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)
@@ -117,12 +117,7 @@
   to = "/.netlify/images"
   status = 200
 
-# ✅ CRITICAL: Essential catch-all redirect for Next.js App Router
-# This MUST be the LAST redirect rule - do not add any redirects after this
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# Catch-all redirect removed - using Next.js App Router without SPA mode
 
 [[headers]]
   for = "/*"
