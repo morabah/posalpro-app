@@ -8,8 +8,7 @@
   ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
 
 # Edge Functions disabled - using Node.js runtime for all routes
-[edge_functions]
-  directory = ""
+# No edge_functions configuration needed since we use Node.js runtime
 
 [build.environment]
   # 🚨 IMPORTANT: Sensitive variables removed from VCS.
