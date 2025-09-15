@@ -14,8 +14,12 @@
 [build.environment]
   # 🚨 IMPORTANT: Sensitive variables removed from VCS.
   # Set the following in Netlify UI (Site settings > Environment variables):
-  #   DIRECT_URL, DATABASE_URL, NEXTAUTH_SECRET, JWT_SECRET, CSRF_SECRET,
-  #   SESSION_ENCRYPTION_KEY, API_KEY, REDIS_URL, NEXT_PUBLIC_APP_URL, NEXTAUTH_URL
+  #   DATABASE_URL (Neon cloud database), DIRECT_URL (Neon cloud database),
+  #   NEXTAUTH_SECRET, JWT_SECRET, CSRF_SECRET, SESSION_ENCRYPTION_KEY,
+  #   API_KEY, REDIS_URL, NEXT_PUBLIC_APP_URL, NEXTAUTH_URL
+  #
+  # ✅ CRITICAL: Use CLOUD_DATABASE_URL for production deployment
+  # This ensures production uses the Neon cloud database with all synced data
 
   # Align with production environment (non-secrets)
   NODE_VERSION = "22"
