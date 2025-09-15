@@ -347,7 +347,34 @@ npm run pre-commit         # Pre-commit hooks (automatic)
 npm run audit:duplicates    # Check for duplicate implementations
 npm run schema:check        # Database schema validation
 npm run schema:validate     # Complete schema integrity check
+npm run pre-commit:runtime-guards  # Verify API route runtime guards
 ```
+
+### **🚨 API Route Runtime Guards (CRITICAL)**
+
+**ALL API routes MUST include runtime guards to prevent Edge Function conflicts:**
+
+```typescript
+// Required at the top of every src/app/api/**/route.ts file
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+// Then your route handlers...
+export async function GET(request: Request) {
+  // Route implementation
+}
+```
+
+**Why these guards are required:**
+- **Prevents Edge Function conflicts** with Prisma and Node.js dependencies
+- **Ensures database connectivity** works correctly in production
+- **Prevents "engine=none" errors** and Data Proxy connection issues
+- **Required for all API routes** that use database connections
+
+**Automated enforcement:**
+- Runtime guard validation is integrated into `npm run lint`
+- Pre-commit hook: `npm run pre-commit:runtime-guards`
+- Manual check: `node scripts/check-runtime-guards.js`
 
 ### **🛠️ Essential Development Scripts**
 
