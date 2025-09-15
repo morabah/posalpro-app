@@ -367,9 +367,9 @@ async function checkPythonServices(): Promise<ServiceStatus> {
 
           // Check common Python service ports
           Promise.all([
-            checkPythonService(8080, 'CORS Server'),
-            checkPythonService(8000, 'Development Server'),
-            checkPythonService(5000, 'Flask Server'),
+            checkPythonService(8080),
+            checkPythonService(8000),
+            checkPythonService(5000),
           ])
             .then(([corsRunning, devRunning, flaskRunning]) => {
               let servicePort = 8080;
