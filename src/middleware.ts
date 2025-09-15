@@ -1,3 +1,6 @@
+// Force Node.js runtime to avoid Edge Function conflicts with dependencies
+export const runtime = 'nodejs';
+
 import enhancedRBACMiddleware from '@/lib/auth/enhancedMiddleware';
 import { getAuthSecret } from '@/lib/auth/secret';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';

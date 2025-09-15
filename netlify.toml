@@ -7,7 +7,7 @@
   # Ensure clean build - remove any cached artifacts
   ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
 
-# Disable Edge Functions completely to avoid require() conflicts
+# Edge Functions disabled - using Node.js runtime for all routes
 [edge_functions]
   directory = ""
 
@@ -24,7 +24,7 @@
   NETLIFY_LINT = "false"
   # Configure specific Next.js flags for Netlify
   NEXT_USE_NETLIFY_EDGE = "false"
-  # Disable edge functions to avoid require() issues
+  # Disable edge functions - using Node.js runtime for all routes
   NETLIFY_EDGE_FUNCTIONS = "false"
   # Force disable edge functions completely
   NETLIFY_EDGE_FUNCTIONS_DISABLED = "true"

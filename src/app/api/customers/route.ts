@@ -20,7 +20,7 @@ import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandle
 
 // Import consolidated schemas from feature folder
 import { CustomerListSchema, CustomerQuerySchema, CustomerSchema } from '@/features/customers';
-import { CustomerStatus, CustomerTier, CustomerFilters } from '@/types/entities/customer';
+import { CustomerFilters, CustomerStatus, CustomerTier } from '@/types/entities/customer';
 import { z } from 'zod';
 
 // POST /api/customers - Create new customer
