@@ -3,14 +3,14 @@
 # Generate Prisma client with explicit binary engine configuration
 # This script ensures the Prisma client is generated with the correct engine type
 
-echo "🔧 Generating Prisma client with library engine..."
+echo "🔧 Generating Prisma client with binary engine..."
 
 # Set environment variables explicitly - aligned with netlify.toml
 export PRISMA_GENERATE_DATAPROXY=false
-export PRISMA_CLIENT_ENGINE_TYPE=library
-export PRISMA_CLI_QUERY_ENGINE_TYPE=library
+export PRISMA_CLIENT_ENGINE_TYPE=binary
+export PRISMA_CLI_QUERY_ENGINE_TYPE=binary
 export PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
-export PRISMA_ENGINE_TYPE=library
+export PRISMA_ENGINE_TYPE=binary
 
 # Display current environment variables
 echo "Environment variables:"
@@ -26,8 +26,8 @@ rm -rf node_modules/.prisma
 
 # Generate Prisma client with production schema
 echo "🚀 Generating Prisma client..."
-# Force library engine type by explicitly setting it in the command
-PRISMA_GENERATE_DATAPROXY=false PRISMA_CLIENT_ENGINE_TYPE=library PRISMA_CLI_QUERY_ENGINE_TYPE=library npx prisma generate --schema=./prisma/schema.production.prisma
+# Force binary engine type by explicitly setting it in the command
+PRISMA_GENERATE_DATAPROXY=false PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary npx prisma generate --schema=./prisma/schema.production.prisma
 
 # Verify the generated client
 echo "✅ Verifying Prisma client generation..."

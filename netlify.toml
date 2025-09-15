@@ -34,11 +34,11 @@
   NETLIFY_EDGE_FUNCTIONS_DISABLED = "true"
   # Disable middleware Edge Function compilation
   NETLIFY_MIDDLEWARE_EDGE = "false"
-  # Force Prisma library engine generation (Node-API)
+  # Force Prisma binary engine generation (not Data Proxy)
   PRISMA_GENERATE_DATAPROXY = "false"
-  PRISMA_CLIENT_ENGINE_TYPE = "library"
-  PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
-  PRISMA_ENGINE_TYPE = "library"
+  PRISMA_CLIENT_ENGINE_TYPE = "binary"
+  PRISMA_CLI_QUERY_ENGINE_TYPE = "binary"
+  PRISMA_ENGINE_TYPE = "binary"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)
@@ -73,6 +73,7 @@
 
   # Prisma engine settings - consistent with build environment
   # (Prisma settings inherited from build environment above)
+  # Binary engine type for direct PostgreSQL connections
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
