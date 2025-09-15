@@ -7,7 +7,8 @@
   # Ensure clean build - remove any cached artifacts
   ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
 
-# Edge Functions disabled - using Node.js runtime for all routes
+# Edge Functions completely disabled - using Node.js runtime for all routes
+# Middleware temporarily disabled to prevent Edge Function conflicts
 # No edge_functions configuration needed since we use Node.js runtime
 
 [build.environment]
@@ -27,6 +28,8 @@
   NETLIFY_EDGE_FUNCTIONS = "false"
   # Force disable edge functions completely
   NETLIFY_EDGE_FUNCTIONS_DISABLED = "true"
+  # Disable middleware Edge Function compilation
+  NETLIFY_MIDDLEWARE_EDGE = "false"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)
