@@ -8,19 +8,18 @@
 // Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = 'nodejs';
 
-
 // Dynamic imports to avoid build-time database connections
 // import { authOptions } from '@/lib/auth';
 // import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 // import { prisma } from '@/lib/prisma';
-import { createApiErrorResponse, StandardError } from '@/lib/errors';
+import { StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
+import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { ExecutionStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 // Type definitions for approval queue data processing
 interface ApprovalExecutionWithRelations {
@@ -198,40 +197,40 @@ export async function GET(request: NextRequest) {
     const executions = await withAsyncErrorHandler(
       () =>
         prisma.approvalExecution.findMany({
-      where,
-      include: {
-        workflow: {
+          where,
           include: {
-            stages: {
-              orderBy: { order: 'asc' },
-            },
-          },
-        },
-        proposal: {
-          include: {
-            customer: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+            workflow: {
+              include: {
+                stages: {
+                  orderBy: { order: 'asc' },
+                },
               },
             },
-            creator: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+            proposal: {
+              include: {
+                customer: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+                creator: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
               },
             },
+            decisions: true,
           },
-        },
-        decisions: true,
-      },
-      orderBy: { startedAt: 'desc' },
-    }),
-    'Failed to fetch approval executions from database',
-    { component: 'ApprovalQueueAPI', operation: 'GET' }
-  );
+          orderBy: { startedAt: 'desc' },
+        }),
+      'Failed to fetch approval executions from database',
+      { component: 'ApprovalQueueAPI', operation: 'GET' }
+    );
 
     // Transform executions into approval queue items
     const queueItems = (executions as any[]).map((execution: any) => {
@@ -530,11 +529,10 @@ export async function POST(request: NextRequest) {
       return errorResponse;
     }
 
-    const body = await withAsyncErrorHandler(
-      () => request.json(),
-      'Failed to parse request body',
-      { component: 'ApprovalQueueAPI', operation: 'POST' }
-    );
+    const body = await withAsyncErrorHandler(() => request.json(), 'Failed to parse request body', {
+      component: 'ApprovalQueueAPI',
+      operation: 'POST',
+    });
     const { action, itemIds } = body;
 
     if (!action || !itemIds || !Array.isArray(itemIds)) {
