@@ -1,7 +1,7 @@
 [build]
   # ✅ CRITICAL: Build from source using production environment variables
-  # Ensure Prisma Client is freshly generated for Linux (no Data Proxy) before building
-  command = "npx prisma generate --schema=./prisma/schema.production.prisma && npm run build"
+  # Ensure Prisma Client is freshly generated for Linux with native engine (not Data Proxy)
+  command = "PRISMA_CLIENT_ENGINE_TYPE=library PRISMA_CLI_QUERY_ENGINE_TYPE=library PRISMA_GENERATE_DATAPROXY=false npx prisma generate --schema=./prisma/schema.production.prisma && npm run build"
   publish = ".next"
 
   # Ensure clean build - remove any cached artifacts
