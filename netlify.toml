@@ -1,7 +1,7 @@
 [build]
   # ✅ CRITICAL: Build from source using production environment variables
   # Ensure Prisma Client is freshly generated for Linux with binary engine (not Data Proxy)
-  command = "rm -rf .next && rm -rf node_modules/.prisma && rm -rf node_modules/@prisma/client && echo 'Setting Prisma environment variables...' && export PRISMA_GENERATE_DATAPROXY=false && export PRISMA_CLIENT_ENGINE_TYPE=binary && export PRISMA_CLI_QUERY_ENGINE_TYPE=binary && export PRISMA_ENGINE_TYPE=binary && echo 'Environment variables set:' && echo 'PRISMA_GENERATE_DATAPROXY='$PRISMA_GENERATE_DATAPROXY && echo 'PRISMA_CLIENT_ENGINE_TYPE='$PRISMA_CLIENT_ENGINE_TYPE && echo 'PRISMA_CLI_QUERY_ENGINE_TYPE='$PRISMA_CLI_QUERY_ENGINE_TYPE && echo 'PRISMA_ENGINE_TYPE='$PRISMA_ENGINE_TYPE && npx prisma generate --schema=./prisma/schema.production.prisma && npm run build"
+  command = "rm -rf .next && rm -rf node_modules/.prisma && rm -rf node_modules/@prisma/client && echo 'Setting Prisma environment variables...' && PRISMA_GENERATE_DATAPROXY=false PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_ENGINE_TYPE=binary npx prisma generate --schema=./prisma/schema.production.prisma && npm run build"
   publish = ".next"
 
   # Ensure clean build - remove any cached artifacts
