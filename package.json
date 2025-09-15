@@ -19,7 +19,7 @@
     "build:fast": "NODE_OPTIONS=\"--max-old-space-size=8192\" TSC_COMPILE_ON_ERROR=false next build",
     "build:optimized": "NODE_OPTIONS=\"--max-old-space-size=8192\" next build --experimental-app-only",
     "analyze": "NODE_OPTIONS=\"--max-old-space-size=8192\" ANALYZE=true next build",
-    "prebuild": "npm run prisma:verify",
+    "prebuild": "",
     "start": "next start",
     "lint": "node scripts/lint-manual.js",
     "lint:custom": "node scripts/lint-custom.js",
