@@ -13,7 +13,6 @@
 // Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = 'nodejs';
 
-
 import { ErrorCodes, StandardError } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
@@ -146,7 +145,7 @@ async function checkDatabaseStatus(type: 'online' | 'offline'): Promise<ServiceS
       : 'localhost';
 
     // Determine database type and provider dynamically
-    let databaseType = 'PostgreSQL';
+    const databaseType = 'PostgreSQL';
     let provider = 'Local';
     let description = 'Primary PostgreSQL database for application data storage';
 
@@ -226,7 +225,7 @@ async function checkCloudDatabaseStatus(): Promise<ServiceStatus> {
       : 'localhost';
 
     // Determine cloud database type and provider
-    let databaseType = 'PostgreSQL';
+    const databaseType = 'PostgreSQL';
     let provider = 'Cloud';
     let description = 'Cloud PostgreSQL database for production data storage';
 
@@ -255,6 +254,7 @@ async function checkCloudDatabaseStatus(): Promise<ServiceStatus> {
           url: cloudDbUrl,
         },
       },
+      log: ['warn', 'error'],
     });
 
     try {
@@ -333,9 +333,9 @@ async function checkPythonServices(): Promise<ServiceStatus> {
           const version = stdout.trim().match(/Python (\d+\.\d+\.\d+)/)?.[1] || 'Unknown';
 
           // Check for running Python services on common ports
-          const checkPythonService = (port: number, _serviceName: string) => {
-            return new Promise<boolean>(async resolve => {
-              const net = await import('node:net');
+          const checkPythonService = async (port: number) => {
+            const net = await import('node:net');
+            return new Promise<boolean>(resolve => {
               const socket = new net.Socket();
               let resolved = false;
 

@@ -21,7 +21,6 @@ echo "🌐 Setting up Netlify environment variables..."
 # Critical Database Variables (use CLOUD_DATABASE_URL for production)
 echo "🗄️  Setting database connection variables..."
 npx netlify env:set DATABASE_URL "$CLOUD_DATABASE_URL" --context production
-npx netlify env:set DIRECT_URL "$CLOUD_DATABASE_URL" --context production
 
 # Authentication Variables
 echo "🔐 Setting authentication variables..."
@@ -62,7 +61,6 @@ npx netlify env:list --context production
 echo ""
 echo "📋 Summary of critical variables set:"
 echo "   DATABASE_URL: Set to Neon cloud database"
-echo "   DIRECT_URL: Set to Neon cloud database"
 echo "   NEXTAUTH_URL: https://posalpro.netlify.app"
 echo "   NEXTAUTH_SECRET: [Set]"
 echo "   JWT_SECRET: [Set]"

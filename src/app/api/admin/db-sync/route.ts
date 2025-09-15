@@ -1,4 +1,3 @@
-
 // Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = 'nodejs';
 
@@ -270,9 +269,11 @@ const performDatabaseSync = async (
 
       const localPrisma = new PrismaClient({
         datasources: { db: { url: localDbUrl } },
+        log: ['warn', 'error'],
       });
       const cloudPrisma = new PrismaClient({
         datasources: { db: { url: cloudDbUrl } },
+        log: ['warn', 'error'],
       });
 
       try {

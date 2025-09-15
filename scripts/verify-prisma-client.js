@@ -43,9 +43,7 @@ async function verifyPrismaClient() {
     // Check Prisma client instantiation
     console.log('\n🔧 Prisma Client Instantiation:');
     try {
-      const prisma = new PrismaClient({
-        log: ['warn', 'error'],
-      });
+      const prisma = new PrismaClient();
 
       console.log('   ✅ Prisma client created successfully');
 
@@ -64,7 +62,6 @@ async function verifyPrismaClient() {
       await prisma.$disconnect();
       console.log('\n🎉 Prisma client verification complete!');
       console.log('✅ Client is properly configured for direct PostgreSQL connections');
-
     } catch (error) {
       console.log('   ❌ Error creating or testing Prisma client');
       console.log('   🔍 Error details:', error.message);
@@ -78,7 +75,6 @@ async function verifyPrismaClient() {
         console.log('   4. Use a postgresql:// URL, not prisma://');
       }
     }
-
   } catch (error) {
     console.error('❌ Error during verification:', error.message);
   }
