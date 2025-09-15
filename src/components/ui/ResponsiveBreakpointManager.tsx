@@ -464,7 +464,6 @@ export function useResponsive(): ResponsiveContextType {
   const context = useContext(ResponsiveContext);
   if (!context) {
     if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       import('@/lib/logger').then(({ logWarn }) =>
         logWarn(
           'useResponsive called outside of ResponsiveBreakpointManager. Returning safe default context.'

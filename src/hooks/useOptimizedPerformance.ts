@@ -102,7 +102,6 @@ export function useOptimizedPerformance() {
           loadTime,
         }));
       } catch (error) {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         import('@/lib/logger').then(({ logWarn }) =>
           logWarn('[OptimizedPerformance] Setup failed', {
             error: error instanceof Error ? error.message : String(error),
@@ -149,7 +148,6 @@ export function useOptimizedPerformance() {
         return memoryUsage;
       }
     } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       import('@/lib/logger').then(({ logWarn }) =>
         logWarn('[OptimizedPerformance] Memory collection failed', {
           error: error instanceof Error ? error.message : String(error),
@@ -187,7 +185,6 @@ export function useOptimizedPerformance() {
 
       return finalScore;
     } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       import('@/lib/logger').then(({ logWarn }) =>
         logWarn('[OptimizedPerformance] Score calculation failed', {
           error: error instanceof Error ? error.message : String(error),
@@ -227,7 +224,6 @@ export function useOptimizedPerformance() {
 
       return recommendations;
     } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       import('@/lib/logger').then(({ logWarn }) =>
         logWarn('[OptimizedPerformance] Recommendations failed', {
           error: error instanceof Error ? error.message : String(error),
@@ -268,7 +264,6 @@ export function useOptimizedPerformance() {
         recommendations,
       };
     } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       import('@/lib/logger').then(({ logWarn }) =>
         logWarn('[OptimizedPerformance] Analysis failed', {
           error: error instanceof Error ? error.message : String(error),

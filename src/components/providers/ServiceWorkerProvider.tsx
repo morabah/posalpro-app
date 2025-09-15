@@ -18,15 +18,10 @@ interface ServiceWorkerProviderProps {
 export function ServiceWorkerProvider({
   children,
   enableNotifications = true,
-  enableAutoUpdate = false
+  enableAutoUpdate = false,
 }: ServiceWorkerProviderProps) {
-  const {
-    status,
-    isOnline,
-    updateAvailable,
-    initialize,
-    updateServiceWorker,
-  } = useServiceWorker(false); // Don't auto-initialize
+  const { status, isOnline, updateAvailable, initialize, updateServiceWorker } =
+    useServiceWorker(false); // Don't auto-initialize
 
   const [hasShownOfflineNotice, setHasShownOfflineNotice] = useState(false);
   const [hasShownUpdateNotice, setHasShownUpdateNotice] = useState(false);
@@ -36,9 +31,10 @@ export function ServiceWorkerProvider({
     if (typeof window !== 'undefined' && status.isSupported) {
       initialize().then(success => {
         if (success && enableNotifications) {
-          // eslint-disable-next-line @typescript-eslint/no-floating-promises
           import('@/lib/logger').then(({ logInfo }) =>
-            logInfo('Service worker initialized successfully', { component: 'ServiceWorkerProvider' })
+            logInfo('Service worker initialized successfully', {
+              component: 'ServiceWorkerProvider',
+            })
           );
         }
       });
@@ -95,7 +91,13 @@ export function ServiceWorkerProvider({
     }
 
     setHasShownUpdateNotice(true);
-  }, [updateAvailable, hasShownUpdateNotice, enableNotifications, enableAutoUpdate, updateServiceWorker]);
+  }, [
+    updateAvailable,
+    hasShownUpdateNotice,
+    enableNotifications,
+    enableAutoUpdate,
+    updateServiceWorker,
+  ]);
 
   // Add global offline indicator
   const OfflineIndicator = () => {

@@ -395,7 +395,7 @@ export function buildStrictHtml(params: StrictTemplateParams): string {
 
   // Calculate dynamic company information numbering
   const getCompanyIndex = () => {
-    let index = 1; // Title is always first
+    const index = 1; // Title is always first
     for (const sectionKey of order) {
       if (sectionKey === 'company') {
         break;

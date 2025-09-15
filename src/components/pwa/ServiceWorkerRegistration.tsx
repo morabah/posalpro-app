@@ -21,7 +21,6 @@ export function ServiceWorkerRegistration() {
             scope: '/',
           });
 
-          // eslint-disable-next-line @typescript-eslint/no-floating-promises
           import('@/lib/logger').then(({ logInfo }) =>
             logInfo('[PWA] Service Worker registered successfully', { scope: registration.scope })
           );
@@ -33,7 +32,7 @@ export function ServiceWorkerRegistration() {
               newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                   // New service worker is available
-                  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
                   import('@/lib/logger').then(({ logInfo }) =>
                     logInfo('[PWA] New service worker available')
                   );
@@ -48,7 +47,6 @@ export function ServiceWorkerRegistration() {
 
           // Handle service worker activation
           navigator.serviceWorker.addEventListener('controllerchange', () => {
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises
             import('@/lib/logger').then(({ logInfo }) => logInfo('[PWA] Service worker activated'));
           });
         } catch (error) {
