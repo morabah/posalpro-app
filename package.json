@@ -69,7 +69,7 @@
     "db:reset": "prisma migrate reset --force && npm run db:seed",
     "db:backup": "pg_dump --no-owner --format=c $DATABASE_URL > ./backups/backup_$(date +%F_%H-%M).sqlc",
     "db:backup:verify": "pg_restore -l ./backups/backup_latest.sqlc >/dev/null",
-    "postinstall": "echo 'Generating Prisma client with library engine...' && PRISMA_GENERATE_DATAPROXY=false PRISMA_CLIENT_ENGINE_TYPE=library PRISMA_CLI_QUERY_ENGINE_TYPE=library PRISMA_ENGINE_TYPE=library npx prisma generate --schema=./prisma/schema.production.prisma",
+    "postinstall": "echo 'Generating Prisma client with library engine...' && PRISMA_GENERATE_DATAPROXY=false PRISMA_CLIENT_ENGINE_TYPE=library PRISMA_CLI_QUERY_ENGINE_TYPE=library PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x PRISMA_ENGINE_TYPE=library npx prisma generate --schema=./prisma/schema.production.prisma",
     "production:setup": "./scripts/setup-production.sh",
     "production:validate": "./scripts/setup-production.sh validate",
     "production:seed": "./scripts/setup-production.sh seed-only",

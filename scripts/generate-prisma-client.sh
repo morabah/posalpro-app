@@ -5,10 +5,11 @@
 
 echo "🔧 Generating Prisma client with library engine..."
 
-# Set environment variables explicitly
+# Set environment variables explicitly - aligned with netlify.toml
 export PRISMA_GENERATE_DATAPROXY=false
 export PRISMA_CLIENT_ENGINE_TYPE=library
 export PRISMA_CLI_QUERY_ENGINE_TYPE=library
+export PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
 export PRISMA_ENGINE_TYPE=library
 
 # Display current environment variables
@@ -16,6 +17,7 @@ echo "Environment variables:"
 echo "  PRISMA_GENERATE_DATAPROXY=$PRISMA_GENERATE_DATAPROXY"
 echo "  PRISMA_CLIENT_ENGINE_TYPE=$PRISMA_CLIENT_ENGINE_TYPE"
 echo "  PRISMA_CLI_QUERY_ENGINE_TYPE=$PRISMA_CLI_QUERY_ENGINE_TYPE"
+echo "  PRISMA_CLI_BINARY_TARGETS=$PRISMA_CLI_BINARY_TARGETS"
 echo "  PRISMA_ENGINE_TYPE=$PRISMA_ENGINE_TYPE"
 
 # Clean any existing Prisma client

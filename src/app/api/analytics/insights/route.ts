@@ -54,7 +54,7 @@ export const GET = createRoute(
       // 🚨 BUILD-TIME SAFETY CHECK: Prevent database operations during Next.js build
       const IS_BUILD_TIME =
         process.env.NETLIFY_BUILD_TIME === 'true' ||
-        (!process.env.DATABASE_URL && !process.env.NETLIFY_DATABASE_URL);
+        !process.env.DATABASE_URL;
 
       if (IS_BUILD_TIME) {
         logInfo('Analytics insights accessed during build - returning empty data', {
