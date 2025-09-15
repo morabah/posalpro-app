@@ -6,7 +6,7 @@
 
 import { ErrorCodes, processError, StandardError } from '../errors/ErrorHandlingService';
 import { logDebug, logInfo } from '../logger';
-import prisma from '../prisma';
+import { prisma } from '../prisma';
 import { getCurrentTenant } from '../tenant';
 
 // Type definitions for dashboard data
@@ -296,7 +296,7 @@ export class DashboardService {
         },
       });
 
-      const performance: TeamPerformance[] = teamData.map(user => ({
+      const performance: TeamPerformance[] = teamData.map((user: any) => ({
         userId: user.id,
         name: user.name || 'Unknown',
         proposalsCreated: user._count.createdProposals,
@@ -362,7 +362,7 @@ export class DashboardService {
         },
       });
 
-      const stages: PipelineStage[] = pipelineData.map(stat => ({
+      const stages: PipelineStage[] = pipelineData.map((stat: any) => ({
         stage: stat.status,
         count: stat._count.id,
         totalValue: Number(stat._sum.totalValue || 0),

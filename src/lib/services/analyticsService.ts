@@ -6,7 +6,7 @@
 
 import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { logDebug, logError, logInfo } from '../logger';
-import prisma from '../prisma';
+import { prisma } from '../prisma';
 import { getCurrentTenant } from '../tenant';
 
 // Type definitions for analytics
@@ -451,7 +451,7 @@ export class AnalyticsService {
       }> = [];
 
       // Add hypothesis events
-      events.forEach(event => {
+      events.forEach((event: any) => {
         insights.push({
           id: event.id,
           type: 'hypothesis',
@@ -463,7 +463,7 @@ export class AnalyticsService {
       });
 
       // Add recent proposals
-      recentProposals.forEach(proposal => {
+      recentProposals.forEach((proposal: any) => {
         insights.push({
           id: proposal.id,
           type: 'proposal',

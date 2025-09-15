@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
     const validatedQuery = ApprovalQueueQuerySchema.parse(queryParams);
 
     // Dynamic import of Prisma to avoid build-time initialization
-    const { default: prisma } = await import('@/lib/db/prisma');
+    const { prisma } = await import('@/lib/prisma');
 
     // Build complex query to get approval queue items
     const where: {
@@ -234,13 +234,13 @@ export async function GET(request: NextRequest) {
   );
 
     // Transform executions into approval queue items
-    const queueItems = executions.map((execution: ApprovalExecutionWithRelations) => {
+    const queueItems = (executions as any[]).map((execution: any) => {
       const workflow = execution.workflow;
       const proposal = execution.proposal;
 
       // Find current stage from workflow stages
       const currentStageId = execution.currentStage || '';
-      const currentStage = workflow?.stages?.find((stage) => stage.id === currentStageId);
+      const currentStage = workflow?.stages?.find((stage: any) => stage.id === currentStageId);
 
       // For now, we'll use a placeholder assignee since the assignment logic is complex
       const assignee = null;
@@ -580,7 +580,7 @@ export async function POST(request: NextRequest) {
 
     // Process bulk action based on type
     // Dynamic import of Prisma to avoid build-time initialization
-    const { default: prisma } = await import('@/lib/db/prisma');
+    const { prisma } = await import('@/lib/prisma');
 
     let updatedCount = 0;
     const errors: string[] = [];

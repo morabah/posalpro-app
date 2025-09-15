@@ -34,7 +34,7 @@ export async function getPrismaClient() {
 
   try {
     logDebug('Initializing Prisma client dynamically');
-    const { default: prisma } = await import('@/lib/db/prisma');
+    const { prisma } = await import('@/lib/prisma');
     prismaClient = prisma;
     return prismaClient;
   } catch (error) {
@@ -49,6 +49,9 @@ export async function getPrismaClient() {
 export async function executeQuery<T>(operation: string, queryFn: QueryFunction<T>): Promise<T> {
   try {
     const prisma = await getPrismaClient();
+    if (!prisma) {
+      throw new Error('Prisma client not initialized');
+    }
     return await queryFn(prisma);
   } catch (error) {
     logError(`Database query failed: ${operation}`, error);

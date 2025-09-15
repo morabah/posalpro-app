@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client';
 import { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '../db/database';
 import { ErrorCodes, errorHandlingService, StandardError } from '../errors';
 import { logDebug, logError, logInfo } from '../logger';
-import prisma from '../prisma';
+import { prisma } from '../prisma';
 import { getCurrentTenant } from '../tenant';
 
 // Type definitions for search
@@ -228,7 +228,7 @@ export class SearchService {
         take: 50, // Limit per entity type
       });
 
-      return proposals.map(proposal => ({
+      return proposals.map((proposal: any) => ({
         id: proposal.id,
         title: proposal.title || '',
         description: proposal.description || '',
@@ -292,7 +292,7 @@ export class SearchService {
         take: 50, // Limit per entity type
       });
 
-      return products.map(product => ({
+      return products.map((product: any) => ({
         id: product.id,
         title: product.name || '',
         description: product.description || '',
@@ -358,7 +358,7 @@ export class SearchService {
         take: 50, // Limit per entity type
       });
 
-      return customers.map(customer => ({
+      return customers.map((customer: any) => ({
         id: customer.id,
         title: customer.name || '',
         description: customer.email || '',
@@ -419,7 +419,7 @@ export class SearchService {
         take: 50, // Limit per entity type
       });
 
-      return users.map(user => ({
+      return users.map((user: any) => ({
         id: user.id,
         title: user.name || '',
         description: user.email || '',
@@ -555,7 +555,7 @@ export class SearchService {
           orderBy: { updatedAt: 'desc' },
         });
 
-        proposals.forEach(proposal => {
+        proposals.forEach((proposal: any) => {
           if (proposal.title && !suggestions.includes(proposal.title)) {
             suggestions.push(proposal.title);
             entities.push({
@@ -588,7 +588,7 @@ export class SearchService {
           orderBy: { updatedAt: 'desc' },
         });
 
-        products.forEach(product => {
+        products.forEach((product: any) => {
           if (product.name && !suggestions.includes(product.name)) {
             suggestions.push(product.name);
             entities.push({
@@ -621,7 +621,7 @@ export class SearchService {
           orderBy: { updatedAt: 'desc' },
         });
 
-        customers.forEach(customer => {
+        customers.forEach((customer: any) => {
           if (customer.name && !suggestions.includes(customer.name)) {
             suggestions.push(customer.name);
             entities.push({
