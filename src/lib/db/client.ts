@@ -162,13 +162,75 @@ const validateEnvironment = () => {
   }
 
   // Validate database URL format
+  let databaseUrl: URL;
   try {
-    new URL(process.env.DATABASE_URL);
+    databaseUrl = new URL(process.env.DATABASE_URL);
   } catch {
     throw new Error(
       'DATABASE_URL must be a valid PostgreSQL connection string. ' +
         'Format: postgresql://username:password@host:port/database'
     );
+  }
+
+  // Validate protocol for Data Proxy vs Direct Connection consistency
+  const databaseUrlString = process.env.DATABASE_URL;
+  const clientEngineType = process.env.PRISMA_CLIENT_ENGINE_TYPE;
+  const generateDataProxy = process.env.PRISMA_GENERATE_DATAPROXY;
+
+  // Check for Data Proxy URL (prisma://) with non-Data Proxy client configuration
+  if (databaseUrlString.startsWith('prisma://')) {
+    if (clientEngineType && clientEngineType !== 'dataproxy') {
+      throw new Error(
+        `Configuration mismatch: DATABASE_URL uses prisma:// (Data Proxy) but PRISMA_CLIENT_ENGINE_TYPE is set to '${clientEngineType}'. ` +
+        'For Data Proxy connections, set PRISMA_CLIENT_ENGINE_TYPE=dataproxy or use postgresql:// for direct connections.'
+      );
+    }
+
+    if (generateDataProxy === 'false') {
+      throw new Error(
+        'Configuration mismatch: DATABASE_URL uses prisma:// (Data Proxy) but PRISMA_GENERATE_DATAPROXY=false. ' +
+        'For Data Proxy connections, set PRISMA_GENERATE_DATAPROXY=true or use postgresql:// for direct connections.'
+      );
+    }
+
+    logger.info('🔗 Data Proxy connection detected (prisma://)');
+  }
+  // Check for direct connection URL (postgresql://) with Data Proxy client configuration
+  else if (databaseUrlString.startsWith('postgresql://')) {
+    if (clientEngineType === 'dataproxy') {
+      logger.warn(
+        '⚠️  Configuration warning: DATABASE_URL uses postgresql:// (direct connection) but PRISMA_CLIENT_ENGINE_TYPE=dataproxy. ' +
+        'For direct connections, set PRISMA_CLIENT_ENGINE_TYPE=binary or library, or use prisma:// for Data Proxy connections.'
+      );
+    }
+
+    if (generateDataProxy === 'true') {
+      logger.warn(
+        '⚠️  Configuration warning: DATABASE_URL uses postgresql:// (direct connection) but PRISMA_GENERATE_DATAPROXY=true. ' +
+        'For direct connections, set PRISMA_GENERATE_DATAPROXY=false, or use prisma:// for Data Proxy connections.'
+      );
+    }
+
+    logger.info('🔗 Direct PostgreSQL connection detected (postgresql://)');
+  }
+  // Invalid protocol
+  else {
+    throw new Error(
+      `Invalid DATABASE_URL protocol: '${databaseUrl.protocol}'. ` +
+      'Expected either postgresql:// for direct connections or prisma:// for Data Proxy connections.'
+    );
+  }
+
+  // Additional validation for direct connections
+  if (databaseUrlString.startsWith('postgresql://')) {
+    // Validate required components for PostgreSQL URLs
+    if (!databaseUrl.hostname) {
+      throw new Error('DATABASE_URL must include a hostname for PostgreSQL connections');
+    }
+
+    if (!databaseUrl.pathname || databaseUrl.pathname === '/') {
+      throw new Error('DATABASE_URL must include a database name for PostgreSQL connections');
+    }
   }
 };
 
