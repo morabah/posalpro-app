@@ -1,437 +1,203 @@
 # PosalPro MVP2 Deployment Guide
 
-## 🚀 Quick Start
+## Overview
 
-The PosalPro MVP2 project now uses a comprehensive versioning and deployment
-system starting with **alpha releases**. Each deployment automatically
-increments the version number and tracks deployment history.
+This guide covers the deployment process for PosalPro MVP2, including automated checks to prevent common configuration issues.
 
-### Current Version: `0.1.0-alpha.1`
+## Prerequisites
 
-## 📋 Version Progression
+- Node.js >= 20.17.0
+- npm >= 10.0.0
+- PostgreSQL database (local or cloud)
+- Environment variables configured
 
-### Alpha Phase (Feature Development)
+## Environment Setup
 
-```
-0.1.0-alpha.1 → 0.1.0-alpha.2 → 0.1.0-alpha.3 → 0.1.0-alpha.N
-```
+### Required Environment Variables
 
-- **Purpose**: Feature development, testing, documentation improvements
-- **Frequency**: Multiple deployments per day/week
-- **Audience**: Development team, internal testing
-
-### Beta Phase (Stabilization)
-
-```
-0.1.0-beta.1 → 0.1.0-beta.2 → 0.1.0-beta.3 → 0.1.0-beta.N
-```
-
-- **Purpose**: Feature complete, bug fixes, performance optimization
-- **Frequency**: Weekly deployments
-- **Audience**: Beta testers, stakeholders
-
-### Release Candidate (Pre-Production)
-
-```
-0.1.0-rc.1 → 0.1.0-rc.2 → 0.1.0-rc.3 → 0.1.0-rc.N
-```
-
-- **Purpose**: Final testing, critical bug fixes only
-- **Frequency**: As needed
-- **Audience**: Production-like testing environment
-
-### Production Releases
-
-```
-0.1.0 → 0.1.1 → 0.2.0 → 1.0.0
-```
-
-- **Patch** (0.1.0 → 0.1.1): Bug fixes, security updates
-- **Minor** (0.1.0 → 0.2.0): New features, enhancements
-- **Major** (0.1.0 → 1.0.0): Breaking changes, major milestones
-
-## 🚀 Deployment Commands
-
-### Standard Deployments
+Set the following environment variables in your deployment environment:
 
 ```bash
-# Alpha release (recommended for current phase)
-npm run deploy:alpha
+# Database Configuration
+DATABASE_URL="postgresql://username:password@host:port/database"
+DIRECT_URL="postgresql://username:password@host:port/database"  # Optional
 
-# Beta release
-npm run deploy:beta
+# Authentication
+NEXTAUTH_SECRET="your-secret-key-here"
+NEXTAUTH_URL="https://your-domain.com"
+JWT_SECRET="your-jwt-secret-here"
+SESSION_ENCRYPTION_KEY="your-session-key-here"
 
-# Release candidate
-npm run deploy:rc
+# Application
+NEXT_PUBLIC_APP_URL="https://your-domain.com"
+API_BASE_URL="https://your-domain.com/api"
+CORS_ORIGINS="https://your-domain.com"
 
-# Production releases
-npm run deploy:patch   # Bug fixes
-npm run deploy:minor   # New features
-npm run deploy:major   # Breaking changes
+# Security
+CSRF_SECRET="your-csrf-secret-here"
+RATE_LIMIT="100"
 
-# Staging deployment (no version bump)
-npm run deploy:staging
+# Prisma Configuration (Critical for Data Proxy Prevention)
+PRISMA_GENERATE_DATAPROXY="false"
+PRISMA_CLIENT_ENGINE_TYPE="binary"
+PRISMA_CLI_QUERY_ENGINE_TYPE="binary"
+PRISMA_ENGINE_TYPE="binary"
 ```
 
-### Advanced Options
+## Automated Build Checks
+
+### Issue 3 Resolution: Automated Prisma Client Verification
+
+The deployment process now includes automated checks to prevent Data Proxy misconfigurations:
+
+#### 1. Prisma Client Verification
+
+**Script**: `npm run prisma:verify`
+
+**When it runs**:
+- During `npm install` (postinstall hook)
+- Before every build (prebuild hook)
+- Can be run manually for verification
+
+**What it checks**:
+- DATABASE_URL protocol consistency (postgresql:// vs prisma://)
+- Prisma client generation mode (Data Proxy vs direct connection)
+- Environment variable consistency
+- Database connectivity with the generated client
+
+**Failure behavior**:
+- Exits with error code 1 for critical misconfigurations
+- Prevents build from proceeding
+- Provides clear error messages and fix instructions
+
+#### 2. Environment Verification
+
+**Script**: `npm run env:verify`
+
+**What it checks**:
+- Required environment variables presence
+- DATABASE_URL protocol validation
+- Prisma configuration consistency
+- Security key formats
+
+## Deployment Process
+
+### 1. Pre-Deployment Verification
 
 ```bash
-# Dry run (see what would happen)
-npm run deploy:dry-run
+# Verify environment configuration
+npm run env:verify
 
-# Skip build step (faster deployment)
-./scripts/deploy.sh alpha --skip-build
-
-# Get deployment information
-npm run deployment:info
+# Verify Prisma client configuration
+npm run prisma:verify
 ```
 
-## 🔥 CRITICAL: Database Deployment Requirements
-
-### Environment Understanding
-
-**PosalPro MVP2 uses different database environments:**
-
-- **Development**: `DATABASE_URL` (local PostgreSQL)
-- **Production**: `CLOUD_DATABASE_URL` (Neon PostgreSQL cloud database)
-
-### Mandatory Database Operations
-
-**For ALL production deployments, you MUST:**
+### 2. Build Process
 
 ```bash
-# 1. Set production database environment
-export CLOUD_DATABASE_URL="postgresql://neondb_owner:npg_XufaK0v9TOgn@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require"
+# Install dependencies (includes Prisma client generation and verification)
+npm install
 
-# 2. Synchronize database schema
-DATABASE_URL=$CLOUD_DATABASE_URL npx prisma db push
-
-# 3. Seed production database (if needed)
-CLOUD_DATABASE_URL=$CLOUD_DATABASE_URL NODE_ENV=production npx prisma db seed
-
-# 4. Verify data exists
-DATABASE_URL=$CLOUD_DATABASE_URL npx prisma db execute --stdin <<< "SELECT COUNT(*) FROM \"Proposal\";"
-
-# 5. Test API endpoints with data
-curl "https://posalpro-mvp2.windsurf.build/api/proposals?page=1&limit=5"
-```
-
-### Database Verification Commands
-
-```bash
-# Check database connection
-DATABASE_URL=$CLOUD_DATABASE_URL npx prisma db execute --stdin <<< "SELECT current_database();"
-
-# Verify key tables have data
-DATABASE_URL=$CLOUD_DATABASE_URL npx prisma db execute --stdin <<< "SELECT
-  (SELECT COUNT(*) FROM \"Proposal\") as proposals,
-  (SELECT COUNT(*) FROM \"Customer\") as customers,
-  (SELECT COUNT(*) FROM \"Product\") as products;"
-
-# Test specific API endpoints
-curl -s "https://posalpro-mvp2.windsurf.build/api/proposals" | jq '.data | length'
-curl -s "https://posalpro-mvp2.windsurf.build/api/customers" | jq '.data | length'
-```
-
-## 📊 Deployment Process
-
-Each deployment automatically performs these steps:
-
-1. **Pre-flight Checks**
-   - Verify project directory
-   - Check git status (warn about uncommitted changes)
-   - Validate environment
-
-2. **Version Management**
-   - Increment version number based on deployment type
-   - Update package.json
-
-3. **Build Process**
-   - Clean previous build (.next directory)
-   - Run TypeScript type checking
-   - Execute production build
-
-4. **Deployment**
-   - Deploy to Netlify (production or staging)
-   - Generate unique deployment URL
-
-5. **🔥 CRITICAL: Database Operations**
-   - Synchronize database schema to production
-   - Seed production database with sample data (if needed)
-   - Verify data exists in production database
-
-6. **Post-deployment**
-   - Record deployment in local history
-   - Create git commit with version bump
-   - Create git tag (v0.1.0-alpha.2, etc.)
-   - Push changes to remote repository
-
-7. **Notification**
-   - Display deployment summary
-   - Show live URLs
-   - Provide next steps
-
-## 📈 Deployment History Tracking
-
-The system maintains a local deployment history file
-(`.deployment-history.json`) that tracks:
-
-- Version number
-- Deployment type and environment
-- Timestamp
-- Git commit information
-- Deployment URL
-
-View history with:
-
-```bash
-npm run deployment:info
-```
-
-## 🌐 URLs and Environments
-
-### Production
-
-- **URL**: https://posalpro-mvp2.windsurf.build
-- **Purpose**: Live application for users
-- **Deployment**: All release types (alpha, beta, rc, production)
-
-### Staging
-
-- **URL**: Temporary Netlify URL (changes each deployment)
-- **Purpose**: Testing before production
-- **Deployment**: `npm run deploy:staging`
-
-### Local Development
-
-- **URL**: http://localhost:3000
-- **Purpose**: Development and testing
-- **Start**: `npm run dev:smart`
-
-## 🔧 Manual Deployment Process
-
-If you need to deploy manually without the automated system:
-
-```bash
-# Build the application
+# Build the application (includes pre-build verification)
 npm run build
-
-# Deploy to production
-npx netlify deploy --prod
-
-# Deploy to staging
-npx netlify deploy
 ```
 
-## 📝 Best Practices
+### 3. Common Issues and Solutions
 
-### Alpha Phase (Current)
+#### Data Proxy Configuration Error
 
-- Deploy frequently (multiple times per day/week)
-- Use `npm run deploy:alpha` for all deployments
-- **CRITICAL**: Always verify database seeding after deployment
-- Test each deployment thoroughly with real data verification
-- Document any issues in deployment history
+**Error**: `Error validating datasource 'db': the URL must start with the protocol 'prisma://'`
 
-### Database Deployment Best Practices
+**Cause**: Prisma client was generated for Data Proxy mode but DATABASE_URL uses postgresql://
 
-- **Always check environment variables** before database operations
-- **Verify schema synchronization** before seeding data
-- **Test API endpoints** to ensure data is accessible
-- **Document database changes** in deployment history
-- **Never assume** development and production databases are in sync
+**Solution**:
+1. Ensure `PRISMA_GENERATE_DATAPROXY=false`
+2. Set `PRISMA_CLIENT_ENGINE_TYPE=binary` or `library`
+3. Regenerate Prisma client: `npx prisma generate`
+4. Use `postgresql://` URL, not `prisma://`
 
-### When to Move to Beta
+#### Environment Variable Mismatch
 
-- All major features implemented
-- Basic functionality stable
-- Ready for wider testing
+**Error**: `Configuration mismatch: DATABASE_URL uses prisma:// but PRISMA_CLIENT_ENGINE_TYPE is set to 'binary'`
 
-### Version Bumping Strategy
+**Solution**: Either:
+- Use `postgresql://` URL with `PRISMA_CLIENT_ENGINE_TYPE=binary`
+- Or use `prisma://` URL with `PRISMA_CLIENT_ENGINE_TYPE=dataproxy`
 
-- **Alpha**: All feature work, documentation, bug fixes
-- **Beta**: Stabilization, performance improvements
-- **RC**: Critical fixes only
-- **Production**: Stable releases only
+## Platform-Specific Deployment
 
-## 🚨 Troubleshooting
+### Netlify
 
-### Common Issues
+1. Set environment variables in Netlify UI
+2. Ensure `PRISMA_GENERATE_DATAPROXY=false` is set
+3. Deploy will automatically run verification checks
+4. Build will fail if Data Proxy misconfiguration is detected
 
-1. **Uncommitted Changes Warning**
+### Vercel
 
-   ```
-   You have uncommitted changes:
-   Continue with deployment? (y/N):
-   ```
+1. Set environment variables in Vercel dashboard
+2. Ensure Prisma configuration variables are set correctly
+3. Build process includes automated verification
 
-   - Commit changes first, or type 'y' to continue
+### Docker
 
-2. **Build Failures**
-   - Check TypeScript errors: `npm run type-check`
-   - Fix lint issues: `npm run lint:fix`
-   - Review build logs for specific errors
+```dockerfile
+# Ensure environment variables are set
+ENV PRISMA_GENERATE_DATAPROXY=false
+ENV PRISMA_CLIENT_ENGINE_TYPE=binary
 
-3. **Deployment Failures**
-   - Check Netlify CLI authentication
-   - Verify build output exists (.next directory)
-   - Check network connectivity
-
-4. **Database Issues**
-
-   ```
-   Error: API returns empty data arrays
-   ```
-
-   - **Cause**: Production database not seeded
-   - **Solution**: Run database seeding commands
-   - **Prevention**: Always run database verification after deployment
-
-5. **Environment Variable Issues**
-
-   ```
-   Error: Database connection failed
-   ```
-
-   - **Cause**: Wrong database URL for environment
-   - **Check**: `echo $DATABASE_URL` vs `echo $CLOUD_DATABASE_URL`
-   - **Solution**: Use correct environment variable for target environment
-
-### Emergency Rollback
-
-If a deployment fails or causes issues:
-
-1. Check deployment history: `npm run deployment:info`
-2. Identify last working version
-3. Use git to revert: `git reset --hard v[VERSION]`
-4. Redeploy previous version
-
-## 📊 Current Status
-
-- **Current Version**: 0.1.0-alpha.1
-- **Next Deployment**: 0.1.0-alpha.2
-- **Production URL**: https://posalpro-mvp2.windsurf.build
-- **Phase**: Alpha Development
-
-## 🎯 Next Steps
-
-1. Continue alpha deployments for feature development
-2. Monitor deployment history and performance
-3. Plan transition to beta phase when features are complete
-4. Establish testing procedures for each deployment type
-
----
-
-## Quick Reference Card
-
-```bash
-# Most common commands
-npm run deployment:info     # Check current status
-npm run deploy:alpha       # Deploy alpha version
-npm run deploy:dry-run     # Preview deployment
-
-# Database verification (CRITICAL)
-DATABASE_URL=$CLOUD_DATABASE_URL npx prisma db push      # Sync schema
-CLOUD_DATABASE_URL=$CLOUD_DATABASE_URL NODE_ENV=production npx prisma db seed  # Seed data
-curl "https://posalpro-mvp2.windsurf.build/api/proposals?page=1&limit=5"       # Test data
-
-# Git operations
-git status                 # Check for changes
-git log --oneline -5       # Recent commits
+# Build process will run verification automatically
+RUN npm install
+RUN npm run build
 ```
 
-**Remember**: Each deployment increments the version automatically and creates a
-permanent record in git history. **CRITICAL**: Always verify database seeding
-and test API endpoints with real data after deployment!
+## Monitoring and Debugging
 
----
+### Health Check Endpoints
 
-## 🚨 CRITICAL NETLIFY CONFIGURATION
+- `/api/health` - Basic application health
+- `/api/health/database` - Database connectivity
+- `/api/health/prisma-config` - Prisma configuration validation
 
-### **❌ NEVER Do These:**
+### Logs to Monitor
 
-1. **Never use `output: 'standalone'` in next.config.js**
-   - Breaks Netlify's serverless function architecture
-   - Causes API routes to return HTML instead of JSON
-   - Results in authentication failures
+- Prisma client generation logs
+- Environment verification results
+- Database connectivity test results
 
-2. **Never deploy without catch-all redirect**
-   - Missing `/* -> /index.html` redirect breaks App Router
-   - Causes 404 errors on all non-root routes
-   - Must be the LAST redirect rule in netlify.toml
+## Troubleshooting
 
-3. **Never reference non-existent pages in NextAuth config**
-   - Missing `/auth/error` page causes authentication failures
-   - Always implement all pages before deployment
+### Build Failures
 
-4. **Never deploy without testing API endpoints**
-   - API routes must return JSON, not HTML
-   - Test with `curl -H "Accept: application/json"` before deployment
+1. Check environment variables are set correctly
+2. Run `npm run env:verify` to validate configuration
+3. Run `npm run prisma:verify` to check Prisma client
+4. Review error messages for specific fix instructions
 
-### **✅ REQUIRED netlify.toml Configuration**
+### Runtime Errors
 
-```toml
-[build]
-  command = "npx prisma migrate deploy && npx prisma generate && npm run build"
+1. Check database connectivity
+2. Verify Prisma client configuration
+3. Review application logs for specific error details
 
-[build.environment]
-  NODE_VERSION = "20.15.1"
-  NEXT_USE_NETLIFY_EDGE = "true"
+## Security Considerations
 
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+- Never commit environment variables to version control
+- Use strong, unique secrets for production
+- Regularly rotate authentication secrets
+- Monitor for unauthorized access attempts
 
-# Set proper content type for API responses
-[[headers]]
-  for = "/api/*"
-  [headers.values]
-    Content-Type = "application/json; charset=utf-8"
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
-    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+## Performance Optimization
 
-# Optimize static files
-[[headers]]
-  for = "/_next/static/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+- Use connection pooling for database connections
+- Enable Prisma query logging in development only
+- Monitor database query performance
+- Use appropriate Prisma engine type for your deployment environment
 
-# Functions are managed by @netlify/plugin-nextjs
-[functions]
-  included_files = ["schema.prisma"]
+## Support
 
-# Development server
-[dev]
-  command = "npm run dev:smart"
-
-# Image optimization
-[[redirects]]
-  from = "/_next/image"
-  to = "/.netlify/images"
-  status = 200
-
-# Essential catch-all for Next.js App Router - MUST be last
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-```
-
-### **✅ REQUIRED next.config.js Settings**
-
-```javascript
-const nextConfig = {
-  reactStrictMode: true,
-  images: {
-    domains: ['images.unsplash.com'],
-    unoptimized: process.env.NODE_ENV !== 'production',
-  },
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client'],
-  },
-  // CRITICAL: Never use 'standalone' output
-  // output: 'standalone', // ❌ NEVER ENABLE THIS
-};
-```
-
-**Live Application**: https://posalpro-mvp2.windsurf.build
+For deployment issues:
+1. Check this guide first
+2. Review error messages from verification scripts
+3. Check application logs
+4. Verify environment variable configuration
