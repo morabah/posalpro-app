@@ -4,9 +4,10 @@
  */
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
@@ -15,14 +16,14 @@ export async function GET() {
       db: 'up',
       ok: result,
       timestamp: new Date().toISOString(),
-      engine: 'library'
+      engine: 'library',
     });
   } catch (error) {
     return NextResponse.json(
       {
         db: 'down',
         error: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       },
       { status: 500 }
     );

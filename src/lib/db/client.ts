@@ -182,14 +182,14 @@ const validateEnvironment = () => {
     if (clientEngineType && clientEngineType !== 'dataproxy') {
       throw new Error(
         `Configuration mismatch: DATABASE_URL uses prisma:// (Data Proxy) but PRISMA_CLIENT_ENGINE_TYPE is set to '${clientEngineType}'. ` +
-        'For Data Proxy connections, set PRISMA_CLIENT_ENGINE_TYPE=dataproxy or use postgresql:// for direct connections.'
+          'For Data Proxy connections, set PRISMA_CLIENT_ENGINE_TYPE=dataproxy or use postgresql:// for direct connections.'
       );
     }
 
     if (generateDataProxy === 'false') {
       throw new Error(
         'Configuration mismatch: DATABASE_URL uses prisma:// (Data Proxy) but PRISMA_GENERATE_DATAPROXY=false. ' +
-        'For Data Proxy connections, set PRISMA_GENERATE_DATAPROXY=true or use postgresql:// for direct connections.'
+          'For Data Proxy connections, set PRISMA_GENERATE_DATAPROXY=true or use postgresql:// for direct connections.'
       );
     }
 
@@ -200,14 +200,14 @@ const validateEnvironment = () => {
     if (clientEngineType === 'dataproxy') {
       logger.warn(
         '⚠️  Configuration warning: DATABASE_URL uses postgresql:// (direct connection) but PRISMA_CLIENT_ENGINE_TYPE=dataproxy. ' +
-        'For direct connections, set PRISMA_CLIENT_ENGINE_TYPE=binary or library, or use prisma:// for Data Proxy connections.'
+          'For direct connections, set PRISMA_CLIENT_ENGINE_TYPE=binary or library, or use prisma:// for Data Proxy connections.'
       );
     }
 
     if (generateDataProxy === 'true') {
       logger.warn(
         '⚠️  Configuration warning: DATABASE_URL uses postgresql:// (direct connection) but PRISMA_GENERATE_DATAPROXY=true. ' +
-        'For direct connections, set PRISMA_GENERATE_DATAPROXY=false, or use prisma:// for Data Proxy connections.'
+          'For direct connections, set PRISMA_GENERATE_DATAPROXY=false, or use prisma:// for Data Proxy connections.'
       );
     }
 
@@ -217,7 +217,7 @@ const validateEnvironment = () => {
   else {
     throw new Error(
       `Invalid DATABASE_URL protocol: '${databaseUrl.protocol}'. ` +
-      'Expected either postgresql:// for direct connections or prisma:// for Data Proxy connections.'
+        'Expected either postgresql:// for direct connections or prisma:// for Data Proxy connections.'
     );
   }
 

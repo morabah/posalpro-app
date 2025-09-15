@@ -8,6 +8,7 @@ import NextAuth from 'next-auth';
 
 // Ensure Node.js runtime for NextAuth (avoids Edge env/token incompatibility)
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const handler = NextAuth(authOptions);
 

@@ -1,11 +1,20 @@
 [build]
   # ✅ CRITICAL: Build from source using production environment variables
   # Ensure Prisma Client is freshly generated for Linux with binary engine (not Data Proxy)
-  command = "rm -rf .next && rm -rf node_modules/.prisma && rm -rf node_modules/@prisma/client && echo 'Setting Prisma environment variables...' && PRISMA_GENERATE_DATAPROXY=false PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_ENGINE_TYPE=binary npx prisma generate --schema=./prisma/schema.production.prisma && npm run build"
+  command = "rm -rf .next && rm -rf node_modules/.prisma && rm -rf node_modules/@prisma/client && echo 'Installing dependencies with Prisma skip...' && npm ci && echo 'Generating Prisma client with binary engine...' && PRISMA_GENERATE_DATAPROXY=false PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_ENGINE_TYPE=binary npx prisma generate --schema=./prisma/schema.production.prisma && echo '=== PRISMA SANITY CHECKS ===' && echo '1. Prisma version and engine type:' && npx prisma -v && echo '2. Checking for Node-API library engine:' && ls -la node_modules/.prisma/client | grep -E 'libquery_engine|query_engine' || echo 'No library engine found' && echo '3. Confirming no edge client imports:' && grep -R '@prisma/client/edge' -n || echo 'No edge client imports found' && echo '4. Environment variables check:' && env | sort | grep -i prisma || echo 'No Prisma env vars found' && echo '=== BUILD PROCEEDING ===' && npm run build"
   publish = ".next"
 
   # Ensure clean build - remove any cached artifacts
   ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
+
+[functions]
+  # ✅ CRITICAL: Configure Netlify Functions for Prisma compatibility
+  # Use esbuild bundler for better Prisma support
+  node_bundler = "esbuild"
+  # External Prisma modules to prevent bundling issues
+  external_node_modules = ["@prisma/client", "prisma"]
+  # Include Prisma generated files
+  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**"]
 
 # Edge Functions completely disabled - using Node.js runtime for all routes
 # Middleware temporarily disabled to prevent Edge Function conflicts
@@ -34,6 +43,8 @@
   NETLIFY_EDGE_FUNCTIONS_DISABLED = "true"
   # Disable middleware Edge Function compilation
   NETLIFY_MIDDLEWARE_EDGE = "false"
+  # Prevent automatic Prisma generation during npm install
+  PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
   # Force Prisma binary engine generation (not Data Proxy)
   PRISMA_GENERATE_DATAPROXY = "false"
   PRISMA_CLIENT_ENGINE_TYPE = "binary"
