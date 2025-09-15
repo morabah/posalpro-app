@@ -52,7 +52,7 @@ rm -rf node_modules/@prisma/client
 
 # Generate Prisma client with production schema
 echo "🚀 Generating Prisma client with binary engine..."
-npx prisma generate --schema=./prisma/schema.production.prisma
+npx prisma generate
 
 # Check if generation was successful
 if [ $? -eq 0 ]; then

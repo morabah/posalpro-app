@@ -27,7 +27,7 @@ rm -rf node_modules/.prisma
 # Generate Prisma client with production schema
 echo "🚀 Generating Prisma client..."
 # Force binary engine type by explicitly setting it in the command
-PRISMA_GENERATE_DATAPROXY=false PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary npx prisma generate --schema=./prisma/schema.production.prisma
+PRISMA_GENERATE_DATAPROXY=false PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary npx prisma generate
 
 # Verify the generated client
 echo "✅ Verifying Prisma client generation..."
