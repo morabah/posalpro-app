@@ -43,11 +43,7 @@
   # API_BASE_URL = "https://posalpro.netlify.app/api"
 
   # Prisma engine settings (non-secrets) - force library engine, not Data Proxy
-  PRISMA_GENERATE_DATAPROXY = "false"
-  PRISMA_CLIENT_ENGINE_TYPE = "library"
-  PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
-  PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x"
-  PRISMA_ENGINE_TYPE = "library"
+  # (Prisma settings defined in build environment above)
 
   # Use production schema explicitly
   PRISMA_SCHEMA = "prisma/schema.production.prisma"
@@ -72,12 +68,7 @@
   API_BASE_URL = "https://posalpro.netlify.app/api"
 
   # Prisma engine settings - consistent with build environment
-  PRISMA_GENERATE_DATAPROXY = "false"
-  PRISMA_CLIENT_ENGINE_TYPE = "library"
-  PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
-  PRISMA_CLI_BINARY_TARGETS = "debian-openssl-3.0.x"
-  PRISMA_ENGINE_TYPE = "library"
-  PRISMA_SCHEMA = "prisma/schema.production.prisma"
+  # (Prisma settings inherited from build environment above)
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
