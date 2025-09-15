@@ -3,7 +3,7 @@
  * Comprehensive permission checking with context awareness and inheritance
  */
 
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { deleteAuthCache, getAuthCache, setAuthCache } from '@/lib/redis';
 import { logger } from '@/lib/logger';
 

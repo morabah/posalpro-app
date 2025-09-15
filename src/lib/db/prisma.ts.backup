@@ -8,9 +8,9 @@
 
 import { logger } from '@/lib/logging/structuredLogger';
 import { recordDbLatency } from '@/lib/observability/metricsStore';
+import { getCurrentTenant } from '@/lib/tenant';
 import type { Prisma } from '@prisma/client';
 import { PrismaClient } from '@prisma/client';
-import { getCurrentTenant } from '@/lib/tenant';
 
 declare global {
   // Reuse Prisma client across HMR cycles in dev

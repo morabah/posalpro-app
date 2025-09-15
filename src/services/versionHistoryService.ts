@@ -10,7 +10,7 @@
  */
 
 import { ApiResponse } from '@/lib/api/response';
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 

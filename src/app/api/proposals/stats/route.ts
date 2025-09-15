@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 
 
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { getCache, setCache } from '@/lib/redis';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';

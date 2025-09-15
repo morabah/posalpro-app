@@ -3,7 +3,7 @@
  * Feature-flagged API key authentication for protected endpoints
  */
 
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 import { logError } from '@/lib/logger';
 import { createHash } from 'crypto';

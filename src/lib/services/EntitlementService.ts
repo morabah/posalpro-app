@@ -1,4 +1,4 @@
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { getCache, setCache } from '@/lib/redis';
 
 const TTL = 60; // seconds

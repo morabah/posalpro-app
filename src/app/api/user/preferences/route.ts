@@ -10,7 +10,7 @@ export const runtime = 'nodejs';
 import { authOptions } from '@/lib/auth';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { logDebug, logInfo } from '@/lib/logger';
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';

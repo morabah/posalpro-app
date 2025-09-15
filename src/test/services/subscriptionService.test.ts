@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 import { getSeatStatus, hasAvailableSeat } from '@/lib/services/subscriptionService';
 
 describe('SubscriptionService seat status', () => {

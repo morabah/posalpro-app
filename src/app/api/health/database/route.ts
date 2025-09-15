@@ -1,77 +1,28 @@
+/**
+ * Database Health Check Route
+ * Simple test to verify Prisma client works with direct PostgreSQL connection
+ */
 
-// Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = 'nodejs';
 
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { ErrorCodes, errorHandlingService, StandardError } from '@/lib/errors';
-import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
-  const startTime = Date.now();
-
+export async function GET() {
   try {
-    // Test database connection with a simple query
-    const connectionTest = await prisma.$queryRaw`SELECT 1 as test`;
-
-    // Test user query that's failing
-    const userTest = await prisma.user.findFirst({
-      select: { id: true, email: true },
-      take: 1,
-    });
-
-    // Test transaction with timeout
-    const transactionTest = await prisma.$transaction(
-      async tx => {
-        return await tx.user.findFirst({
-          select: { id: true, email: true },
-          take: 1,
-        });
-      },
-      {
-        timeout: 10000, // 10 second timeout
-      }
-    );
-
-    const health = {
-      status: 'healthy',
+    const result = await prisma.$queryRaw`SELECT 1 as ok`;
+    return NextResponse.json({
+      db: 'up',
+      ok: result,
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      responseTime: Date.now() - startTime,
-      database: {
-        connection: 'ok',
-        userQuery: userTest ? 'ok' : 'no_users',
-        transaction: transactionTest ? 'ok' : 'failed',
-        connectionTest: connectionTest ? 'ok' : 'failed',
-      },
-    };
-
-    return new NextResponse(JSON.stringify(health, null, 2), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=30, s-maxage=30',
-        'X-Response-Time': `${Date.now() - startTime}ms`,
-      },
+      engine: 'library'
     });
   } catch (error) {
-    // Use standardized error handling for health checks
-    errorHandlingService.processError(
-      error,
-      'Database health check failed',
-      ErrorCodes.SYSTEM.INTERNAL_ERROR,
-      {
-        component: 'DatabaseHealthRoute',
-        operation: 'healthCheck',
-        responseTime: Date.now() - startTime,
-      }
-    );
-
     return NextResponse.json(
       {
-        status: 'unhealthy',
-        error: error instanceof Error ? error.message : 'Database health check failed',
-        timestamp: new Date().toISOString(),
-        responseTime: Date.now() - startTime,
+        db: 'down',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
       },
       { status: 500 }
     );

@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 
 import { z } from 'zod';
 import { createRoute } from '@/lib/api/route';
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 import { BillingSyncService } from '@/lib/services/BillingSyncService';
 import { getActiveSubscriptionForTenant } from '@/lib/services/subscriptionService';
 

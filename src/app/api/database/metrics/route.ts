@@ -16,7 +16,7 @@ import { ErrorHandlingService, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { DatabaseOptimizationService } from '@/lib/services/DatabaseOptimizationService';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 
 /**
  * Component Traceability Matrix

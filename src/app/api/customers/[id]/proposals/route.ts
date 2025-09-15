@@ -15,7 +15,7 @@ import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 import { ErrorCodes, StandardError } from '@/lib/errors';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest } from 'next/server';

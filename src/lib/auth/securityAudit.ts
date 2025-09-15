@@ -3,7 +3,7 @@
  * Real-time security event detection and comprehensive audit logging
  */
 
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
 

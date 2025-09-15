@@ -1,4 +1,4 @@
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { z } from 'zod';
 
 // Typed DSL subset based on the spec

@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 // Dynamic imports to avoid build-time database connections
 // import { authOptions } from '@/lib/auth';
 // import { validateApiPermission } from '@/lib/auth/apiAuthorization';
-// import prisma from '@/lib/db/prisma';
+// import prisma from '@/lib/prisma';
 import { createApiErrorResponse, StandardError } from '@/lib/errors';
 import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';

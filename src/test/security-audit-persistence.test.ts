@@ -4,7 +4,7 @@
  */
 
 import { SecurityAuditManager } from '@/lib/security/audit';
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 
 // Mock Prisma client
 jest.mock('@/lib/db/prisma', () => ({

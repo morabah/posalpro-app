@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 
 import { ProductQuickSearchApiSchema } from '@/features/products/schemas';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import { ErrorCodes } from '@/lib/errors';

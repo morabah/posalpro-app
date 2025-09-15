@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 
 
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { logInfo } from '@/lib/logger';
 
 // Type definition for proposal metrics data (matches Prisma query result)

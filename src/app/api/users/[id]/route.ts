@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 import { createRoute } from '@/lib/api/route';
 import { EntitlementService } from '@/lib/services/EntitlementService';
 // Permission checks are enforced via createRoute roles
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import {
   createApiErrorResponse,
   ErrorCodes,

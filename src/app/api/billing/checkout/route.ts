@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 
 import { createRoute } from '@/lib/api/route';
 import { getStripe, isStripeReady } from '@/lib/billing/stripe';
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 import { getErrorHandler } from '@/server/api/errorHandler';
 import { z } from 'zod';
 

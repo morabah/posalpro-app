@@ -14,7 +14,7 @@ import {
 } from '@/features/proposals/schemas';
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { logError, logInfo } from '@/lib/logger';
 
 // Validation schemas for workflow operations (centralized)

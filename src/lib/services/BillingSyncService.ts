@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 import { PLAN_TIER_ENTITLEMENTS } from '@/lib/billing/entitlementMapping';
 
 export class BillingSyncService {

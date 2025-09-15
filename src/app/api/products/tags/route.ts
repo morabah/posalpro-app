@@ -10,7 +10,7 @@ export const runtime = 'nodejs';
 import { createRoute } from '@/lib/api/route';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
 
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { logError, logInfo } from '@/lib/logger';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 

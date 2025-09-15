@@ -18,7 +18,7 @@ import {
   executeQuery,
 } from '@/lib/db/database';
 import { ExecutionStatus, Prisma } from '@prisma/client';
-import prisma from '@/lib/db/prisma';
+import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';

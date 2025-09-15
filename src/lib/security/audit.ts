@@ -13,7 +13,7 @@
  * ✅ Security audit trail
  */
 
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 import { logDebug, logError, logInfo, logWarn } from '@/lib/logger';
 
 // ====================

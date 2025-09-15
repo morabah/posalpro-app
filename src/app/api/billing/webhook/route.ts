@@ -3,7 +3,7 @@
 export const runtime = 'nodejs';
 
 import { getStripe, isStripeReady } from '@/lib/billing/stripe';
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 import { BillingSyncService } from '@/lib/services/BillingSyncService';
 import { NextRequest } from 'next/server';
 

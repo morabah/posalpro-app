@@ -65,7 +65,7 @@ jest.mock('@/lib/errors', () => ({
 }));
 
 // Import the mocked modules
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 
 // Mock data for Prisma responses
 const mockPrismaVersion = {

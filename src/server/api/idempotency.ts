@@ -4,7 +4,7 @@
  * Supports both POST (required) and GET (optional) idempotency
  */
 
-import { prisma } from '@/lib/db/prisma';
+import { prisma } from '@/lib/prisma';
 import { ErrorHandlingService, ErrorCodes } from '@/lib/errors';
 import { logError } from '@/lib/logger';
 
