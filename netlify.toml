@@ -1,7 +1,7 @@
 [build]
   # ✅ CRITICAL: Build from source using production environment variables
   # Ensure Prisma Client is freshly generated for Linux with binary engine (not Data Proxy)
-  command = "rm -rf .next && rm -rf node_modules/.prisma && rm -rf node_modules/@prisma/client && echo 'Installing dependencies with Prisma skip...' && npm ci && echo 'Generating Prisma client with binary engine...' && PRISMA_GENERATE_DATAPROXY=false PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_ENGINE_TYPE=binary npx prisma generate && echo '=== PRISMA SANITY CHECKS ===' && echo '1. Prisma version and engine type:' && npx prisma -v && echo '2. Checking for Node-API library engine:' && ls -la node_modules/.prisma/client | grep -E 'libquery_engine|query_engine' || echo 'No library engine found' && echo '3. Confirming no edge client imports:' && grep -R '@prisma/client/edge' -n || echo 'No edge client imports found' && echo '4. Environment variables check:' && env | sort | grep -i prisma || echo 'No Prisma env vars found' && echo '=== BUILD PROCEEDING ===' && npm run build"
+  command = "bash scripts/netlify-build.sh"
   publish = ".next"
 
   # Ensure clean build - remove any cached artifacts
