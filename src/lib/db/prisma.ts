@@ -68,7 +68,7 @@ const prismaGenerateDataproxy = (process.env['PRISMA_GENERATE_DATAPROXY'] || '')
 const prismaAccelerateUrl = process.env['PRISMA_ACCELERATE_URL'];
 const isDataProxyMode =
   prismaClientEngineType === 'dataproxy' ||
-  prismaGenerateDataproxy === 'true' ||
+  (prismaGenerateDataproxy === 'true' && prismaClientEngineType !== 'binary') ||
   !!prismaAccelerateUrl ||
   databaseUrl.startsWith('prisma://');
 
