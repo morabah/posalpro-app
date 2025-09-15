@@ -24,7 +24,7 @@ rm -rf node_modules/.prisma
 
 # Generate Prisma client with production schema
 echo "🚀 Generating Prisma client..."
-npx prisma generate --schema=./prisma/schema.production.prisma --force
+npx prisma generate --schema=./prisma/schema.production.prisma
 
 # Verify the generated client
 echo "✅ Verifying Prisma client generation..."
