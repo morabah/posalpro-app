@@ -7,6 +7,10 @@
   # Ensure clean build - remove any cached artifacts
   ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
 
+# Disable Edge Functions completely to avoid require() conflicts
+[edge_functions]
+  directory = ""
+
 [build.environment]
   # 🚨 IMPORTANT: Sensitive variables removed from VCS.
   # Set the following in Netlify UI (Site settings > Environment variables):
@@ -22,6 +26,8 @@
   NEXT_USE_NETLIFY_EDGE = "false"
   # Disable edge functions to avoid require() issues
   NETLIFY_EDGE_FUNCTIONS = "false"
+  # Force disable edge functions completely
+  NETLIFY_EDGE_FUNCTIONS_DISABLED = "true"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)
