@@ -1,10 +1,7 @@
 [build]
   command = """
 echo "=== Starting Prisma Binary Engine Build ==="
-rm -rf node_modules/.prisma node_modules/@prisma/client
-echo "=== Installing dependencies ==="
-npm ci
-echo "=== Setting Prisma environment variables ==="
+echo "=== Setting Prisma environment variables FIRST ==="
 export PRISMA_CLIENT_ENGINE_TYPE=binary
 export PRISMA_CLI_QUERY_ENGINE_TYPE=binary
 export PRISMA_GENERATE_DATAPROXY=false
@@ -13,12 +10,13 @@ echo "PRISMA_CLI_QUERY_ENGINE_TYPE=$PRISMA_CLI_QUERY_ENGINE_TYPE"
 echo "PRISMA_GENERATE_DATAPROXY=$PRISMA_GENERATE_DATAPROXY"
 echo "=== All Prisma environment variables ==="
 env | grep -i prisma | sort
+echo "=== Cleaning Prisma artifacts ==="
+rm -rf node_modules/.prisma node_modules/@prisma/client
+echo "=== Installing dependencies ==="
+npm ci
 echo "=== Generating Prisma client with binary engine ==="
-# Force complete regeneration by removing only generated client files (not the @prisma package)
-rm -rf node_modules/.prisma
-rm -rf node_modules/@prisma/client
-# Generate with explicit binary engine
-PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_GENERATE_DATAPROXY=false npx prisma generate --schema=./prisma/schema.prisma
+# Generate with explicit binary engine (environment variables already set)
+npx prisma generate --schema=./prisma/schema.prisma
 echo "=== Verifying Prisma configuration ==="
 npx prisma -v
 echo "=== Checking generated engines ==="
