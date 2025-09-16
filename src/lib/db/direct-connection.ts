@@ -1,5 +1,5 @@
 // Direct Database Connection Handler
-// This bypasses Prisma client generation issues by using direct PostgreSQL connections
+// Provides direct PostgreSQL connections as an alternative to Prisma
 
 import { Pool } from 'pg';
 
@@ -18,27 +18,8 @@ export function getDirectConnection(): Pool {
       throw new Error('DATABASE_URL environment variable is required');
     }
 
-    // Ensure we're using postgresql:// URL, not prisma://
-    let connectionString = databaseUrl;
-    if (databaseUrl.startsWith('prisma://')) {
-      // This is a workaround for the Data Proxy URL issue
-      // In production, this should be fixed by updating Netlify environment variables
-      console.warn('⚠️ WORKAROUND: Converting prisma:// URL to postgresql:// URL');
-
-      // Extract the actual database URL from the prisma:// URL
-      // This is a temporary workaround - the proper fix is to update Netlify env vars
-      const url = new URL(databaseUrl);
-      const actualDbUrl = url.searchParams.get('url');
-
-      if (actualDbUrl) {
-        connectionString = actualDbUrl;
-      } else {
-        // Fallback: construct from known pattern
-        connectionString =
-          'postgresql://neondb_owner:YOUR_PASSWORD@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require';
-        console.warn('⚠️ Using fallback connection string - update with actual credentials');
-      }
-    }
+    // Use the direct PostgreSQL connection string
+    const connectionString = databaseUrl;
 
     pool = new Pool({
       connectionString,
