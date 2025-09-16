@@ -24,6 +24,28 @@ npm ci
 
 # Step 3: Generate Prisma client with binary engine
 echo "🔧 Generating Prisma client with binary engine..."
+
+# WORKAROUND: Override DATABASE_URL if it's set to prisma://
+if [[ "$DATABASE_URL" == prisma://* ]]; then
+  echo "⚠️  WORKAROUND: Overriding prisma:// URL with postgresql:// URL"
+  echo "   Original DATABASE_URL: ${DATABASE_URL:0:30}..."
+
+  # Use CLOUD_DATABASE_URL if available, otherwise construct from known pattern
+  if [ -n "$CLOUD_DATABASE_URL" ]; then
+    export DATABASE_URL="$CLOUD_DATABASE_URL"
+    echo "   Using CLOUD_DATABASE_URL: ${DATABASE_URL:0:30}..."
+  else
+    # Fallback: Use the known Neon database pattern
+    # This should be replaced with the actual credentials
+    export DATABASE_URL="postgresql://neondb_owner:YOUR_PASSWORD@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require"
+    echo "   Using fallback DATABASE_URL: ${DATABASE_URL:0:30}..."
+    echo "   ⚠️  WARNING: Using placeholder credentials - update with actual values!"
+  fi
+
+  echo "   ⚠️  This is a temporary workaround!"
+  echo "   💡 Fix properly by updating Netlify environment variables"
+fi
+
 # Force all Prisma environment variables to ensure binary engine generation
 export PRISMA_GENERATE_DATAPROXY=false
 export PRISMA_CLIENT_ENGINE_TYPE=binary
@@ -36,6 +58,7 @@ echo "  PRISMA_GENERATE_DATAPROXY=$PRISMA_GENERATE_DATAPROXY"
 echo "  PRISMA_CLIENT_ENGINE_TYPE=$PRISMA_CLIENT_ENGINE_TYPE"
 echo "  PRISMA_CLI_QUERY_ENGINE_TYPE=$PRISMA_CLI_QUERY_ENGINE_TYPE"
 echo "  PRISMA_ENGINE_TYPE=$PRISMA_ENGINE_TYPE"
+echo "  DATABASE_URL=${DATABASE_URL:0:30}..."
 
 npx prisma generate
 
