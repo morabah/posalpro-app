@@ -1,25 +1,11 @@
 [build]
-  # ✅ CRITICAL: Build from source using production environment variables
-  # Force one explicit generate (Node API/library engine) to avoid engine=none issues
   command = """
-echo '--- Clean prisma artifacts ---' \
-&& rm -rf node_modules/.prisma node_modules/@prisma/client \
-&& echo '--- Install ---' \
-&& npm ci \
-&& echo '--- Prisma generate (library/Node-API) ---' \
-&& PRISMA_CLIENT_ENGINE_TYPE=library PRISMA_CLI_QUERY_ENGINE_TYPE=library PRISMA_GENERATE_DATAPROXY=false \
-   npx prisma generate --schema=./prisma/schema.prisma \
-&& echo '--- Prisma Sanity Checks ---' \
-&& echo '1. Checking Prisma version and engine type:' \
-&& npx prisma -v \
-&& echo '2. Verifying Node-API library engine presence:' \
-&& ls -la node_modules/@prisma/engines/ | grep -E "libquery_engine|query_engine" || echo "WARNING: No Node-API engine found" \
-&& echo '3. Confirming no edge client imports:' \
-&& find src -name "*.ts" -o -name "*.tsx" | xargs grep -l "@prisma/client/edge" 2>/dev/null || echo "✅ No edge client imports found" \
-&& echo '4. Checking for stray Prisma environment variables:' \
-&& env | sort | grep -i prisma || echo "No Prisma environment variables found" \
-&& echo '--- Build ---' \
-&& npm run build
+rm -rf node_modules/.prisma node_modules/@prisma/client
+npm ci
+PRISMA_CLIENT_ENGINE_TYPE=library PRISMA_CLI_QUERY_ENGINE_TYPE=library PRISMA_GENERATE_DATAPROXY=false \
+  npx prisma generate --schema=./prisma/schema.prisma
+npx prisma -v
+npm run build
 """
   publish = ".next"
 
@@ -27,15 +13,9 @@ echo '--- Clean prisma artifacts ---' \
   ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
 
 [functions]
-  # ✅ CRITICAL: Configure Netlify Functions for Prisma compatibility
-  # Use esbuild bundler for better Prisma support
   node_bundler = "esbuild"
-  # External Prisma modules to prevent bundling issues
   external_node_modules = ["@prisma/client", "prisma"]
-  # Include Prisma generated files and schema
-  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**", "prisma/schema.prisma"]
-  # Avoid forcing large deps into every function bundle
-  # Let the Next.js server handler bundle only what it actually imports.
+  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**"]
 
 # Edge Functions completely disabled - using Node.js runtime for all routes
 # Middleware temporarily disabled to prevent Edge Function conflicts
@@ -64,14 +44,11 @@ echo '--- Clean prisma artifacts ---' \
   NETLIFY_EDGE_FUNCTIONS_DISABLED = "true"
   # Disable middleware Edge Function compilation
   NETLIFY_MIDDLEWARE_EDGE = "false"
-  # Prevent automatic Prisma generation during npm install
-  PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
   # Force Prisma library engine generation (not Data Proxy)
-  PRISMA_GENERATE_DATAPROXY = "false"
+  PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
   PRISMA_CLIENT_ENGINE_TYPE = "library"
-  PRISMA_CLI_ENGINE_TYPE = "library"
   PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
-  PRISMA_ENGINE_TYPE = "library"
+  PRISMA_GENERATE_DATAPROXY = "false"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)
