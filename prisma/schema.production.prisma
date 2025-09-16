@@ -1,0 +1,384 @@
+generator client {
+  provider        = "prisma-client-js"
+  engineType      = "binary"              // or "library" if you prefer Node-API
+  binaryTargets   = ["debian-openssl-3.0.x"]
+  previewFeatures = ["fullTextIndex", "fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")          // postgresql://...
+}
+
+model Tenant {
+  id               String   @id @default(cuid())
+  name             String
+  domain           String   @unique
+  subdomain        String?  @unique
+  stripeCustomerId String?  @unique
+  status           String   @default("ACTIVE")
+  settings         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  users            User[]
+  customers        Customer[]
+  products         Product[]
+  proposals        Proposal[]
+  workflowTemplates WorkflowTemplate[]
+  contentLibrary   ContentLibrary[]
+  rfpDocuments     RfpDocument[]
+  analytics        Analytics[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  apiKeys          ApiKey[]
+
+  @@map("tenants")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  firstName         String
+  lastName          String
+  passwordHash      String?
+  emailVerified     Boolean  @default(false)
+  emailVerifiedAt   DateTime?
+  lastLoginAt       DateTime?
+  status            String   @default("ACTIVE")
+  profileImage      String?
+  timezone          String   @default("UTC")
+  language          String   @default("en")
+  preferences       Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  roles             UserRole[]
+  proposals         Proposal[]
+  workflowExecutions WorkflowExecution[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  apiKeys           ApiKey[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model Customer {
+  id                String   @id @default(cuid())
+  name              String
+  email             String?
+  phone             String?
+  company           String?
+  industry          String?
+  address           Json?
+  status            String   @default("ACTIVE")
+  notes             String?
+  tags              String[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proposals         Proposal[]
+  interactions      CustomerInteraction[]
+
+  @@map("customers")
+}
+
+model CustomerInteraction {
+  id          String   @id @default(cuid())
+  type        String   // email, phone, meeting, note
+  subject     String?
+  content     String
+  outcome     String?
+  nextSteps   String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("customer_interactions")
+}
+
+model Product {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  category          String?
+  type              String   @default("PRODUCT") // PRODUCT, SERVICE, BUNDLE
+  status            String   @default("ACTIVE")
+  pricing           Json?    // flexible pricing structure
+  specifications    Json?
+  features          String[]
+  tags              String[]
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proposalProducts  ProposalProduct[]
+  relationships     ProductRelationship[]
+
+  @@map("products")
+}
+
+model ProductRelationship {
+  id                String   @id @default(cuid())
+  type              String   // COMPATIBLE, REQUIRES, EXCLUDES, UPGRADES_TO
+  description       String?
+  createdAt         DateTime @default(now())
+
+  // Relations
+  sourceProductId   String
+  sourceProduct     Product  @relation("SourceProduct", fields: [sourceProductId], references: [id], onDelete: Cascade)
+  targetProductId   String
+  targetProduct     Product  @relation("TargetProduct", fields: [targetProductId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceProductId, targetProductId])
+  @@map("product_relationships")
+}
+
+model Proposal {
+  id                String   @id @default(cuid())
+  title             String
+  description       String?
+  status            String   @default("DRAFT") // DRAFT, SENT, REVIEWED, APPROVED, REJECTED, EXPIRED
+  priority          String   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  deadline          DateTime?
+  estimatedValue    Decimal?
+  currency          String   @default("USD")
+  version           Int      @default(1)
+  content           Json?    // flexible content structure
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId        String
+  customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdById       String
+  createdBy         User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  products          ProposalProduct[]
+  workflowExecutions WorkflowExecution[]
+  versions          ProposalVersion[]
+
+  @@map("proposals")
+}
+
+model ProposalProduct {
+  id                String   @id @default(cuid())
+  quantity          Int      @default(1)
+  unitPrice         Decimal
+  total             Decimal
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  // Relations
+  proposalId        String
+  proposal          Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalId, productId])
+  @@map("proposal_products")
+}
+
+model ProposalVersion {
+  id                String   @id @default(cuid())
+  version           Int
+  content           Json
+  changes           String?
+  createdAt         DateTime @default(now())
+
+  // Relations
+  proposalId        String
+  proposal          Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalId, version])
+  @@map("proposal_versions")
+}
+
+model WorkflowTemplate {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  steps             Json     // workflow steps configuration
+  isDefault         Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  executions        WorkflowExecution[]
+
+  @@map("workflow_templates")
+}
+
+model WorkflowExecution {
+  id                String   @id @default(cuid())
+  status            String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+  currentStep       Int      @default(0)
+  data              Json?    // execution data
+  startedAt         DateTime @default(now())
+  completedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  proposalId        String
+  proposal          Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  templateId        String
+  template          WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("workflow_executions")
+}
+
+model ContentLibrary {
+  id                String   @id @default(cuid())
+  title             String
+  content           String
+  type              String   // TEXT, IMAGE, DOCUMENT, TEMPLATE
+  category          String?
+  tags              String[]
+  metadata          Json?
+  isPublic          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("content_library")
+}
+
+model RfpDocument {
+  id                String   @id @default(cuid())
+  title             String
+  content           String
+  source            String?
+  parsedData        Json?    // structured data extracted from RFP
+  status            String   @default("PENDING") // PENDING, PROCESSED, FAILED
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("rfp_documents")
+}
+
+model Analytics {
+  id                String   @id @default(cuid())
+  event             String
+  data              Json?
+  timestamp         DateTime @default(now())
+
+  // Relations
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("analytics")
+}
+
+model Notification {
+  id                String   @id @default(cuid())
+  title             String
+  message           String
+  type              String   // INFO, WARNING, ERROR, SUCCESS
+  isRead            Boolean  @default(false)
+  data              Json?
+  createdAt         DateTime @default(now())
+
+  // Relations
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id                String   @id @default(cuid())
+  action            String
+  entity            String
+  entityId          String
+  changes           Json?
+  ipAddress         String?
+  userAgent         String?
+  createdAt         DateTime @default(now())
+
+  // Relations
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("audit_logs")
+}
+
+model ApiKey {
+  id                String   @id @default(cuid())
+  name              String
+  key               String   @unique
+  permissions       String[]
+  lastUsedAt        DateTime?
+  expiresAt         DateTime?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
