@@ -32,9 +32,9 @@ export async function GET() {
       // File system checks
       fileSystem: {
         prismaClientExists: false,
-        prismaClientPath: null,
+        prismaClientPath: null as string | null,
         queryEngineExists: false,
-        queryEnginePath: null,
+        queryEnginePath: null as string[] | null,
       }
     };
 
