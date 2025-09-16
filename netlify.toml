@@ -3,32 +3,36 @@
 echo '=== Clean ===' \
 && rm -rf node_modules/.prisma node_modules/@prisma/client \
 && npm ci \
-&& echo '=== Prisma generate (Node client) ===' \
+&& echo '=== Prisma inputs (before generate) ===' \
+&& echo "PRISMA_SCHEMA=$PRISMA_SCHEMA" \
+&& echo '--- generator blocks in all schemas:' \
+&& awk 'BEGIN{print ">> prisma/schema.prisma"} /^generator client *{/,/^}/' prisma/schema.prisma \
+&& echo \
+&& [ -f prisma/schema.production.prisma ] && { \
+  echo ">> prisma/schema.production.prisma"; \
+  awk '/^generator client *{/,/^}/' prisma/schema.production.prisma; echo; } || true \
+&& echo '--- grep for dataproxy/edge signals:' \
+&& (grep -R --line-number 'engineType *= *"dataproxy"' prisma || echo 'no engineType=dataproxy') \
+&& (grep -R --line-number 'prisma://' prisma || echo 'no prisma:// in schema') \
+&& (grep -R --line-number '@prisma/client/edge' . || echo 'no @prisma/client/edge imports') \
+&& (grep -R --line-number -- '--no-engine' node_modules || echo 'no dependency uses --no-engine') \
+&& echo '=== Prisma generate (force Node-API) ===' \
 && PRISMA_SKIP_POSTINSTALL_GENERATE=true \
    PRISMA_GENERATE_DATAPROXY=false \
-   PRISMA_CLIENT_ENGINE_TYPE=library \
    PRISMA_ENGINE_TYPE=library \
-   PRISMA_SCHEMA=./prisma/schema.production.prisma \
-   npx prisma generate --schema=./prisma/schema.production.prisma | tee /tmp/prisma_generate.log \
-&& ! grep -q 'engine=none' /tmp/prisma_generate.log || (echo '❌ Data-Proxy client detected (engine=none). Aborting.'; exit 1) \
-&& npx prisma -v \
-&& echo '=== Prisma Sanity Checks ===' \
-&& echo "Schematics:" \
-&& grep -n "generator client" prisma/schema*.prisma | sed -n '1,20p' \
+   PRISMA_CLIENT_ENGINE_TYPE=library \
+   PRISMA_CLI_QUERY_ENGINE_TYPE=library \
+   PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x \
+   npx prisma generate --log-level=debug --schema="${PRISMA_SCHEMA:-./prisma/schema.prisma}" \
+   | tee /tmp/prisma_generate.log \
+&& echo '--- generated client details:' \
+&& node -e "try{const p=require('@prisma/client/package.json');console.log({prisma:p.prisma||null,version:p.version})}catch(e){console.error(e)}" \
+&& echo '--- engines present:' \
+&& ls -la node_modules/@prisma/engines/ | grep -E 'query-engine|libquery|schema-engine' || echo 'no engines found' \
+&& if grep -q 'engine=none' /tmp/prisma_generate.log; then echo '❌ Data-Proxy client detected (engine=none). Aborting.'; exit 1; fi \
 && echo '=== Webpack Guard Checks ===' \
 && node -e "try{console.log('webpack resolves to:', require.resolve('webpack'))}catch(e){console.log('webpack not installed (good)')}" \
 && node -e "try{const w=require('next/dist/compiled/webpack/webpack'); console.log('compiled webpack keys:', Object.keys(w).slice(0,5))}catch(e){console.error('cannot load compiled webpack', e)}" \
-&& echo '=== Prisma Generator Sanity Checks ===' \
-&& echo "Production schema generator block:" \
-&& awk '/^generator client *{/,/^}/' prisma/schema.production.prisma \
-&& if grep -q 'engineType *= *"dataproxy"' prisma/schema.production.prisma; then \
-     echo "❌ schema.production.prisma sets engineType=dataproxy"; \
-     exit 1; \
-   fi \
-&& if awk '/^generator client *{/,/^}/' prisma/schema.production.prisma | grep -q 'prisma://'; then \
-     echo "❌ prisma:// detected in production schema generator block"; \
-     exit 1; \
-   fi \
 && echo '=== Next build ===' \
 && NODE_OPTIONS="--max-old-space-size=4096" npm run build
 """
@@ -43,7 +47,7 @@ echo '=== Clean ===' \
 [functions]
   node_bundler = "esbuild"
   external_node_modules = ["@prisma/client", "prisma"]
-  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**"]
+  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**", "node_modules/@prisma/engines/**"]
 
 # Edge Functions completely disabled - using Node.js runtime for all routes
 # Middleware temporarily disabled to prevent Edge Function conflicts
