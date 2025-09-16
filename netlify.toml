@@ -1,32 +1,15 @@
 [build]
   command = """
-echo "=== Starting Prisma Binary Engine Build ==="
-echo "=== Setting Prisma environment variables FIRST ==="
-export PRISMA_CLIENT_ENGINE_TYPE=binary
-export PRISMA_CLI_QUERY_ENGINE_TYPE=binary
-export PRISMA_GENERATE_DATAPROXY=false
-echo "PRISMA_CLIENT_ENGINE_TYPE=$PRISMA_CLIENT_ENGINE_TYPE"
-echo "PRISMA_CLI_QUERY_ENGINE_TYPE=$PRISMA_CLI_QUERY_ENGINE_TYPE"
-echo "PRISMA_GENERATE_DATAPROXY=$PRISMA_GENERATE_DATAPROXY"
-echo "=== All Prisma environment variables ==="
-env | grep -i prisma | sort
-echo "=== Cleaning Prisma artifacts ==="
-rm -rf node_modules/.prisma node_modules/@prisma/client
-echo "=== Installing dependencies ==="
-npm ci
-echo "=== Generating Prisma client with binary engine ==="
-# Force binary engine generation with explicit flags
-PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_GENERATE_DATAPROXY=false npx prisma generate --schema=./prisma/schema.prisma
-echo "=== Verifying Prisma configuration ==="
-npx prisma -v
-echo "=== Checking generated engines ==="
-ls -la node_modules/@prisma/engines/ | grep -E "query-engine|libquery" || echo "No engines found"
-echo "=== Verifying Prisma client generation ==="
-ls -la node_modules/.prisma/client/ || echo "Prisma client not generated"
-ls -la node_modules/@prisma/client/ || echo "Prisma client package not found"
-echo "=== Building Next.js app ==="
-npm run build
-echo "=== Build completed ==="
+echo '=== Clean ===' \
+&& rm -rf node_modules/.prisma node_modules/@prisma/client \
+&& npm ci \
+&& echo '=== Prisma generate (Binary) ===' \
+&& PRISMA_SKIP_POSTINSTALL_GENERATE=true \
+   npx prisma generate --schema=$PRISMA_SCHEMA | tee /tmp/prisma_generate.log \
+&& ! grep -q 'engine=none' /tmp/prisma_generate.log || (echo '❌ Data-Proxy client detected (engine=none). Aborting.'; exit 1) \
+&& npx prisma -v \
+&& echo '=== Next build ===' \
+&& npm run build
 """
   publish = ".next"
 
@@ -70,9 +53,6 @@ echo "=== Build completed ==="
   NETLIFY_MIDDLEWARE_EDGE = "false"
   # Force Prisma binary engine generation (not Data Proxy)
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
-  PRISMA_CLIENT_ENGINE_TYPE = "binary"
-  PRISMA_CLI_QUERY_ENGINE_TYPE = "binary"
-  PRISMA_GENERATE_DATAPROXY = "false"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)
@@ -84,6 +64,7 @@ echo "=== Build completed ==="
   # (Prisma settings defined in build environment above)
 
   # Use production schema explicitly
+  PRISMA_SCHEMA = "prisma/schema.prisma"
 
   # Build toggles (non-secrets)
   # Do NOT skip Prisma generate in Netlify — we must regenerate for linux

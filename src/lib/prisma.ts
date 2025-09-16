@@ -32,6 +32,15 @@ if (process.env.NODE_ENV === 'production') {
   logPrismaConfiguration().catch(console.error);
 }
 
+// Runtime probe to verify Prisma configuration (temporary - remove later)
+console.log('🧪 prisma.resolve', require.resolve?.('@prisma/client'));
+console.log('🧪 prisma.env', {
+  PRISMA_GENERATE_DATAPROXY: process.env.PRISMA_GENERATE_DATAPROXY,
+  PRISMA_CLIENT_ENGINE_TYPE: process.env.PRISMA_CLIENT_ENGINE_TYPE,
+  PRISMA_ENGINE_TYPE: process.env.PRISMA_ENGINE_TYPE,
+  PRISMA_SCHEMA: process.env.PRISMA_SCHEMA,
+});
+
 // Log noise down in prod; add 'query' in dev if you like
 export const prisma =
   globalForPrisma.prisma ??
