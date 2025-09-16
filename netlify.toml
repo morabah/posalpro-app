@@ -1,16 +1,35 @@
 [build]
   command = """
+echo "=== Starting Prisma Binary Engine Build ==="
 rm -rf node_modules/.prisma node_modules/@prisma/client
+echo "=== Installing dependencies ==="
 npm ci
-PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_GENERATE_DATAPROXY=false \
-  npx prisma generate --schema=./prisma/schema.prisma
+echo "=== Setting Prisma environment variables ==="
+export PRISMA_CLIENT_ENGINE_TYPE=binary
+export PRISMA_CLI_QUERY_ENGINE_TYPE=binary
+export PRISMA_GENERATE_DATAPROXY=false
+echo "PRISMA_CLIENT_ENGINE_TYPE=$PRISMA_CLIENT_ENGINE_TYPE"
+echo "PRISMA_CLI_QUERY_ENGINE_TYPE=$PRISMA_CLI_QUERY_ENGINE_TYPE"
+echo "PRISMA_GENERATE_DATAPROXY=$PRISMA_GENERATE_DATAPROXY"
+echo "=== All Prisma environment variables ==="
+env | grep -i prisma | sort
+echo "=== Generating Prisma client with binary engine ==="
+npx prisma generate --schema=./prisma/schema.prisma
+echo "=== Verifying Prisma configuration ==="
 npx prisma -v
+echo "=== Checking generated engines ==="
+ls -la node_modules/@prisma/engines/ | grep -E "query-engine|libquery" || echo "No engines found"
+echo "=== Building Next.js app ==="
 npm run build
+echo "=== Build completed ==="
 """
   publish = ".next"
 
-  # Ensure clean build - remove any cached artifacts
+  # Force clean build - clear all caches
   ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
+
+  # Clear Netlify build cache
+  clear_cache = true
 
 [functions]
   node_bundler = "esbuild"
