@@ -3,33 +3,20 @@
 echo '=== Clean ===' \
 && rm -rf node_modules/.prisma node_modules/@prisma/client \
 && npm ci \
+&& echo '=== Kill Prisma Data Proxy env switches ===' \
+&& unset PRISMA_GENERATE_DATAPROXY PRISMA_GENERATE_ACCELERATE PRISMA_GENERATE_NO_ENGINE PRISMA_CLIENT_DATA_PROXY_CLIENT_VERSION \
+&& echo 'Remaining PRISMA_* toggles:' && env | grep -E '^PRISMA_(GENERATE|CLIENT|ENGINE|CLI)=' || echo '(none)' \
 && echo '=== Prisma inputs (before generate) ===' \
 && echo "PRISMA_SCHEMA=$PRISMA_SCHEMA" \
 && echo '--- generator blocks in all schemas:' \
 && awk 'BEGIN{print ">> prisma/schema.prisma"} /^generator client *{/,/^}/' prisma/schema.prisma \
-&& echo \
 && [ -f prisma/schema.production.prisma ] && { \
-  echo ">> prisma/schema.production.prisma"; \
-  awk '/^generator client *{/,/^}/' prisma/schema.production.prisma; echo; } || true \
-&& echo '--- grep for dataproxy/edge signals:' \
-&& (grep -R --line-number 'engineType *= *"dataproxy"' prisma || echo 'no engineType=dataproxy') \
-&& (grep -R --line-number 'prisma://' prisma || echo 'no prisma:// in schema') \
-&& (grep -R --line-number '@prisma/client/edge' . || echo 'no @prisma/client/edge imports') \
-&& (grep -R --line-number -- '--no-engine' node_modules || echo 'no dependency uses --no-engine') \
-&& echo '=== Prisma generate (force Node-API) ===' \
-&& PRISMA_SKIP_POSTINSTALL_GENERATE=true \
-   PRISMA_GENERATE_DATAPROXY=false \
-   PRISMA_ENGINE_TYPE=library \
-   PRISMA_CLIENT_ENGINE_TYPE=library \
-   PRISMA_CLI_QUERY_ENGINE_TYPE=library \
-   PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x \
-               npx prisma generate --schema="./prisma/schema.production.prisma" \
-   | tee /tmp/prisma_generate.log \
-&& echo '--- generated client details:' \
-&& node -e "try{const p=require('@prisma/client/package.json');console.log({prisma:p.prisma||null,version:p.version})}catch(e){console.error(e)}" \
+  echo; echo ">> prisma/schema.production.prisma"; awk '/^generator client *{/,/^}/' prisma/schema.production.prisma; } || true \
+&& echo '=== Prisma generate (Node-API) ===' \
+&& npx prisma generate --schema="./prisma/schema.production.prisma" | tee /tmp/prisma_generate.log \
 && echo '--- engines present:' \
-&& ls -la node_modules/@prisma/engines/ | grep -E 'query-engine|libquery|schema-engine' || echo 'no engines found' \
-&& if grep -q 'engine=none' /tmp/prisma_generate.log; then echo '❌ Data-Proxy client detected (engine=none). Aborting.'; exit 1; fi \
+&& ls -la node_modules/@prisma/engines/ | grep -E 'query-engine|libquery|schema-engine' || true \
+&& if grep -q 'engine=none' /tmp/prisma_generate.log; then echo '❌ still engine=none'; exit 1; fi \
 && echo '=== Webpack Guard Checks ===' \
 && node -e "try{console.log('webpack resolves to:', require.resolve('webpack'))}catch(e){console.log('webpack not installed (good)')}" \
 && node -e "try{const w=require('next/dist/compiled/webpack/webpack'); console.log('compiled webpack keys:', Object.keys(w).slice(0,5))}catch(e){console.error('cannot load compiled webpack', e)}" \
@@ -79,7 +66,6 @@ echo '=== Clean ===' \
   NETLIFY_MIDDLEWARE_EDGE = "false"
   # Make sure no hidden/early generate runs with wrong defaults:
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
-  PRISMA_GENERATE_DATAPROXY = "false"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)
