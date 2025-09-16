@@ -6,9 +6,9 @@ echo '=== Clean ===' \
 && echo '=== Prisma generate (Node client) ===' \
 && PRISMA_SKIP_POSTINSTALL_GENERATE=true \
    PRISMA_GENERATE_DATAPROXY=false \
-   PRISMA_CLIENT_ENGINE_TYPE=binary \
-   PRISMA_ENGINE_TYPE=binary \
-   npx prisma generate --schema=./prisma/schema.prisma | tee /tmp/prisma_generate.log \
+   PRISMA_CLIENT_ENGINE_TYPE=library \
+   PRISMA_ENGINE_TYPE=library \
+   npx prisma generate --schema=./prisma/schema.production.prisma | tee /tmp/prisma_generate.log \
 && ! grep -q 'engine=none' /tmp/prisma_generate.log || (echo '❌ Data-Proxy client detected (engine=none). Aborting.'; exit 1) \
 && npx prisma -v \
 && echo '=== Prisma Sanity Checks ===' \

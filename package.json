@@ -275,7 +275,7 @@
     "typescript-eslint": "^8.33.1"
   },
   "prisma": {
-    "schema": "prisma/schema.prisma"
+    "schema": "prisma/schema.production.prisma"
   },
   "overrides": {
     "typescript": "^5.7.0",
