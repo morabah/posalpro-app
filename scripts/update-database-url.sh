@@ -74,3 +74,6 @@ echo ""
 
 echo -e "${GREEN}✅ Ready to deploy!${NC}"
 echo "The build script now contains the actual DATABASE_URL and will override the prisma:// URL during build."
+
+
+

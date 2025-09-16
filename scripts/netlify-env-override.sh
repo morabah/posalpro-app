@@ -107,3 +107,4 @@ echo ""
 
 echo -e "${GREEN}✅ Workaround applied!${NC}"
 echo "Remember to update the DATABASE_URL in the script with your actual PostgreSQL URL."
+

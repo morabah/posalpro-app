@@ -18,6 +18,7 @@ export default tseslint.config(
       'build/**',
       'coverage/**',
       'scripts/**',
+      'tests/**',
       'templates/**',
       'docs/**',
       '**/*.md',

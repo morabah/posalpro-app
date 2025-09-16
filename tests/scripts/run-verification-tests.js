@@ -7,12 +7,13 @@
  * a summary of results for CI/CD integration.
  */
 
+/* eslint-env node */
 import { spawnSync } from 'child_process';
 import path from 'path';
 
 const testFiles = [
   'tests/scripts/verify-env.test.js',
-  'tests/scripts/verify-prisma-client.test.js'
+  'tests/scripts/verify-prisma-client.test.js',
 ];
 
 console.log('🧪 Running verification script tests...\n');
@@ -27,7 +28,7 @@ for (const testFile of testFiles) {
 
   const result = spawnSync('npx', ['jest', testFile, '--verbose', '--no-coverage'], {
     encoding: 'utf8',
-    timeout: 30000
+    timeout: 30000,
   });
 
   const testName = path.basename(testFile, '.test.js');
@@ -37,7 +38,7 @@ for (const testFile of testFiles) {
     name: testName,
     success: success,
     exitCode: result.status,
-    output: result.stdout + result.stderr
+    output: result.stdout + result.stderr,
   });
 
   if (success) {

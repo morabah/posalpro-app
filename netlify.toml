@@ -1,7 +1,7 @@
 [build]
   # ✅ CRITICAL: Build from source using production environment variables
   # Ensure Prisma Client is freshly generated for Linux with binary engine (not Data Proxy)
-  command = "bash scripts/netlify-build.sh"
+  command = "node -e \"console.log('Node:', process.version)\" && npx prisma -v && unset PRISMA_GENERATE_NO_ENGINE && unset PRISMA_GENERATE_DATAPROXY && unset PRISMA_CLI_NO_ENGINE && unset PRISMA_CLIENT_NO_ENGINE && export PRISMA_CLIENT_ENGINE_TYPE=library && export PRISMA_CLI_ENGINE_TYPE=library && npx prisma generate --schema=./prisma/schema.prisma && npm run build"
   publish = ".next"
 
   # Ensure clean build - remove any cached artifacts
@@ -47,11 +47,11 @@
   NETLIFY_MIDDLEWARE_EDGE = "false"
   # Prevent automatic Prisma generation during npm install
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
-  # Force Prisma binary engine generation (not Data Proxy)
+  # Force Prisma library engine generation (not Data Proxy)
   PRISMA_GENERATE_DATAPROXY = "false"
-  PRISMA_CLIENT_ENGINE_TYPE = "binary"
-  PRISMA_CLI_QUERY_ENGINE_TYPE = "binary"
-  PRISMA_ENGINE_TYPE = "binary"
+  PRISMA_CLIENT_ENGINE_TYPE = "library"
+  PRISMA_CLI_ENGINE_TYPE = "library"
+  PRISMA_ENGINE_TYPE = "library"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)

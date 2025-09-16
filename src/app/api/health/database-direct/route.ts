@@ -16,24 +16,30 @@ export async function GET() {
         db: 'up',
         connection: 'direct',
         timestamp: new Date().toISOString(),
-        result: result.result
+        result: result.result,
       });
     } else {
-      return NextResponse.json({
-        db: 'down',
-        connection: 'direct',
-        error: result.error,
-        timestamp: new Date().toISOString()
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          db: 'down',
+          connection: 'direct',
+          error: result.error,
+          timestamp: new Date().toISOString(),
+        },
+        { status: 500 }
+      );
     }
   } catch (error: any) {
     console.error('❌ Direct database connection test failed:', error);
 
-    return NextResponse.json({
-      db: 'down',
-      connection: 'direct',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        db: 'down',
+        connection: 'direct',
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 }
+    );
   }
 }

@@ -34,7 +34,8 @@ export function getDirectConnection(): Pool {
         connectionString = actualDbUrl;
       } else {
         // Fallback: construct from known pattern
-        connectionString = 'postgresql://neondb_owner:YOUR_PASSWORD@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require';
+        connectionString =
+          'postgresql://neondb_owner:YOUR_PASSWORD@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require';
         console.warn('⚠️ Using fallback connection string - update with actual credentials');
       }
     }
@@ -42,7 +43,7 @@ export function getDirectConnection(): Pool {
     pool = new Pool({
       connectionString,
       ssl: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false,
       },
       max: 20,
       idleTimeoutMillis: 30000,
@@ -56,19 +57,23 @@ export function getDirectConnection(): Pool {
 }
 
 // Test the direct connection
-export async function testDirectConnection(): Promise<{ success: boolean; error?: string; result?: any }> {
+export async function testDirectConnection(): Promise<{
+  success: boolean;
+  error?: string;
+  result?: any;
+}> {
   try {
     const client = getDirectConnection();
     const result = await client.query('SELECT 1 as test, NOW() as timestamp');
 
     return {
       success: true,
-      result: result.rows[0]
+      result: result.rows[0],
     };
   } catch (error: any) {
     return {
       success: false,
-      error: error.message
+      error: error.message,
     };
   }
 }

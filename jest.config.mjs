@@ -59,7 +59,7 @@ const customJestConfig = {
       transform: {
         '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
       },
-      testTimeout: 60000,
+      timeout: 60000,
     },
   ],
   // Phase 3: Establish baseline coverage thresholds (to be raised over time)
