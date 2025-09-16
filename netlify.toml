@@ -15,8 +15,8 @@ rm -rf node_modules/.prisma node_modules/@prisma/client
 echo "=== Installing dependencies ==="
 npm ci
 echo "=== Generating Prisma client with binary engine ==="
-# Generate with explicit binary engine (environment variables already set)
-npx prisma generate --schema=./prisma/schema.prisma
+# Force binary engine generation with explicit flags
+PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_GENERATE_DATAPROXY=false npx prisma generate --schema=./prisma/schema.prisma --force
 echo "=== Verifying Prisma configuration ==="
 npx prisma -v
 echo "=== Checking generated engines ==="
@@ -35,8 +35,8 @@ echo "=== Build completed ==="
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@prisma/client", "prisma", "@prisma/engines"]
-  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**", "node_modules/@prisma/engines/**"]
+  external_node_modules = ["@prisma/client", "prisma"]
+  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**"]
 
 # Edge Functions completely disabled - using Node.js runtime for all routes
 # Middleware temporarily disabled to prevent Edge Function conflicts
