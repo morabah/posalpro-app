@@ -9,7 +9,15 @@ echo '--- Clean prisma artifacts ---' \
 && echo '--- Prisma generate (library/Node-API) ---' \
 && PRISMA_CLIENT_ENGINE_TYPE=library PRISMA_CLI_QUERY_ENGINE_TYPE=library PRISMA_GENERATE_DATAPROXY=false \
    npx prisma generate --schema=./prisma/schema.prisma \
+&& echo '--- Prisma Sanity Checks ---' \
+&& echo '1. Checking Prisma version and engine type:' \
 && npx prisma -v \
+&& echo '2. Verifying Node-API library engine presence:' \
+&& ls -la node_modules/@prisma/engines/ | grep -E "libquery_engine|query_engine" || echo "WARNING: No Node-API engine found" \
+&& echo '3. Confirming no edge client imports:' \
+&& find src -name "*.ts" -o -name "*.tsx" | xargs grep -l "@prisma/client/edge" 2>/dev/null || echo "✅ No edge client imports found" \
+&& echo '4. Checking for stray Prisma environment variables:' \
+&& env | sort | grep -i prisma || echo "No Prisma environment variables found" \
 && echo '--- Build ---' \
 && npm run build
 """
