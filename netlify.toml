@@ -2,7 +2,7 @@
   command = """
 rm -rf node_modules/.prisma node_modules/@prisma/client
 npm ci
-PRISMA_CLIENT_ENGINE_TYPE=library PRISMA_CLI_QUERY_ENGINE_TYPE=library PRISMA_GENERATE_DATAPROXY=false \
+PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_GENERATE_DATAPROXY=false \
   npx prisma generate --schema=./prisma/schema.prisma
 npx prisma -v
 npm run build
@@ -44,10 +44,10 @@ npm run build
   NETLIFY_EDGE_FUNCTIONS_DISABLED = "true"
   # Disable middleware Edge Function compilation
   NETLIFY_MIDDLEWARE_EDGE = "false"
-  # Force Prisma library engine generation (not Data Proxy)
+  # Force Prisma binary engine generation (not Data Proxy)
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
-  PRISMA_CLIENT_ENGINE_TYPE = "library"
-  PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
+  PRISMA_CLIENT_ENGINE_TYPE = "binary"
+  PRISMA_CLI_QUERY_ENGINE_TYPE = "binary"
   PRISMA_GENERATE_DATAPROXY = "false"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
