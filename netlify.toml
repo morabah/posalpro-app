@@ -16,11 +16,14 @@ echo "=== Installing dependencies ==="
 npm ci
 echo "=== Generating Prisma client with binary engine ==="
 # Force binary engine generation with explicit flags
-PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_GENERATE_DATAPROXY=false npx prisma generate --schema=./prisma/schema.prisma --force
+PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_GENERATE_DATAPROXY=false npx prisma generate --schema=./prisma/schema.prisma
 echo "=== Verifying Prisma configuration ==="
 npx prisma -v
 echo "=== Checking generated engines ==="
 ls -la node_modules/@prisma/engines/ | grep -E "query-engine|libquery" || echo "No engines found"
+echo "=== Verifying Prisma client generation ==="
+ls -la node_modules/.prisma/client/ || echo "Prisma client not generated"
+ls -la node_modules/@prisma/client/ || echo "Prisma client package not found"
 echo "=== Building Next.js app ==="
 npm run build
 echo "=== Build completed ==="
