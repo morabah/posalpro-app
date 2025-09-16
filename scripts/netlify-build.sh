@@ -60,7 +60,13 @@ echo "  PRISMA_CLI_QUERY_ENGINE_TYPE=$PRISMA_CLI_QUERY_ENGINE_TYPE"
 echo "  PRISMA_ENGINE_TYPE=$PRISMA_ENGINE_TYPE"
 echo "  DATABASE_URL=${DATABASE_URL:0:30}..."
 
-npx prisma generate
+# Force binary engine generation with explicit flags
+echo "🔧 Forcing binary engine generation..."
+PRISMA_GENERATE_DATAPROXY=false \
+PRISMA_CLIENT_ENGINE_TYPE=binary \
+PRISMA_CLI_QUERY_ENGINE_TYPE=binary \
+PRISMA_ENGINE_TYPE=binary \
+npx prisma generate --schema=./prisma/schema.prisma
 
 # Step 4: Prisma sanity checks
 echo ""
