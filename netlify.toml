@@ -3,9 +3,12 @@
 echo '=== Clean ===' \
 && rm -rf node_modules/.prisma node_modules/@prisma/client \
 && npm ci \
-&& echo '=== Prisma generate (Binary) ===' \
+&& echo '=== Prisma generate (Node client) ===' \
 && PRISMA_SKIP_POSTINSTALL_GENERATE=true \
-   npx prisma generate --schema=$PRISMA_SCHEMA | tee /tmp/prisma_generate.log \
+   PRISMA_GENERATE_DATAPROXY=false \
+   PRISMA_CLIENT_ENGINE_TYPE=binary \
+   PRISMA_ENGINE_TYPE=binary \
+   npx prisma generate --schema=./prisma/schema.prisma | tee /tmp/prisma_generate.log \
 && ! grep -q 'engine=none' /tmp/prisma_generate.log || (echo '❌ Data-Proxy client detected (engine=none). Aborting.'; exit 1) \
 && npx prisma -v \
 && echo '=== Webpack Guard Checks ===' \
@@ -54,7 +57,7 @@ echo '=== Clean ===' \
   NETLIFY_EDGE_FUNCTIONS_DISABLED = "true"
   # Disable middleware Edge Function compilation
   NETLIFY_MIDDLEWARE_EDGE = "false"
-  # Force Prisma binary engine generation (not Data Proxy)
+  # Make sure no hidden/early generate runs with wrong defaults:
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
   PRISMA_GENERATE_DATAPROXY = "false"
   # Disable Next.js telemetry in CI/build
@@ -67,8 +70,7 @@ echo '=== Clean ===' \
   # Prisma engine settings (non-secrets) - force library engine, not Data Proxy
   # (Prisma settings defined in build environment above)
 
-  # Use production schema explicitly
-  PRISMA_SCHEMA = "prisma/schema.prisma"
+  # Schema path specified directly in build command (./prisma/schema.prisma)
 
   # Build toggles (non-secrets)
   # Do NOT skip Prisma generate in Netlify — we must regenerate for linux
