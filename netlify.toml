@@ -37,9 +37,8 @@ echo "=== Build completed ==="
 
 [functions]
   node_bundler = "esbuild"
-  # Temporarily remove external modules to force proper bundling
-  # external_node_modules = ["@prisma/client", "prisma"]
-  # included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**"]
+  external_node_modules = ["@prisma/client", "prisma", "@prisma/engines"]
+  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/client/**", "node_modules/@prisma/engines/**"]
 
 # Edge Functions completely disabled - using Node.js runtime for all routes
 # Middleware temporarily disabled to prevent Edge Function conflicts
