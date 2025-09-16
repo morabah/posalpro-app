@@ -6,20 +6,20 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  domain    String   @unique
-  subdomain String?  @unique
-  stripeCustomerId String? @unique
-  status    String   @default("ACTIVE")
-  settings  Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String
+  domain           String   @unique
+  subdomain        String?  @unique
+  stripeCustomerId String?  @unique
+  status           String   @default("ACTIVE")
+  settings         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   // Relations
   customers     Customer[]
@@ -363,15 +363,15 @@ model Plan {
 }
 
 model Subscription {
-  id         String             @id @default(cuid())
-  tenantId   String
-  planId     String
-  status     SubscriptionStatus @default(ACTIVE)
-  seats      Int                @default(5)
-  stripeSubscriptionId String?  @unique
-  validUntil DateTime?
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  id                   String             @id @default(cuid())
+  tenantId             String
+  planId               String
+  status               SubscriptionStatus @default(ACTIVE)
+  seats                Int                @default(5)
+  stripeSubscriptionId String?            @unique
+  validUntil           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   plan   Plan   @relation(fields: [planId], references: [id])
@@ -830,7 +830,7 @@ model ProposalSection {
   updatedAt        DateTime         @updatedAt
   proposal         Proposal         @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
-  proposalProducts     ProposalProduct[]
+  proposalProducts ProposalProduct[]
 
   @@index([proposalId, order])
   @@index([proposalId, order], map: "idx_proposal_sections_order")
@@ -875,7 +875,7 @@ model Product {
   tags              String[]
   attributes        Json?
   images            String[]
-  datasheetPath     String?                   // Optional path to product datasheet (network or local)
+  datasheetPath     String? // Optional path to product datasheet (network or local)
   stockQuantity     Int?                      @default(0)
   status            String?                   @default("ACTIVE")
   isActive          Boolean                   @default(true)
