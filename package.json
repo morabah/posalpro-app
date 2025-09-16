@@ -279,8 +279,7 @@
   },
   "overrides": {
     "typescript": "^5.7.0",
-    "zod": "^3.25.48",
-    "prisma": "5.22.0"
+    "zod": "^3.25.48"
   },
   "resolutions": {
     "typescript": "^5.7.0",
