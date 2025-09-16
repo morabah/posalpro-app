@@ -9,7 +9,7 @@ echo '=== Clean ===' \
 && ! grep -q 'engine=none' /tmp/prisma_generate.log || (echo '❌ Data-Proxy client detected (engine=none). Aborting.'; exit 1) \
 && npx prisma -v \
 && echo '=== Next build ===' \
-&& NODE_OPTIONS="--max-old-space-size=4096" npm run build
+&& NODE_OPTIONS="--max-old-space-size=4096" npm run build:fast
 """
   publish = ".next"
 
