@@ -39,7 +39,8 @@ echo '=== Clean ===' \
   publish = ".next"
 
   # Force clean build - clear all caches
-  ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
+  # Temporarily disabled to force diagnostic build execution
+  # ignore = "git diff --quiet HEAD~1 HEAD -- .next/"
 
   # Clear Netlify build cache
   clear_cache = true
