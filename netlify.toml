@@ -56,6 +56,7 @@ echo '=== Clean ===' \
   NETLIFY_MIDDLEWARE_EDGE = "false"
   # Force Prisma binary engine generation (not Data Proxy)
   PRISMA_SKIP_POSTINSTALL_GENERATE = "true"
+  PRISMA_GENERATE_DATAPROXY = "false"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
   # Safe build-time toggles (non-secrets)
