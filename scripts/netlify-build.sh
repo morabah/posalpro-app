@@ -37,7 +37,7 @@ if [[ "$DATABASE_URL" == prisma://* ]]; then
   else
     # Fallback: Use the known Neon database pattern
     # This should be replaced with the actual credentials
-    export DATABASE_URL="postgresql://neondb_owner:YOUR_PASSWORD@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require"
+    export DATABASE_URL="postgresql://'neondb_owner:Targo2000@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require"
     echo "   Using fallback DATABASE_URL: ${DATABASE_URL:0:30}..."
     echo "   ⚠️  WARNING: Using placeholder credentials - update with actual values!"
   fi
