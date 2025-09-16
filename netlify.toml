@@ -1,7 +1,18 @@
 [build]
   # ✅ CRITICAL: Build from source using production environment variables
-  # Ensure Prisma Client is freshly generated for Linux with binary engine (not Data Proxy)
-  command = "node -e \"console.log('Node:', process.version)\" && npx prisma -v && unset PRISMA_GENERATE_NO_ENGINE && unset PRISMA_GENERATE_DATAPROXY && unset PRISMA_CLI_NO_ENGINE && unset PRISMA_CLIENT_NO_ENGINE && export PRISMA_CLIENT_ENGINE_TYPE=library && export PRISMA_CLI_ENGINE_TYPE=library && npx prisma generate --schema=./prisma/schema.prisma && npm run build"
+  # Force one explicit generate (Node API/library engine) to avoid engine=none issues
+  command = """
+echo '--- Clean prisma artifacts ---' \
+&& rm -rf node_modules/.prisma node_modules/@prisma/client \
+&& echo '--- Install ---' \
+&& npm ci \
+&& echo '--- Prisma generate (library/Node-API) ---' \
+&& PRISMA_CLIENT_ENGINE_TYPE=library PRISMA_CLI_QUERY_ENGINE_TYPE=library PRISMA_GENERATE_DATAPROXY=false \
+   npx prisma generate --schema=./prisma/schema.prisma \
+&& npx prisma -v \
+&& echo '--- Build ---' \
+&& npm run build
+"""
   publish = ".next"
 
   # Ensure clean build - remove any cached artifacts
@@ -51,6 +62,7 @@
   PRISMA_GENERATE_DATAPROXY = "false"
   PRISMA_CLIENT_ENGINE_TYPE = "library"
   PRISMA_CLI_ENGINE_TYPE = "library"
+  PRISMA_CLI_QUERY_ENGINE_TYPE = "library"
   PRISMA_ENGINE_TYPE = "library"
   # Disable Next.js telemetry in CI/build
   NEXT_TELEMETRY_DISABLED = "1"
