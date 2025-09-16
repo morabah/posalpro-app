@@ -35,10 +35,15 @@ const baseConfig = {
   // ✅ CRITICAL: LCP optimization configuration
   // Following Lesson #30: Performance Optimization - Bundle Splitting
   experimental: {
-    // Avoid optimizing React packages to prevent RSC/Fast Refresh edge cases in Chrome
-    optimizePackageImports: ['next-auth', 'lucide-react'],
+    // TEMPORARY: Disable optimizePackageImports to unblock build
+    // optimizePackageImports: undefined,
+    // or comment it out entirely if you had it as an array
+    // optimizePackageImports: ['next-auth', 'lucide-react'],
     webVitalsAttribution: ['CLS', 'LCP', 'FCP', 'FID', 'TTFB'],
   },
+
+  // Keep SWC minification on (it's the default, but being explicit is fine)
+  swcMinify: true,
 
   // 🚨 CRITICAL: Prevent database connections during build
   serverExternalPackages: [
@@ -193,8 +198,9 @@ const baseConfig = {
       // Enable tree shaking
       config.optimization.usedExports = true;
 
-      // Next.js 15 handles minification internally - no custom TerserPlugin needed
-      // This prevents webpack constructor conflicts with Next.js's compiled webpack
+      // TEMPORARY: Disable webpack minification to unblock build
+      // This avoids the minify-webpack-plugin code path that's causing issues
+      config.optimization.minimize = false;
     }
 
     return config;
