@@ -23,7 +23,7 @@ echo '=== Clean ===' \
    PRISMA_CLIENT_ENGINE_TYPE=library \
    PRISMA_CLI_QUERY_ENGINE_TYPE=library \
    PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x \
-   npx prisma generate --log-level=debug --schema="${PRISMA_SCHEMA:-./prisma/schema.prisma}" \
+               npx prisma generate --schema="${PRISMA_SCHEMA:-./prisma/schema.prisma}" \
    | tee /tmp/prisma_generate.log \
 && echo '--- generated client details:' \
 && node -e "try{const p=require('@prisma/client/package.json');console.log({prisma:p.prisma||null,version:p.version})}catch(e){console.error(e)}" \
