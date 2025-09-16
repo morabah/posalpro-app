@@ -1,7 +1,7 @@
 generator client {
   provider        = "prisma-client-js"
-  engineType      = "binary"
-  binaryTargets   = ["native", "debian-openssl-3.0.x"]
+  engineType      = "binary"              // or "library"; must NOT be "dataproxy"
+  binaryTargets   = ["debian-openssl-3.0.x"]
   previewFeatures = ["fullTextIndex", "fullTextSearch"]
 }
 
