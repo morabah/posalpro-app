@@ -14,7 +14,11 @@ echo "PRISMA_GENERATE_DATAPROXY=$PRISMA_GENERATE_DATAPROXY"
 echo "=== All Prisma environment variables ==="
 env | grep -i prisma | sort
 echo "=== Generating Prisma client with binary engine ==="
-npx prisma generate --schema=./prisma/schema.prisma
+# Force complete regeneration by removing all Prisma artifacts
+rm -rf node_modules/@prisma
+rm -rf node_modules/.prisma
+# Generate with explicit binary engine
+PRISMA_CLIENT_ENGINE_TYPE=binary PRISMA_CLI_QUERY_ENGINE_TYPE=binary PRISMA_GENERATE_DATAPROXY=false npx prisma generate --schema=./prisma/schema.prisma
 echo "=== Verifying Prisma configuration ==="
 npx prisma -v
 echo "=== Checking generated engines ==="
