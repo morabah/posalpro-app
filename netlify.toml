@@ -8,6 +8,9 @@ echo '=== Clean ===' \
    npx prisma generate --schema=$PRISMA_SCHEMA | tee /tmp/prisma_generate.log \
 && ! grep -q 'engine=none' /tmp/prisma_generate.log || (echo '❌ Data-Proxy client detected (engine=none). Aborting.'; exit 1) \
 && npx prisma -v \
+&& echo '=== Webpack Guard Checks ===' \
+&& node -e "try{console.log('webpack resolves to:', require.resolve('webpack'))}catch(e){console.log('webpack not installed (good)')}" \
+&& node -e "try{const w=require('next/dist/compiled/webpack/webpack'); console.log('compiled webpack keys:', Object.keys(w).slice(0,5))}catch(e){console.error('cannot load compiled webpack', e)}" \
 && echo '=== Next build ===' \
 && NODE_OPTIONS="--max-old-space-size=4096" npm run build
 """
