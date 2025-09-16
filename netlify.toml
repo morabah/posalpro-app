@@ -17,6 +17,17 @@ echo '=== Clean ===' \
 && echo '=== Webpack Guard Checks ===' \
 && node -e "try{console.log('webpack resolves to:', require.resolve('webpack'))}catch(e){console.log('webpack not installed (good)')}" \
 && node -e "try{const w=require('next/dist/compiled/webpack/webpack'); console.log('compiled webpack keys:', Object.keys(w).slice(0,5))}catch(e){console.error('cannot load compiled webpack', e)}" \
+&& echo '=== Prisma Generator Sanity Checks ===' \
+&& echo "Production schema generator block:" \
+&& awk '/^generator client *{/,/^}/' prisma/schema.production.prisma \
+&& if grep -q 'engineType *= *"dataproxy"' prisma/schema.production.prisma; then \
+     echo "❌ schema.production.prisma sets engineType=dataproxy"; \
+     exit 1; \
+   fi \
+&& if awk '/^generator client *{/,/^}/' prisma/schema.production.prisma | grep -q 'prisma://'; then \
+     echo "❌ prisma:// detected in production schema generator block"; \
+     exit 1; \
+   fi \
 && echo '=== Next build ===' \
 && NODE_OPTIONS="--max-old-space-size=4096" npm run build
 """
