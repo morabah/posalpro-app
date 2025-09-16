@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports, no-undef, @typescript-eslint/no-unused-vars */
 let withBundleAnalyzer = config => config;
-let TerserPlugin;
+// Removed TerserPlugin variable - Next.js 15 handles minification internally
 try {
   // Make bundle analyzer optional in CI (e.g., Netlify) to avoid MODULE_NOT_FOUND
   const analyzer = require('@next/bundle-analyzer')({
@@ -8,18 +8,11 @@ try {
   });
   withBundleAnalyzer = analyzer;
 } catch (err) {
-
   console.log('[next.config] @next/bundle-analyzer not installed; proceeding without it');
 }
 
-try {
-  // Make terser optional in CI (e.g., Netlify) to avoid MODULE_NOT_FOUND
-  // Next.js has its own minifier; this is only an enhancement when available
-  TerserPlugin = require('terser-webpack-plugin');
-} catch (err) {
-
-  console.log('[next.config] terser-webpack-plugin not installed; proceeding without it');
-}
+// Removed TerserPlugin import - Next.js 15 handles minification internally
+// This prevents webpack constructor conflicts with Next.js's compiled webpack
 
 /** @type {import('next').NextConfig} */
 const securityHeaders = [
@@ -200,19 +193,8 @@ const baseConfig = {
       // Enable tree shaking
       config.optimization.usedExports = true;
 
-      // Add compression
-      if (TerserPlugin) {
-        config.optimization.minimizer = [
-          new TerserPlugin({
-            terserOptions: {
-              compress: {
-                drop_console: !dev,
-                drop_debugger: !dev,
-              },
-            },
-          }),
-        ];
-      }
+      // Next.js 15 handles minification internally - no custom TerserPlugin needed
+      // This prevents webpack constructor conflicts with Next.js's compiled webpack
     }
 
     return config;
