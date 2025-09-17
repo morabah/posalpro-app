@@ -110,6 +110,7 @@ model User {
   validationExecutions     ValidationExecution[]
   validationIssuesResolved ValidationIssue[]
   validationRules          ValidationRule[]
+  approvalDecisions        ApprovalDecision[]
 
   @@unique([tenantId, email])
   @@index([name])
@@ -1126,6 +1127,7 @@ model WorkflowStage {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   executions          ApprovalExecution[]
+  decisions           ApprovalDecision[]
   workflow            ApprovalWorkflow    @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([workflowId, order])
@@ -1134,20 +1136,21 @@ model WorkflowStage {
 }
 
 model ApprovalExecution {
-  id                 String           @id @default(cuid())
+  id                 String             @id @default(cuid())
   workflowId         String
   entityId           String
   currentStage       String?
-  status             ExecutionStatus  @default(PENDING)
-  startedAt          DateTime         @default(now())
+  status             ExecutionStatus    @default(PENDING)
+  startedAt          DateTime           @default(now())
   completedAt        DateTime?
   slaCompliance      Boolean?
   proposalId         String?
   performanceMetrics Json?
   userStoryContext   String[]
-  stageExecution     WorkflowStage?   @relation(fields: [currentStage], references: [id])
-  proposal           Proposal?        @relation(fields: [proposalId], references: [id])
-  workflow           ApprovalWorkflow @relation(fields: [workflowId], references: [id])
+  decisions          ApprovalDecision[]
+  stageExecution     WorkflowStage?     @relation(fields: [currentStage], references: [id])
+  proposal           Proposal?          @relation(fields: [proposalId], references: [id])
+  workflow           ApprovalWorkflow   @relation(fields: [workflowId], references: [id])
 
   @@index([workflowId, status])
   @@index([proposalId])
@@ -1155,7 +1158,7 @@ model ApprovalExecution {
 }
 
 model ApprovalDecision {
-  id                String       @id @default(cuid())
+  id                String            @id @default(cuid())
   executionId       String
   stageId           String
   approverId        String
@@ -1164,7 +1167,10 @@ model ApprovalDecision {
   timeToDecision    Int?
   qualityScore      Float?
   performanceImpact Float?
-  timestamp         DateTime     @default(now())
+  timestamp         DateTime          @default(now())
+  approver          User              @relation(fields: [approverId], references: [id])
+  execution         ApprovalExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  stage             WorkflowStage     @relation(fields: [stageId], references: [id])
 
   @@index([executionId])
   @@index([approverId])
