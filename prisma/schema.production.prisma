@@ -111,6 +111,7 @@ model User {
   validationIssuesResolved ValidationIssue[]
   validationRules          ValidationRule[]
   approvalDecisions        ApprovalDecision[]
+  assignedProposals        Proposal[]                       @relation("ProposalAssignees")
 
   @@unique([tenantId, email])
   @@index([name])
@@ -747,6 +748,7 @@ model Proposal {
   creator           User                @relation("ProposalCreator", fields: [createdBy], references: [id])
   customer          Customer            @relation(fields: [customerId], references: [id])
   tenant            Tenant              @relation(fields: [tenantId], references: [id])
+  assignedTo        User[]              @relation("ProposalAssignees")
   validationIssues  ValidationIssue[]
 
   @@index([status, dueDate])
@@ -807,6 +809,7 @@ model ProposalSection {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   proposal         Proposal         @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalProducts ProposalProduct[]
 
   @@index([proposalId, order])
   @@index([proposalId, order], map: "idx_proposal_sections_order")
@@ -817,6 +820,7 @@ model ProposalProduct {
   id                 String            @id @default(cuid())
   proposalId         String
   productId          String
+  sectionId          String?
   quantity           Int               @default(1)
   unitPrice          Decimal
   discount           Decimal           @default(0)
@@ -827,10 +831,12 @@ model ProposalProduct {
   updatedAt          DateTime          @updatedAt
   product            Product           @relation(fields: [productId], references: [id])
   proposal           Proposal          @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  section            ProposalSection?  @relation(fields: [sectionId], references: [id])
   validationIssues   ValidationIssue[]
 
   @@index([proposalId])
   @@index([productId])
+  @@index([proposalId, sectionId])
   @@index([productId], map: "idx_proposal_products_product_id")
   @@map("proposal_products")
 }
@@ -1192,14 +1198,6 @@ model Outbox {
   @@index([status, createdAt])
 }
 
-model ProposalAssignees {
-  A String
-  B String
-
-  @@unique([A, B], map: "_ProposalAssignees_AB_unique")
-  @@index([B], map: "_ProposalAssignees_B_index")
-  @@map("_ProposalAssignees")
-}
 
 enum PlanTier {
   FREE
