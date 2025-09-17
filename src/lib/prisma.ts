@@ -33,7 +33,11 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Runtime probe to verify Prisma configuration (temporary - remove later)
-console.log('🧪 prisma.resolve', require.resolve?.('@prisma/client'));
+try {
+  console.log('🧪 prisma.resolve', require.resolve('@prisma/client'));
+} catch (e) {
+  console.log('🧪 prisma.resolve', 'failed to resolve');
+}
 console.log('🧪 prisma.env', {
   PRISMA_GENERATE_DATAPROXY: process.env.PRISMA_GENERATE_DATAPROXY,
   PRISMA_CLIENT_ENGINE_TYPE: process.env.PRISMA_CLIENT_ENGINE_TYPE,
