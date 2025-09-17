@@ -129,6 +129,7 @@ echo '=== Clean ===' \
   # Bundle Puppeteer/Chromium only for the dedicated PDF function
   node_bundler = "esbuild"
   external_node_modules = ["puppeteer-core", "@sparticuz/chromium"]
+  included_files = ["node_modules/@sparticuz/chromium/**"]
 
 # Database initialization hook
 [dev]

@@ -42,6 +42,11 @@ export const handler: Handler = async event => {
 
     // Dynamic imports (ESM default exports)
     const { default: chromium }: any = await import('@sparticuz/chromium');
+    // Ensure static chrome channel is used in serverless to avoid missing binary
+    if (!process.env.CHROME_PATH && !process.env.PUPPETEER_EXECUTABLE_PATH) {
+      // Prefer packaged chrome; chromium.executablePath() will resolve below
+      process.env.PUPPETEER_CHROMIUM_REVISION = process.env.PUPPETEER_CHROMIUM_REVISION || '';
+    }
     const { default: puppeteer }: any = await import('puppeteer-core');
 
     let executablePath: string | undefined;
@@ -117,6 +122,13 @@ export const handler: Handler = async event => {
         margin,
       });
 
+      // Encode to base64 (sanitize to avoid CR/LF issues in platform decoder)
+      const base64 = (
+        Buffer.isBuffer(pdfBuffer)
+          ? pdfBuffer.toString('base64')
+          : Buffer.from(pdfBuffer as unknown as ArrayBuffer).toString('base64')
+      ).replace(/\r?\n/g, '');
+
       return {
         statusCode: 200,
         headers: {
@@ -125,7 +137,7 @@ export const handler: Handler = async event => {
           'cache-control': 'no-store',
         },
         isBase64Encoded: true,
-        body: pdfBuffer.toString('base64'),
+        body: base64,
       };
     } finally {
       await browser.close();
