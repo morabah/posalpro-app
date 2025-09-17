@@ -1,9 +1,17 @@
 /* eslint-disable @typescript-eslint/no-require-imports, no-undef, @typescript-eslint/no-unused-vars */
-// SAFE HOT-FIX: Initialize compiled webpack early to prevent lazy wrapper issues
-const compiledWebpack = require('next/dist/compiled/webpack/webpack');
-// Some envs return a lazy wrapper that must be initialized
-if (typeof compiledWebpack.init === 'function') {
-  compiledWebpack.init(() => require('next/dist/compiled/webpack/webpack'));
+// Ensure Next's compiled webpack module is initialized BEFORE any plugins run.
+try {
+  const compiledWebpack = require('next/dist/compiled/webpack/webpack');
+  if (compiledWebpack && typeof compiledWebpack.init === 'function') {
+    compiledWebpack.init(() => require('next/dist/compiled/webpack/webpack'));
+    // Optional: tiny sanity check to help in CI logs
+    const w = require('next/dist/compiled/webpack/webpack');
+    if (!w || !w.WebpackError) {
+      console.warn('[next.config] Compiled webpack initialized but WebpackError missing');
+    }
+  }
+} catch (e) {
+  console.warn('[next.config] Failed to initialize compiled webpack:', e?.message || e);
 }
 
 let withBundleAnalyzer = config => config;
@@ -85,6 +93,11 @@ const baseConfig = {
 
   // ✅ CRITICAL: Enhanced webpack configuration for bundle optimization
   webpack: (config, { dev, isServer }) => {
+    // Fast fallback: Disable minification only on CI to avoid the broken code path
+    if (process.env.NETLIFY === 'true' || process.env.CI === 'true') {
+      config.optimization.minimize = false;
+      console.warn('[next.config] Minification disabled on CI as a workaround');
+    }
     // Handle Node.js built-in modules for client-side compatibility
     if (!isServer) {
       config.resolve.fallback = {
