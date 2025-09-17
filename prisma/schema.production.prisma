@@ -356,6 +356,24 @@ model Idempotency {
   @@index([expiresAt])
 }
 
+model SecurityAuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  resource  String
+  action    String
+  scope     String
+  success   Boolean
+  timestamp DateTime @default(now())
+  error     String?
+  metadata  Json?
+  ip        String?
+  userAgent String?
+
+  @@index([userId, timestamp])
+  @@index([resource, action])
+  @@index([success, timestamp])
+}
+
 model SecurityEvent {
   id        String              @id @default(cuid())
   userId    String?
