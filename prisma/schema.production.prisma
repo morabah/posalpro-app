@@ -1,8 +1,8 @@
 generator client {
   provider        = "prisma-client-js"
-  engineType      = "library"              // or "library" if you prefer Node-API
-  binaryTargets   = ["native", "debian-openssl-3.0.x"]
   previewFeatures = ["fullTextIndex", "fullTextSearch"]
+  binaryTargets   = ["native", "debian-openssl-3.0.x"]
+  engineType      = "library"
 }
 
 datasource db {
@@ -11,27 +11,37 @@ datasource db {
 }
 
 model Tenant {
-  id               String   @id @default(cuid())
-  name             String
-  domain           String   @unique
-  subdomain        String?  @unique
-  stripeCustomerId String?  @unique
-  status           String   @default("ACTIVE")
-  settings         Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  // Relations
-  customers     Customer[]
-  products      Product[]
-  proposals     Proposal[]
-  users         User[]
-  subscriptions Subscription[]
-  entitlements  Entitlement[]
+  id        String     @id @default(cuid())
+  name      String
+  domain    String     @unique
+  subdomain String?    @unique
+  status    String     @default("ACTIVE")
+  settings  Json?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  customers Customer[]
+  products  Product[]
+  proposals Proposal[]
+  users     User[]
+  entitlements Entitlement[]
 
   @@index([status])
   @@index([createdAt])
   @@map("tenants")
+}
+
+model Entitlement {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String
+  enabled   Boolean  @default(true)
+  value     String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
 }
 
 model User {
@@ -46,7 +56,6 @@ model User {
   updatedAt                DateTime                         @updatedAt
   lastLogin                DateTime?
   accessibilityConfig      AccessibilityConfiguration?
-  approvalDecisions        ApprovalDecision[]
   approvalWorkflows        ApprovalWorkflow[]
   communicationPrefs       CommunicationPreferences?
   createdContent           Content[]
@@ -57,7 +66,6 @@ model User {
   createdRules             ProductRelationshipRule[]        @relation("RuleCreator")
   updatedRules             ProductRelationshipRule[]        @relation("RuleUpdater")
   productRelationships     ProductRelationship[]
-  tenant                   Tenant                           @relation(fields: [tenantId], references: [id])
   createdProposals         Proposal[]                       @relation("ProposalCreator")
   securityEvents           SecurityEvent[]
   temporaryAccess          TemporaryAccess[]
@@ -66,10 +74,10 @@ model User {
   preferences              UserPreferences?
   roles                    UserRole[]
   sessions                 UserSession[]
+  tenant                   Tenant                           @relation(fields: [tenantId], references: [id])
   validationExecutions     ValidationExecution[]
   validationIssuesResolved ValidationIssue[]
   validationRules          ValidationRule[]
-  assignedProposals        Proposal[]                       @relation("ProposalAssignees")
 
   @@unique([tenantId, email])
   @@index([name])
@@ -289,25 +297,6 @@ model AuditLog {
   @@index([actorId, at])
 }
 
-model SecurityAuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
-  resource  String
-  action    String
-  scope     String
-  success   Boolean
-  timestamp DateTime @default(now())
-  error     String?
-  metadata  Json?
-  ip        String?
-  userAgent String?
-
-  @@index([userId, timestamp])
-  @@index([resource, action])
-  @@index([success, timestamp])
-  @@index([timestamp])
-}
-
 model ApiKey {
   id        String   @id @default(cuid())
   label     String
@@ -333,66 +322,6 @@ model Idempotency {
   @@index([route])
   @@index([userId])
   @@index([expiresAt])
-}
-
-// --- SaaS Billing (minimal scaffolding) ---
-
-enum PlanTier {
-  FREE
-  PRO
-  ENTERPRISE
-}
-
-enum SubscriptionStatus {
-  ACTIVE
-  PAST_DUE
-  CANCELED
-  TRIALING
-}
-
-model Plan {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  tier      PlanTier
-  features  Json?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  subscriptions Subscription[]
-}
-
-model Subscription {
-  id                   String             @id @default(cuid())
-  tenantId             String
-  planId               String
-  status               SubscriptionStatus @default(ACTIVE)
-  seats                Int                @default(5)
-  stripeSubscriptionId String?            @unique
-  validUntil           DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  plan   Plan   @relation(fields: [planId], references: [id])
-
-  @@index([tenantId])
-  @@index([planId])
-  @@index([status])
-}
-
-model Entitlement {
-  id        String   @id @default(cuid())
-  tenantId  String
-  key       String
-  enabled   Boolean  @default(true)
-  value     String?
-  createdAt DateTime @default(now())
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-
-  @@unique([tenantId, key])
-  @@index([tenantId])
 }
 
 model SecurityEvent {
@@ -656,7 +585,6 @@ model Customer {
   phone        String?
   website      String?
   address      String?
-  country      String?
   industry     String?
   companySize  String?
   revenue      Decimal?
@@ -674,8 +602,8 @@ model Customer {
   lastSyncedAt DateTime?
   syncStatus   String?           @default("PENDING")
   contacts     CustomerContact[]
-  proposals    Proposal[]
   tenant       Tenant            @relation(fields: [tenantId], references: [id])
+  proposals    Proposal[]
 
   @@unique([tenantId, email])
   @@index([status, tier])
@@ -767,9 +695,8 @@ model Proposal {
   versions          ProposalVersion[]
   creator           User                @relation("ProposalCreator", fields: [createdBy], references: [id])
   customer          Customer            @relation(fields: [customerId], references: [id])
-  validationIssues  ValidationIssue[]
-  assignedTo        User[]              @relation("ProposalAssignees")
   tenant            Tenant              @relation(fields: [tenantId], references: [id])
+  validationIssues  ValidationIssue[]
 
   @@index([status, dueDate])
   @@index([customerId, status])
@@ -830,8 +757,6 @@ model ProposalSection {
   updatedAt        DateTime         @updatedAt
   proposal         Proposal         @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
-  proposalProducts ProposalProduct[]
-
   @@index([proposalId, order])
   @@index([proposalId, order], map: "idx_proposal_sections_order")
   @@map("proposal_sections")
@@ -841,7 +766,6 @@ model ProposalProduct {
   id                 String            @id @default(cuid())
   proposalId         String
   productId          String
-  sectionId          String?
   quantity           Int               @default(1)
   unitPrice          Decimal
   discount           Decimal           @default(0)
@@ -852,12 +776,10 @@ model ProposalProduct {
   updatedAt          DateTime          @updatedAt
   product            Product           @relation(fields: [productId], references: [id])
   proposal           Proposal          @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  section            ProposalSection?  @relation(fields: [sectionId], references: [id])
   validationIssues   ValidationIssue[]
 
   @@index([proposalId])
   @@index([productId])
-  @@index([proposalId, sectionId])
   @@index([productId], map: "idx_proposal_products_product_id")
   @@map("proposal_products")
 }
@@ -875,7 +797,6 @@ model Product {
   tags              String[]
   attributes        Json?
   images            String[]
-  datasheetPath     String? // Optional path to product datasheet (network or local)
   stockQuantity     Int?                      @default(0)
   status            String?                   @default("ACTIVE")
   isActive          Boolean                   @default(true)
@@ -887,9 +808,9 @@ model Product {
   relationshipRules ProductRelationshipRule[]
   relationships     ProductRelationship[]     @relation("SourceProduct")
   relatedFrom       ProductRelationship[]     @relation("TargetProduct")
+  tenant            Tenant                    @relation(fields: [tenantId], references: [id])
   proposalProducts  ProposalProduct[]
   validationRules   ValidationRule[]
-  tenant            Tenant                    @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, sku])
   @@index([isActive, createdAt(sort: Desc)])
@@ -1154,7 +1075,6 @@ model WorkflowStage {
   performanceTracking Json?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
-  decisions           ApprovalDecision[]
   executions          ApprovalExecution[]
   workflow            ApprovalWorkflow    @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
@@ -1164,21 +1084,20 @@ model WorkflowStage {
 }
 
 model ApprovalExecution {
-  id                 String             @id @default(cuid())
+  id                 String           @id @default(cuid())
   workflowId         String
   entityId           String
   currentStage       String?
-  status             ExecutionStatus    @default(PENDING)
-  startedAt          DateTime           @default(now())
+  status             ExecutionStatus  @default(PENDING)
+  startedAt          DateTime         @default(now())
   completedAt        DateTime?
   slaCompliance      Boolean?
   proposalId         String?
   performanceMetrics Json?
   userStoryContext   String[]
-  decisions          ApprovalDecision[]
-  stageExecution     WorkflowStage?     @relation(fields: [currentStage], references: [id])
-  proposal           Proposal?          @relation(fields: [proposalId], references: [id])
-  workflow           ApprovalWorkflow   @relation(fields: [workflowId], references: [id])
+  stageExecution     WorkflowStage?   @relation(fields: [currentStage], references: [id])
+  proposal           Proposal?        @relation(fields: [proposalId], references: [id])
+  workflow           ApprovalWorkflow @relation(fields: [workflowId], references: [id])
 
   @@index([workflowId, status])
   @@index([proposalId])
@@ -1186,7 +1105,7 @@ model ApprovalExecution {
 }
 
 model ApprovalDecision {
-  id                String            @id @default(cuid())
+  id                String       @id @default(cuid())
   executionId       String
   stageId           String
   approverId        String
@@ -1195,14 +1114,35 @@ model ApprovalDecision {
   timeToDecision    Int?
   qualityScore      Float?
   performanceImpact Float?
-  timestamp         DateTime          @default(now())
-  approver          User              @relation(fields: [approverId], references: [id])
-  execution         ApprovalExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
-  stage             WorkflowStage     @relation(fields: [stageId], references: [id])
+  timestamp         DateTime     @default(now())
 
   @@index([executionId])
   @@index([approverId])
   @@map("approval_decisions")
+}
+
+model Outbox {
+  id        String   @id @default(cuid())
+  type      String
+  payload   Json
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  attempts  Int      @default(0)
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([type])
+  @@index([status, createdAt])
+}
+
+model ProposalAssignees {
+  A String
+  B String
+
+  @@unique([A, B], map: "_ProposalAssignees_AB_unique")
+  @@index([B], map: "_ProposalAssignees_B_index")
+  @@map("_ProposalAssignees")
 }
 
 enum UserStatus {
@@ -1493,19 +1433,4 @@ enum EntityType {
   PROPOSAL_SECTION
   PROPOSAL_PRODUCT
   PRODUCT_RELATIONSHIP
-}
-
-model Outbox {
-  id        String   @id @default(cuid())
-  type      String
-  payload   Json
-  status    String   @default("pending") // pending, processing, done, error
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  attempts  Int      @default(0)
-
-  @@index([status])
-  @@index([createdAt])
-  @@index([type])
-  @@index([status, createdAt])
 }
