@@ -1,0 +1,17 @@
+model Entitlement {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String
+  enabled   Boolean  @default(true)
+  value     String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+}
+
+model SecurityEvent {
+  id        String              @id @default(cuid())
+

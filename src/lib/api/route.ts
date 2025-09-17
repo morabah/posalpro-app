@@ -36,7 +36,8 @@ interface ExtendedUser {
 }
 
 // Extended route configuration interface
-interface ExtendedRouteConfig extends RouteConfig<z.ZodTypeAny | undefined, z.ZodTypeAny | undefined> {
+interface ExtendedRouteConfig
+  extends RouteConfig<z.ZodTypeAny | undefined, z.ZodTypeAny | undefined> {
   requireAuth?: boolean;
   requirePaid?: boolean;
 }
@@ -223,7 +224,10 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         }
 
         // Minimal paid feature gating using feature flags (server-side guard rail)
-        if ((config as ExtendedRouteConfig).requireAuth !== false && (config as ExtendedRouteConfig).requirePaid) {
+        if (
+          (config as ExtendedRouteConfig).requireAuth !== false &&
+          (config as ExtendedRouteConfig).requirePaid
+        ) {
           const flags = getFeatureFlags();
           const enforce = process.env.PAID_FEATURES_ENFORCE === 'true';
           const paidOn =
@@ -234,25 +238,28 @@ export function createRoute<Q extends z.ZodTypeAny | undefined, B extends z.ZodT
         }
 
         // Entitlement enforcement: require all listed entitlements for the tenant
+        // Administrators bypass entitlement checks
         if (config.entitlements && config.entitlements.length > 0) {
-          const tenantId = (user as ExtendedUser).tenantId;
-          if (!tenantId) {
-            throw forbidden('User has no tenant ID');
-          }
-          const ok = await EntitlementService.hasEntitlements(
-            tenantId,
-            config.entitlements
+          const isAdmin = (user.roles || []).some(
+            r => r === 'Administrator' || r === 'System Administrator'
           );
-          if (!ok) {
-            throw forbidden('Missing entitlements');
+          if (!isAdmin) {
+            const tenantId = (user as ExtendedUser).tenantId;
+            if (!tenantId) {
+              throw forbidden('User has no tenant ID');
+            }
+            const ok = await EntitlementService.hasEntitlements(tenantId, config.entitlements);
+            if (!ok) {
+              throw forbidden('Missing entitlements');
+            }
           }
         }
 
         // User permissions enforcement: require all listed permissions for the user
         if (config.permissions && config.permissions.length > 0) {
           const userPermissions = (user as ExtendedUser).permissions || [];
-          const hasAllPermissions = config.permissions.every(permission =>
-            userPermissions.includes(permission) || userPermissions.includes('*:*')
+          const hasAllPermissions = config.permissions.every(
+            permission => userPermissions.includes(permission) || userPermissions.includes('*:*')
           );
           if (!hasAllPermissions) {
             throw forbidden('Missing permissions');
