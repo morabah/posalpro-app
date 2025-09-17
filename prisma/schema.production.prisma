@@ -24,6 +24,7 @@ model Tenant {
   proposals Proposal[]
   users     User[]
   entitlements Entitlement[]
+  subscriptions Subscription[]
 
   @@index([status])
   @@index([createdAt])
@@ -42,6 +43,36 @@ model Entitlement {
 
   @@unique([tenantId, key])
   @@index([tenantId])
+}
+
+model Plan {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  tier      PlanTier
+  features  Json?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  tenantId             String
+  planId               String
+  status               SubscriptionStatus @default(ACTIVE)
+  seats                Int                @default(5)
+  stripeSubscriptionId String?            @unique
+  validUntil           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  @@index([tenantId])
+  @@index([planId])
 }
 
 model User {
@@ -1143,6 +1174,19 @@ model ProposalAssignees {
   @@unique([A, B], map: "_ProposalAssignees_AB_unique")
   @@index([B], map: "_ProposalAssignees_B_index")
   @@map("_ProposalAssignees")
+}
+
+enum PlanTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
 }
 
 enum UserStatus {
