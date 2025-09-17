@@ -855,6 +855,7 @@ model Product {
   tags              String[]
   attributes        Json?
   images            String[]
+  datasheetPath     String?
   stockQuantity     Int?                      @default(0)
   status            String?                   @default("ACTIVE")
   isActive          Boolean                   @default(true)
