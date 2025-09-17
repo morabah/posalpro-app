@@ -1,4 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports, no-undef, @typescript-eslint/no-unused-vars */
+// SAFE HOT-FIX: Initialize compiled webpack early to prevent lazy wrapper issues
+const compiledWebpack = require('next/dist/compiled/webpack/webpack');
+// Some envs return a lazy wrapper that must be initialized
+if (typeof compiledWebpack.init === 'function') {
+  compiledWebpack.init(() => require('next/dist/compiled/webpack/webpack'));
+}
+
 let withBundleAnalyzer = config => config;
 // Removed TerserPlugin variable - Next.js 15 handles minification internally
 try {

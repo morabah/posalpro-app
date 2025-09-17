@@ -52,7 +52,7 @@ echo '=== Clean ===' \
   # This ensures production uses the Neon cloud database with all synced data
 
   # Align with production environment (non-secrets)
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
   # Increase memory for TypeScript compilation (2GB)
   NODE_OPTIONS = "--max-old-space-size=2048"
   NETLIFY_LINT = "false"
