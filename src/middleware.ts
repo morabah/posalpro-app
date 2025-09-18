@@ -12,7 +12,8 @@ import { NextRequest, NextResponse } from 'next/server';
 const securityMiddleware = createSecurityMiddleware();
 
 function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) return (crypto as any).randomUUID();
+  if (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
+    return (crypto as any).randomUUID();
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -22,7 +23,8 @@ function generateUUID(): string {
 
 function hasSessionCookie(req: NextRequest): boolean {
   return Boolean(
-    req.cookies.get('next-auth.session-token') || req.cookies.get('__Secure-next-auth.session-token')
+    req.cookies.get('next-auth.session-token') ||
+      req.cookies.get('__Secure-next-auth.session-token')
   );
 }
 
@@ -73,7 +75,10 @@ function applyCors(req: NextRequest, res: NextResponse): NextResponse {
     res.headers.set('Access-Control-Allow-Credentials', 'true');
   }
   res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Request-ID');
+  res.headers.set(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Requested-With, X-Request-ID'
+  );
   res.headers.set('Access-Control-Max-Age', '86400');
   return res;
 }
@@ -98,7 +103,9 @@ async function resolveTenantId(req: NextRequest): Promise<string | null> {
   const sub = extractSubdomain(req.headers.get('host'));
   if (sub) return sub;
   if (process.env.NODE_ENV !== 'production') {
-    return process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default';
+    return (
+      process.env.DEFAULT_TENANT_ID || process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID || 'tenant_default'
+    );
   }
   return null;
 }
@@ -107,7 +114,10 @@ function rateLimitTenant(req: NextRequest, tenantId: string | null): NextRespons
   const p = req.nextUrl.pathname;
   if (!p.startsWith('/api/')) return null;
   if (!tenantId) return null;
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || (req as { ip?: string }).ip || 'local';
+  const ip =
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    (req as { ip?: string }).ip ||
+    'local';
   const key = `${tenantId}:${ip}`;
   const now = Date.now();
   const bucket = tenantBuckets.get(key) || { count: 0, resetAt: now + TENANT_WINDOW_MS };
@@ -132,8 +142,14 @@ function rateLimitTenant(req: NextRequest, tenantId: string | null): NextRespons
 function rateLimitAdmin(req: NextRequest): NextResponse | null {
   const { pathname } = req.nextUrl;
   if (!(pathname.startsWith('/api/admin') || pathname.startsWith('/admin'))) return null;
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || (req as { ip?: string }).ip || 'local';
-  const bucket = (globalThis as any).__adminBucket?.[ip] || { count: 0, resetAt: Date.now() + 60_000 };
+  const ip =
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    (req as { ip?: string }).ip ||
+    'local';
+  const bucket = (globalThis as any).__adminBucket?.[ip] || {
+    count: 0,
+    resetAt: Date.now() + 60_000,
+  };
   const now = Date.now();
   if (now > bucket.resetAt) {
     bucket.count = 0;
@@ -166,17 +182,24 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
     try {
       const token = await getToken({ req, secret: getAuthSecret() });
       if (!token) return NextResponse.json('Invalid authentication token', { status: 401 });
-      const userRoles = Array.isArray((token as any)?.roles) ? ((token as any).roles as string[]) : [];
+      const userRoles = Array.isArray((token as any)?.roles)
+        ? ((token as any).roles as string[])
+        : [];
       const userPermissions = Array.isArray((token as any)?.permissions)
         ? ((token as any).permissions as string[])
         : [];
-      const hasAdminCapability = userPermissions.includes('admin:*') || userPermissions.includes('admin:access');
-      const hasAdminRole = userRoles.some((role: string) => role === 'System Administrator' || role === 'Administrator');
+      const hasAdminCapability =
+        userPermissions.includes('admin:*') || userPermissions.includes('admin:access');
+      const hasAdminRole = userRoles.some(
+        (role: string) => role === 'System Administrator' || role === 'Administrator'
+      );
 
       const method = req.method.toUpperCase();
       let endpointAuthorized = false;
       if (pathname.startsWith('/api/admin/metrics') && method === 'GET') {
-        endpointAuthorized = userPermissions.includes('admin:metrics:read') || userPermissions.includes('metrics:read');
+        endpointAuthorized =
+          userPermissions.includes('admin:metrics:read') ||
+          userPermissions.includes('metrics:read');
       } else if (pathname.startsWith('/api/admin/users') && method === 'GET') {
         endpointAuthorized = userPermissions.includes('users:read');
       }
@@ -188,7 +211,12 @@ async function enforceEdgeAuth(req: NextRequest): Promise<NextResponse | null> {
       const standardError = new StandardError({
         message: 'Token validation failed',
         code: ErrorCodes.AUTH.INVALID_TOKEN,
-        metadata: { component: 'middleware', operation: 'enforceEdgeAuth', pathname, error: error instanceof Error ? error.message : String(error) },
+        metadata: {
+          component: 'middleware',
+          operation: 'enforceEdgeAuth',
+          pathname,
+          error: error instanceof Error ? error.message : String(error),
+        },
       });
       errorHandlingService.processError(standardError);
       return NextResponse.json('Authentication failed', { status: 401 });
@@ -287,5 +315,13 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*', '/admin/:path*', '/proposals/create', '/proposals/manage', '/customers/:path*', '/products/:path*', '/analytics/:path*'],
+  matcher: [
+    '/api/:path*',
+    '/admin/:path*',
+    '/proposals/create',
+    '/proposals/manage',
+    '/customers/:path*',
+    '/products/:path*',
+    '/analytics/:path*',
+  ],
 };
