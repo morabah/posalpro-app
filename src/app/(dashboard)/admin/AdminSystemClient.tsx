@@ -47,14 +47,22 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline';
 
-// Role Management Component
-import RoleManager from '@/features/admin/components/RoleManager';
+// Role Management Component - Lazy loaded for code splitting
+import { lazy, Suspense } from 'react';
 
-// Service Status Monitor Component
-import ServiceStatusMonitor from '@/features/admin/components/ServiceStatusMonitor';
+const RoleManager = lazy(() => import('@/features/admin/components/RoleManager'));
+const ServiceStatusMonitor = lazy(() => import('@/features/admin/components/ServiceStatusMonitor'));
+const PerformanceMonitor = lazy(() => import('@/features/admin/components/PerformanceMonitor'));
 
-// Performance Monitor Component
-import PerformanceMonitor from '@/features/admin/components/PerformanceMonitor';
+// Loading fallback components for admin sections
+const AdminSectionLoadingFallback = ({ section }: { section: string }) => (
+  <div className="flex items-center justify-center p-8">
+    <div className="flex flex-col items-center space-y-4">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <p className="text-sm text-gray-600">Loading {section}...</p>
+    </div>
+  </div>
+);
 
 // Types
 type AdminTabType =
@@ -102,6 +110,22 @@ export function AdminSystemClient() {
   // Role management state
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAccessLevel, setSelectedAccessLevel] = useState('All Levels');
+
+  // Preload next tab for better UX
+  const preloadNextTab = (currentTab: AdminTabType) => {
+    const tabOrder: AdminTabType[] = ['overview', 'users', 'roles', 'permissions', 'integration', 'config', 'backup'];
+    const currentIndex = tabOrder.indexOf(currentTab);
+    const nextTab = tabOrder[currentIndex + 1];
+
+    if (nextTab === 'roles') {
+      // Preload RoleManager
+      import('@/features/admin/components/RoleManager');
+    } else if (nextTab === 'overview') {
+      // Preload monitoring components
+      import('@/features/admin/components/ServiceStatusMonitor');
+      import('@/features/admin/components/PerformanceMonitor');
+    }
+  };
 
   // UI state selectors - these are stable with useShallow
   const usersFilters = useAdminUsersFilters();
@@ -350,6 +374,10 @@ export function AdminSystemClient() {
                 key={id}
                 onClick={() => {
                   setActiveTab(id as AdminTabType);
+
+                  // Preload next tab for better UX
+                  preloadNextTab(id as AdminTabType);
+
                   analytics('admin_tab_changed', {
                     tab: id,
                     userStory: 'US-8.1',
@@ -449,10 +477,14 @@ export function AdminSystemClient() {
             </div>
 
             {/* Service Status Monitor */}
-            <ServiceStatusMonitor />
+            <Suspense fallback={<AdminSectionLoadingFallback section="Service Status" />}>
+              <ServiceStatusMonitor />
+            </Suspense>
 
             {/* Performance Monitor */}
-            <PerformanceMonitor />
+            <Suspense fallback={<AdminSectionLoadingFallback section="Performance Monitor" />}>
+              <PerformanceMonitor />
+            </Suspense>
           </div>
         )}
 
@@ -638,12 +670,14 @@ export function AdminSystemClient() {
 
         {activeTab === 'roles' && (
           <div className="space-y-6">
-            <RoleManager
-              searchTerm={searchTerm}
-              selectedAccessLevel={selectedAccessLevel}
-              onSearchChange={setSearchTerm}
-              onAccessLevelChange={setSelectedAccessLevel}
-            />
+            <Suspense fallback={<AdminSectionLoadingFallback section="Role Manager" />}>
+              <RoleManager
+                searchTerm={searchTerm}
+                selectedAccessLevel={selectedAccessLevel}
+                onSearchChange={setSearchTerm}
+                onAccessLevelChange={setSelectedAccessLevel}
+              />
+            </Suspense>
           </div>
         )}
 
