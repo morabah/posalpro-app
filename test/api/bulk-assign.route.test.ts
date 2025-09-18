@@ -9,9 +9,8 @@ jest.mock('next-auth', () => ({
 }));
 
 // Mock prisma client used in the route
-jest.mock('@/lib/db/prisma', () => ({
-  __esModule: true,
-  default: {
+jest.mock('@/lib/prisma', () => ({
+  prisma: {
     proposalProduct: {
       findMany: jest.fn(async ({ where }: any) => {
         // Return two products belonging to proposal p1

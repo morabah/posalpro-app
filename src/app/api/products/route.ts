@@ -32,6 +32,7 @@ import {
 export const GET = createRoute(
   {
     roles: ['admin', 'manager', 'sales', 'viewer', 'System Administrator', 'Administrator'],
+    entitlements: ['feature.products.read'],
     query: ProductQuerySchema,
   },
   async ({ query, user, requestId }) => {

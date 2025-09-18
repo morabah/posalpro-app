@@ -30,17 +30,66 @@ try {
 // This prevents webpack constructor conflicts with Next.js's compiled webpack
 
 /** @type {import('next').NextConfig} */
+function buildCsp() {
+  const isProd = process.env.NODE_ENV === 'production';
+  const scriptSrc = [
+    "'self'",
+    // Allow CDN worker scripts (e.g., pdf.js) but avoid eval in production
+    'https://cdnjs.cloudflare.com',
+    'https://unpkg.com',
+    'https://mozilla.github.io',
+  ];
+  // In development, Next may inject inline/eval for HMR
+  if (!isProd) {
+    scriptSrc.push("'unsafe-eval'", "'unsafe-inline'", "'report-sample'");
+  } else {
+    scriptSrc.push("'report-sample'");
+  }
+
+  // Use nonce-based CSP for styles in production, unsafe-inline only in development
+  const styleSrc = ["'self'", 'https://fonts.googleapis.com'];
+  if (!isProd) {
+    styleSrc.push("'unsafe-inline'");
+  }
+  const fontSrc = ["'self'", 'https://fonts.gstatic.com', 'data:'];
+  const imgSrc = ["'self'", 'data:', 'https:'];
+  const connectSrc = [
+    "'self'",
+    'https://api.posalpro.com',
+    'https://cdnjs.cloudflare.com',
+    'https://unpkg.com',
+    'https://mozilla.github.io',
+  ];
+  const workerSrc = [
+    "'self'",
+    'blob:',
+    'https://cdnjs.cloudflare.com',
+    'https://unpkg.com',
+    'https://mozilla.github.io',
+  ];
+  const frameSrc = ["'self'", 'http://localhost:8080', 'https:', 'https://mozilla.github.io'];
+
+  return [
+    `default-src 'self'`,
+    `script-src ${scriptSrc.join(' ')}`,
+    `style-src ${styleSrc.join(' ')}`,
+    `font-src ${fontSrc.join(' ')}`,
+    `img-src ${imgSrc.join(' ')}`,
+    `connect-src ${connectSrc.join(' ')}`,
+    `worker-src ${workerSrc.join(' ')}`,
+    `frame-src ${frameSrc.join(' ')}`,
+    `frame-ancestors 'none'`,
+    `report-uri /api/security/csp-report`,
+  ].join('; ');
+}
+
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-  {
-    key: 'Content-Security-Policy',
-    value:
-      "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com https://mozilla.github.io 'report-sample'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://api.posalpro.com https://cdnjs.cloudflare.com https://unpkg.com https://mozilla.github.io; worker-src 'self' blob: https://cdnjs.cloudflare.com https://unpkg.com https://mozilla.github.io; frame-src 'self' http://localhost:8080 https: https://mozilla.github.io; frame-ancestors 'none'; report-uri /api/security/csp-report",
-  },
+  { key: 'Content-Security-Policy', value: buildCsp() },
   { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
   { key: 'Pragma', value: 'no-cache' },
   { key: 'Expires', value: '0' },
@@ -74,7 +123,9 @@ const baseConfig = {
     minimumCacheTTL: 60,
     dangerouslyAllowSVG: true,
     contentSecurityPolicy:
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; sandbox;",
+      process.env.NODE_ENV === 'production'
+        ? "default-src 'self'; script-src 'self' https://unpkg.com; sandbox;"
+        : "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; sandbox;",
   },
 
   // Keep strict checks; do not ignore errors during builds

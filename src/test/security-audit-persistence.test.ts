@@ -3,11 +3,11 @@
  * Verifies audit logs are persisted to database and retention policy works
  */
 
-import { SecurityAuditManager } from '@/lib/security/audit';
 import { prisma } from '@/lib/prisma';
+import { SecurityAuditManager } from '@/lib/security/audit';
 
 // Mock Prisma client
-jest.mock('@/lib/db/prisma', () => ({
+jest.mock('@/lib/prisma', () => ({
   prisma: {
     securityAuditLog: {
       createMany: jest.fn(),
@@ -285,7 +285,7 @@ describe('Security Audit Persistence Tests', () => {
 
       mockPrisma.securityAuditLog.count
         .mockResolvedValueOnce(100) // totalLogs
-        .mockResolvedValueOnce(85)  // successCount
+        .mockResolvedValueOnce(85) // successCount
         .mockResolvedValueOnce(15); // failureCount
       mockPrisma.securityAuditLog.findMany.mockResolvedValue(mockStats.recentLogs);
 
@@ -361,23 +361,17 @@ describe('Security Audit Persistence Tests', () => {
     it('should log data modification operations', async () => {
       mockPrisma.securityAuditLog.createMany.mockResolvedValue({ count: 1 });
 
-      auditManager.logDataModification(
-        'user-1',
-        'products',
-        'create',
-        'product-123',
-        { name: 'New Product', price: 99.99 }
-      );
+      auditManager.logDataModification('user-1', 'products', 'create', 'product-123', {
+        name: 'New Product',
+        price: 99.99,
+      });
 
       // Log enough entries to trigger batch flush
       for (let i = 0; i < 4; i++) {
-        auditManager.logDataModification(
-          'user-1',
-          'products',
-          'create',
-          'product-123',
-          { name: 'New Product', price: 99.99 }
-        );
+        auditManager.logDataModification('user-1', 'products', 'create', 'product-123', {
+          name: 'New Product',
+          price: 99.99,
+        });
       }
 
       // Wait for async flush
@@ -407,25 +401,15 @@ describe('Security Audit Persistence Tests', () => {
     it('should log permission check results', async () => {
       mockPrisma.securityAuditLog.createMany.mockResolvedValue({ count: 1 });
 
-      auditManager.logPermissionCheck(
-        'user-1',
-        'admin/users',
-        'read',
-        'ALL',
-        false,
-        ['admin:users:read']
-      );
+      auditManager.logPermissionCheck('user-1', 'admin/users', 'read', 'ALL', false, [
+        'admin:users:read',
+      ]);
 
       // Log enough entries to trigger batch flush
       for (let i = 0; i < 4; i++) {
-        auditManager.logPermissionCheck(
-          'user-1',
-          'admin/users',
-          'read',
-          'ALL',
-          false,
-          ['admin:users:read']
-        );
+        auditManager.logPermissionCheck('user-1', 'admin/users', 'read', 'ALL', false, [
+          'admin:users:read',
+        ]);
       }
 
       // Wait for async flush

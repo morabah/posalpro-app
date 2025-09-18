@@ -418,20 +418,26 @@ check_api_health() {
     echo -e "  ${INFO} ${BLUE}Waiting for server to fully initialize...${NC}"
     sleep 5
 
-    # Test admin metrics endpoint
-    local metrics_response=$(curl -s --max-time 5 "http://localhost:$port/api/admin/metrics" 2>/dev/null)
-    if echo "$metrics_response" | grep -q '"success".*true' || echo "$metrics_response" | grep -q '"data"'; then
+    # Test admin metrics endpoint (expect 401 - authentication required)
+    local metrics_response=$(curl -s --max-time 5 -w "%{http_code}" "http://localhost:$port/api/admin/metrics" 2>/dev/null)
+    local metrics_status="${metrics_response: -3}"
+    if [ "$metrics_status" = "401" ]; then
+        print_check "pass" "Admin metrics API properly secured" "HTTP 401 - Authentication required (expected)"
+    elif [ "$metrics_status" = "200" ]; then
         print_check "pass" "Admin metrics API responding" "http://localhost:$port/api/admin/metrics"
     else
-        print_check "warn" "Admin metrics API not responding" "May need more startup time or check database"
+        print_check "warn" "Admin metrics API unexpected response" "HTTP $metrics_status - May need more startup time"
     fi
 
-    # Test admin users endpoint
-    local users_response=$(curl -s --max-time 5 "http://localhost:$port/api/admin/users" 2>/dev/null)
-    if echo "$users_response" | grep -q '"success".*true' || echo "$users_response" | grep -q '"data"'; then
+    # Test admin users endpoint (expect 401 - authentication required)
+    local users_response=$(curl -s --max-time 5 -w "%{http_code}" "http://localhost:$port/api/admin/users" 2>/dev/null)
+    local users_status="${users_response: -3}"
+    if [ "$users_status" = "401" ]; then
+        print_check "pass" "Admin users API properly secured" "HTTP 401 - Authentication required (expected)"
+    elif [ "$users_status" = "200" ]; then
         print_check "pass" "Admin users API responding" "http://localhost:$port/api/admin/users"
     else
-        print_check "warn" "Admin users API not responding" "Check database connectivity"
+        print_check "warn" "Admin users API unexpected response" "HTTP $users_status - Check database connectivity"
     fi
 
     # Test health endpoint (if exists)

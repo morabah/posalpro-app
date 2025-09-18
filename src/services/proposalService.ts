@@ -9,17 +9,19 @@
  * ✅ IMPLEMENTS: Modern architecture with proper separation of concerns
  */
 
-import { ErrorCodes, processError, StandardError } from '@/lib/errors/ErrorHandlingService';
+import { ErrorCodes, processError } from '@/lib/errors/ErrorHandlingService';
 import { http } from '@/lib/http';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 
-// Import consolidated schemas
+// Import consolidated schemas from lib validation
 import {
-  ProposalCreateSchema,
-  type ProposalCreateData,
-  type ProposalQueryData,
-  type ProposalUpdateData,
-} from '@/features/proposals';
+  createProposalSchema,
+  proposalSearchSchema,
+  type CreateProposalData,
+  type ProposalSearchCriteria,
+  type UpdateProposalData,
+} from '@/lib/validation/schemas/proposal';
+import { ProposalStatus as ProposalStatusEnum } from '@/types/entities/proposal';
 
 // ====================
 // Type Definitions (Aligned with API schemas)
@@ -69,15 +71,15 @@ export interface ProposalProduct {
 // Import consolidated schemas
 // ====================
 
-import { type Proposal } from '@/features/proposals';
+import { type Proposal } from '@/types/entities/proposal';
 
 // Re-export types for backward compatibility
 export type { Proposal };
 
 // Re-export enums for backward compatibility
+// Align with Prisma enum and consolidated schema (no IN_PROGRESS)
 export const ProposalStatus = {
   DRAFT: 'DRAFT',
-  IN_PROGRESS: 'IN_PROGRESS',
   IN_REVIEW: 'IN_REVIEW',
   PENDING_APPROVAL: 'PENDING_APPROVAL',
   APPROVED: 'APPROVED',
@@ -95,8 +97,8 @@ export const ProposalPriority = {
 } as const;
 
 // Use the consolidated schemas from features/proposals/schemas
-export type ProposalCreate = ProposalCreateData;
-export type ProposalUpdate = ProposalUpdateData;
+export type ProposalCreate = CreateProposalData;
+export type ProposalUpdate = UpdateProposalData;
 
 // ====================
 // Service Class
@@ -116,17 +118,7 @@ export class ProposalService {
   private constructor() {}
 
   async getProposals(
-    params: {
-      search?: string;
-      department?: string;
-      role?: string;
-      status?: string;
-      sortBy?: string;
-      sortOrder?: 'asc' | 'desc';
-      limit?: number;
-      cursor?: string;
-      filters?: Record<string, unknown>;
-    } = {}
+    params: Partial<ProposalSearchCriteria> = {}
   ): Promise<{ items: Proposal[]; nextCursor: string | null }> {
     const start = performance.now();
     logDebug('Fetching proposals with cursor pagination', {
@@ -138,23 +130,19 @@ export class ProposalService {
     });
 
     try {
+      // Validate and normalize using consolidated schema (prevents enum/type drift)
+      const validated = proposalSearchSchema.parse(params);
+
       const searchParams = new URLSearchParams();
-
-      // Add query parameters matching new API interface
-      if (params.search) searchParams.set('search', params.search);
-      if (params.limit) searchParams.set('limit', params.limit.toString());
-      if (params.cursor) searchParams.set('cursor', params.cursor);
-      if (params.sortBy) searchParams.set('sortBy', params.sortBy);
-      if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
-
-      // Add filter parameters
-      if (params.filters) {
-        Object.entries(params.filters).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-            searchParams.set(key, String(value));
-          }
-        });
-      }
+      Object.entries(validated).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === '') return;
+        // Normalize dates and booleans to strings
+        if (value && typeof value === 'object' && value instanceof Date) {
+          searchParams.set(key, value.toISOString());
+        } else {
+          searchParams.set(key, String(value));
+        }
+      });
 
       // Use centralized HTTP client
       const data = await http.get<{ items: Proposal[]; nextCursor: string | null }>(
@@ -225,14 +213,14 @@ export class ProposalService {
     logDebug('Creating proposal', {
       component: 'ProposalService',
       operation: 'createProposal',
-      proposal: { title: proposal.basicInfo.title, customerId: proposal.basicInfo.customerId },
+      proposal: { title: proposal.metadata.title, customerId: proposal.metadata.customerId },
       userStory: 'US-3.1',
       hypothesis: 'H4',
     });
 
     try {
       // Validate proposal data using aligned schema
-      const validatedData = ProposalCreateSchema.parse(proposal);
+      const validatedData = createProposalSchema.parse(proposal);
 
       const data = await http.post<Proposal>('/api/proposals', validatedData);
 
@@ -298,7 +286,7 @@ export class ProposalService {
   }
 
   // ✅ ADDED: Database-First Field Alignment - Transform wizard payload to API schema
-  private transformWizardPayloadForAPI(proposal: WizardPayload): ProposalUpdate {
+  private transformWizardPayloadForAPI(proposal: WizardPayload): Partial<ProposalUpdate> {
     // ✅ Handle wizard flat payload structure
     const {
       teamData,
@@ -323,20 +311,27 @@ export class ProposalService {
       return {
         ...processedBasicFields,
         metadata: {
-          teamData: teamData || undefined,
-          contentData: contentData || undefined,
-          productData: productData || undefined,
-          sectionData: sectionData || undefined,
-          reviewData: reviewData || undefined,
-          submittedAt: new Date().toISOString(),
-          wizardVersion: 'modern',
-          planType: (planType as 'BASIC' | 'PROFESSIONAL' | 'ENTERPRISE') || undefined,
+          // Store wizard-specific data in a custom field that can be extended
+          ...(processedBasicFields as any),
+          // Add wizard metadata as custom properties
+          wizardData: {
+            teamData: teamData || undefined,
+            contentData: contentData || undefined,
+            productData: productData || undefined,
+            sectionData: sectionData || undefined,
+            reviewData: reviewData || undefined,
+            submittedAt: new Date().toISOString(),
+            wizardVersion: 'modern',
+            planType: (planType as 'BASIC' | 'PROFESSIONAL' | 'ENTERPRISE') || undefined,
+          },
         },
       };
     }
 
-    // ✅ If no wizard-specific data, return processed fields
-    return processedBasicFields;
+    // ✅ If no wizard-specific data, return processed fields as partial update
+    return {
+      metadata: processedBasicFields as any,
+    };
   }
 
   async deleteProposal(id: string): Promise<{ message: string }> {
@@ -461,7 +456,7 @@ export class ProposalService {
 
   async updateWorkflowStatus(
     id: string,
-    status: string,
+    status: ProposalStatusEnum,
     metadata?: Record<string, unknown>
   ): Promise<Proposal> {
     const start = performance.now();

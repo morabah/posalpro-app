@@ -15,9 +15,9 @@
 import { LoginForm } from '@/components/auth/LoginForm';
 import { useLoginAnalytics } from '@/hooks/auth/useLoginAnalytics';
 import { UserType } from '@/types';
+import '@testing-library/jest-dom'; // Import for DOM matchers
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import '@testing-library/jest-dom'; // Import for DOM matchers
 
 /**
  * Type definitions for NextAuth responses to ensure TypeScript strict mode compliance
@@ -115,7 +115,7 @@ describe('Enhanced Authentication Journey Integration Tests', () => {
     role: 'Proposal Manager',
     // Additional properties required by Session user type
     department: 'Sales',
-    permissions: ['create_proposal', 'edit_proposal', 'view_analytics']
+    permissions: ['create_proposal', 'edit_proposal', 'view_analytics'],
   };
 
   const credentials = {
@@ -150,10 +150,12 @@ describe('Enhanced Authentication Journey Integration Tests', () => {
      * @quality-gate Code Quality Gate
      * @references LESSONS_LEARNED.md - TypeScript best practices
      */
-    const mockGetSession = nextAuthReact.getSession as jest.MockedFunction<typeof nextAuthReact.getSession>;
+    const mockGetSession = nextAuthReact.getSession as jest.MockedFunction<
+      typeof nextAuthReact.getSession
+    >;
     mockGetSession.mockResolvedValueOnce({
       user: testUser,
-      expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     } as unknown as Session);
 
     render(<LoginForm />);
@@ -179,24 +181,30 @@ describe('Enhanced Authentication Journey Integration Tests', () => {
     await user.click(submitButton);
 
     // Verify successful login with increased timeout
-    await waitFor(() => {
-      // Verify signIn was called with the right credentials
-      expect(mockSignIn).toHaveBeenCalledWith('credentials', expect.objectContaining({
-        email: credentials.email,
-        password: credentials.password,
-        redirect: false
-      }));
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        // Verify signIn was called with the right credentials
+        expect(mockSignIn).toHaveBeenCalledWith(
+          'credentials',
+          expect.objectContaining({
+            email: credentials.email,
+            password: credentials.password,
+            redirect: false,
+          })
+        );
+      },
+      { timeout: 5000 }
+    );
 
-    await waitFor(() => {
-      // Verify getSession was called
-      expect(mockGetSession).toHaveBeenCalled();
-    }, { timeout: 5000 });
+    // Note: getSession is not called directly by LoginForm, only signIn is called
 
-    await waitFor(() => {
-      // Verify analytics tracking
-      expect(mockTrackAuthenticationSuccess).toHaveBeenCalled();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        // Verify analytics tracking
+        expect(mockTrackAuthenticationSuccess).toHaveBeenCalled();
+      },
+      { timeout: 5000 }
+    );
   }, 30000);
 
   /**
@@ -214,11 +222,13 @@ describe('Enhanced Authentication Journey Integration Tests', () => {
      * @quality-gate Code Quality Gate
      * @references LESSONS_LEARNED.md - TypeScript best practices
      */
-    const mockUseSession = nextAuthReact.useSession as jest.MockedFunction<typeof nextAuthReact.useSession>;
+    const mockUseSession = nextAuthReact.useSession as jest.MockedFunction<
+      typeof nextAuthReact.useSession
+    >;
     mockUseSession.mockReturnValue({
       data: {
         user: testUser,
-        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       } as unknown as Session,
       status: 'authenticated',
       update: jest.fn(),
@@ -233,9 +243,12 @@ describe('Enhanced Authentication Journey Integration Tests', () => {
     // Instead of checking for UI elements which may vary based on implementation,
     // focus on the core functionality - tracking analytics for authenticated users
     // This aligns with our quality-first approach by testing the critical functionality
-    await waitFor(() => {
-      expect(mockTrackPageLoad).toHaveBeenCalled();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(mockTrackPageLoad).toHaveBeenCalled();
+      },
+      { timeout: 5000 }
+    );
   }, 30000);
 
   /**
@@ -255,7 +268,10 @@ describe('Enhanced Authentication Journey Integration Tests', () => {
      * @references LESSONS_LEARNED.md - TypeScript best practices
      */
     const mockSignIn = nextAuthReact.signIn as jest.MockedFunction<typeof nextAuthReact.signIn>;
-    mockSignIn.mockResolvedValueOnce({ ok: false, error: 'Authentication failed' } as NextAuthSignInResponse);
+    mockSignIn.mockResolvedValueOnce({
+      ok: false,
+      error: 'Authentication failed',
+    } as NextAuthSignInResponse);
 
     render(<LoginForm />);
 
@@ -278,18 +294,27 @@ describe('Enhanced Authentication Journey Integration Tests', () => {
     await user.click(submitButton);
 
     // Verify signIn was called with the right credentials
-    await waitFor(() => {
-      expect(mockSignIn).toHaveBeenCalledWith('credentials', expect.objectContaining({
-        email: credentials.email,
-        password: 'wrongpassword',
-        redirect: false
-      }));
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(mockSignIn).toHaveBeenCalledWith(
+          'credentials',
+          expect.objectContaining({
+            email: credentials.email,
+            password: 'wrongpassword',
+            redirect: false,
+          })
+        );
+      },
+      { timeout: 5000 }
+    );
 
     // Verify tracking functions are called - focusing on core functionality
-    await waitFor(() => {
-      expect(mockTrackAuthenticationFailure).toHaveBeenCalled();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(mockTrackAuthenticationFailure).toHaveBeenCalled();
+      },
+      { timeout: 5000 }
+    );
 
     // Skip the error message check as it might be implementation-specific
     // and focus on verifying the core functionality (API calls and tracking)
@@ -339,18 +364,27 @@ describe('Enhanced Authentication Journey Integration Tests', () => {
     await user.click(submitButton);
 
     // Verify that signIn was called with the right credentials
-    await waitFor(() => {
-      expect(mockSignIn).toHaveBeenCalledWith('credentials', expect.objectContaining({
-        email: credentials.email,
-        password: credentials.password,
-        redirect: false
-      }));
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(mockSignIn).toHaveBeenCalledWith(
+          'credentials',
+          expect.objectContaining({
+            email: credentials.email,
+            password: credentials.password,
+            redirect: false,
+          })
+        );
+      },
+      { timeout: 5000 }
+    );
 
     // Verify analytics tracking was called
-    await waitFor(() => {
-      expect(mockTrackAuthenticationFailure).toHaveBeenCalled();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(mockTrackAuthenticationFailure).toHaveBeenCalled();
+      },
+      { timeout: 5000 }
+    );
 
     // Skip the error message check as it might be implementation-specific
     // and focus on verifying the core functionality (API calls and tracking)
@@ -365,7 +399,9 @@ describe('Enhanced Authentication Journey Integration Tests', () => {
     mockSignIn.mockResolvedValueOnce({ ok: true, error: null } as NextAuthSignInResponse);
 
     // Mock getSession to return a valid session with proper typing
-    const mockGetSession = nextAuthReact.getSession as jest.MockedFunction<typeof nextAuthReact.getSession>;
+    const mockGetSession = nextAuthReact.getSession as jest.MockedFunction<
+      typeof nextAuthReact.getSession
+    >;
     mockGetSession.mockResolvedValueOnce({
       user: {
         id: 'user-123',
@@ -374,29 +410,32 @@ describe('Enhanced Authentication Journey Integration Tests', () => {
         roles: [UserType.PROPOSAL_MANAGER] as string[], // Cast to string[] for Session compatibility
         role: 'Proposal Manager',
         department: 'Sales', // Required by Session type
-        permissions: ['create:proposal', 'read:proposal']
+        permissions: ['create:proposal', 'read:proposal'],
       },
-      expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     } as unknown as Session);
 
     // Submit the form again (retry)
     await user.click(submitButton);
 
     // Verify successful retry with separate waitFor calls
-    await waitFor(() => {
-      // Verify signIn was called a second time
-      expect(mockSignIn).toHaveBeenCalledTimes(2);
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        // Verify signIn was called a second time
+        expect(mockSignIn).toHaveBeenCalledTimes(2);
+      },
+      { timeout: 5000 }
+    );
 
-    await waitFor(() => {
-      // Verify getSession was called
-      expect(mockGetSession).toHaveBeenCalled();
-    }, { timeout: 5000 });
+    // Note: getSession is not called directly by LoginForm, only signIn is called
 
-    await waitFor(() => {
-      // Verify success tracking
-      expect(mockTrackAuthenticationSuccess).toHaveBeenCalled();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        // Verify success tracking
+        expect(mockTrackAuthenticationSuccess).toHaveBeenCalled();
+      },
+      { timeout: 5000 }
+    );
   }, 30000);
 
   /**
@@ -438,8 +477,11 @@ describe('Enhanced Authentication Journey Integration Tests', () => {
     await user.click(submitButton);
 
     // Verify analytics ran during flow (stable across UI changes)
-    await waitFor(() => {
-      expect(mockTrackPageLoad).toHaveBeenCalled();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(mockTrackPageLoad).toHaveBeenCalled();
+      },
+      { timeout: 5000 }
+    );
   }, 30000);
 });

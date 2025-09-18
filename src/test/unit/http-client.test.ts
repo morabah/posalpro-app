@@ -4,8 +4,8 @@
  * Covers success, timeout, retry, and error scenarios using mocked fetch
  */
 
+import { http, HttpClient, HttpClientError, type ApiResponse } from '@/lib/http';
 import { jest } from '@jest/globals';
-import { HttpClient, http, HttpClientError, type ApiResponse } from '@/lib/http';
 
 // Mock the logger to capture log calls
 jest.mock('@/lib/logger', () => ({
@@ -103,9 +103,10 @@ describe('HttpClient', () => {
     const mockResponse = {
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ data: testData }),
+      json: () => Promise.resolve({ ok: true, data: testData }),
       text: () => Promise.resolve(''),
-      headers: new Headers(),
+      headers: new Headers({ 'content-type': 'application/json' }),
+      url: 'https://api.example.com/test',
     } as Response;
 
     beforeEach(() => {
@@ -119,7 +120,7 @@ describe('HttpClient', () => {
         'https://api.example.com/test',
         expect.objectContaining({ method: 'GET' })
       );
-      expect(result).toEqual({ data: testData });
+      expect(result).toEqual(testData);
     });
 
     it('should handle POST requests with data', async () => {
@@ -132,7 +133,7 @@ describe('HttpClient', () => {
           body: JSON.stringify(testData),
         })
       );
-      expect(result).toEqual({ data: testData });
+      expect(result).toEqual(testData);
     });
 
     it('should handle PUT requests with data', async () => {
@@ -145,7 +146,7 @@ describe('HttpClient', () => {
           body: JSON.stringify(testData),
         })
       );
-      expect(result).toEqual({ data: testData });
+      expect(result).toEqual(testData);
     });
 
     it('should handle PATCH requests with data', async () => {
@@ -158,7 +159,7 @@ describe('HttpClient', () => {
           body: JSON.stringify(testData),
         })
       );
-      expect(result).toEqual({ data: testData });
+      expect(result).toEqual(testData);
     });
 
     it('should handle DELETE requests', async () => {
@@ -168,7 +169,7 @@ describe('HttpClient', () => {
         'https://api.example.com/test',
         expect.objectContaining({ method: 'DELETE' })
       );
-      expect(result).toEqual({ data: testData });
+      expect(result).toEqual(testData);
     });
   });
 
@@ -609,9 +610,10 @@ describe('HttpClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: () => Promise.resolve({ data: 'test' }),
+        json: () => Promise.resolve({ ok: true, data: 'test' }),
         text: () => Promise.resolve(''),
-        headers: new Headers(),
+        headers: new Headers({ 'content-type': 'application/json' }),
+        url: 'https://api.example.com/test',
       } as Response);
 
       const result = await http.get('https://api.example.com/test');
@@ -620,7 +622,7 @@ describe('HttpClient', () => {
         'https://api.example.com/test',
         expect.objectContaining({ method: 'GET' })
       );
-      expect(result).toEqual({ data: 'test' });
+      expect(result).toEqual('test');
     });
   });
 
@@ -631,7 +633,8 @@ describe('HttpClient', () => {
         status: 204, // No Content
         json: () => Promise.resolve(null),
         text: () => Promise.resolve(''),
-        headers: new Headers(),
+        headers: new Headers({ 'content-type': 'application/json' }),
+        url: 'https://api.example.com/test',
       } as Response);
 
       const result = await client.get('/test');

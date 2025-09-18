@@ -564,13 +564,13 @@ export default function ModernDashboard({
                     <div className="flex items-center justify-between">
                       <span
                         className={`text-xs font-medium px-2 py-1 rounded-full ${
-                          proposal.priority === 'CRITICAL'
+                          proposal.priority === 'URGENT' || proposal.priority === 'CRITICAL'
                             ? 'bg-red-100 text-red-700'
                             : proposal.priority === 'HIGH'
                               ? 'bg-orange-100 text-orange-700'
                               : proposal.priority === 'MEDIUM'
                                 ? 'bg-amber-100 text-amber-700'
-                                : 'bg-gray-100 text-gray-700'
+                                : 'bg-green-100 text-green-700'
                         }`}
                       >
                         {proposal.priority}

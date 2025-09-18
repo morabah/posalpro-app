@@ -58,22 +58,24 @@ const getStatusVariant = (
   switch (status) {
     case 'DRAFT':
       return 'secondary';
-    case 'PENDING_REVIEW':
+    case 'PENDING_APPROVAL': // canonical
+    case 'PENDING_REVIEW': // legacy synonym
       return 'warning';
-    case 'UNDER_REVIEW':
+    case 'IN_REVIEW': // canonical
+    case 'UNDER_REVIEW': // legacy synonym
       return 'outline';
     case 'APPROVED':
       return 'success';
     case 'REJECTED':
       return 'destructive';
-    case 'SENT':
+    case 'SUBMITTED': // often treated as sent
+    case 'SENT': // legacy synonym
       return 'default';
     case 'ACCEPTED':
       return 'success';
     case 'DECLINED':
       return 'destructive';
     case 'EXPIRED':
-      return 'secondary';
     case 'CANCELLED':
       return 'secondary';
     default:
@@ -86,6 +88,8 @@ const getPriorityVariant = (
   priority: Proposal['priority']
 ): 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline' => {
   switch (priority) {
+    case 'URGENT':
+      return 'destructive';
     case 'HIGH':
       return 'destructive';
     case 'MEDIUM':
@@ -256,7 +260,7 @@ export default function UnifiedProposalList() {
 
   // Extract proposals from infinite query data and filter out any undefined/null items
   const proposals =
-    data?.pages?.flatMap(page => page.items).filter((item): item is Proposal => item != null) || [];
+    data?.pages?.flatMap(page => page.items).filter((item): item is any => item != null) || [];
   const total = proposals.length;
 
   // Local state for filtering and searching

@@ -1803,11 +1803,43 @@ export class ProposalService {
           await this.handleProductAssignments(tx, proposal.id, data.productData.products);
         }
 
-        return proposal;
+        // Re-fetch with assignedTo relation to return fully aligned shape
+        const withAssigned = await tx.proposal.findUnique({
+          where: { id: proposal.id },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            customerId: true,
+            dueDate: true,
+            priority: true,
+            value: true,
+            currency: true,
+            status: true,
+            tags: true,
+            userStoryTracking: true,
+            createdAt: true,
+            updatedAt: true,
+            customer: { select: { id: true, name: true, email: true, industry: true } },
+            creator: { select: { id: true, name: true, email: true } },
+            assignedTo: { select: { id: true, name: true, email: true } },
+          },
+        });
+
+        return withAssigned!;
       });
 
-      // Normalize and return
-      return this.normalizeProposalData(proposal) as ProposalWithCustomer;
+      // Normalize and return (include assigned users for create response)
+      return {
+        ...(this.normalizeProposalData(proposal) as any),
+        assignedTo: Array.isArray((proposal as any).assignedTo)
+          ? (proposal as any).assignedTo.map((u: any) => ({
+              id: String(u.id),
+              name: u.name ?? undefined,
+              email: u.email ?? null,
+            }))
+          : [],
+      } as ProposalWithCustomer;
     } catch (error) {
       errorHandlingService.processError(error);
 

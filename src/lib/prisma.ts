@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { logDebug, logInfo, logWarn } from './logger';
 import {
   logPrismaConfiguration,
   validatePrismaConfigurationOrThrow,
@@ -29,21 +30,46 @@ if (process.env.NODE_ENV === 'production') {
   (globalThis as any).__prismaValidation = validateConfig;
 } else {
   // Log configuration details in development
-  logPrismaConfiguration().catch(console.error);
+  logPrismaConfiguration().catch(err => {
+    logWarn('Prisma configuration logging failed', { error: err });
+  });
 }
 
 // Runtime probe to verify Prisma configuration (temporary - remove later)
 try {
-  console.log('🧪 prisma.resolve', require.resolve('@prisma/client'));
+  logDebug('prisma.resolve', { path: require.resolve('@prisma/client') });
 } catch (e) {
-  console.log('🧪 prisma.resolve', 'failed to resolve');
+  logDebug('prisma.resolve failed');
 }
-console.log('🧪 prisma.env', {
+logInfo('prisma.env', {
   PRISMA_GENERATE_DATAPROXY: process.env.PRISMA_GENERATE_DATAPROXY,
   PRISMA_CLIENT_ENGINE_TYPE: process.env.PRISMA_CLIENT_ENGINE_TYPE,
   PRISMA_ENGINE_TYPE: process.env.PRISMA_ENGINE_TYPE,
   PRISMA_SCHEMA: process.env.PRISMA_SCHEMA,
 });
+
+// In local/dev, sanitize Prisma engine env to avoid invalid values
+if (process.env.NODE_ENV !== 'production') {
+  const validEngineValues = new Set(['library', 'binary']);
+  const engineEnvKeys = [
+    'PRISMA_CLIENT_ENGINE_TYPE',
+    'PRISMA_ENGINE_TYPE',
+    'PRISMA_CLI_QUERY_ENGINE_TYPE',
+  ] as const;
+
+  for (const key of engineEnvKeys) {
+    const value = process.env[key];
+    if (value && !validEngineValues.has(value)) {
+      // Default to library engine locally if an invalid value is set (e.g., dataproxy/none)
+      process.env[key] = 'library';
+    }
+  }
+
+  // Ensure Data Proxy is disabled locally
+  if (process.env.PRISMA_GENERATE_DATAPROXY === 'true') {
+    process.env.PRISMA_GENERATE_DATAPROXY = 'false';
+  }
+}
 
 // Log noise down in prod; add 'query' in dev if you like
 export const prisma =

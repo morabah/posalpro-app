@@ -66,7 +66,7 @@ export interface ProposalBasicInfo {
     industry?: string;
   };
   dueDate?: string;
-  priority: 'LOW' | 'MEDIUM' | 'HIGH';
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   value?: number; // Changed from estimatedValue to match database
   currency: string;
   projectType?: string;
@@ -548,7 +548,30 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
 
       // Submit to API using proposalService for consistency
       const { proposalService } = await import('@/services/proposalService');
-      const result = await proposalService.createProposal(proposalData);
+
+      // Transform the data structure to match the API schema
+      const transformedData = {
+        metadata: {
+          title: proposalData.basicInfo.title,
+          description: proposalData.basicInfo.description,
+          customerName: proposalData.basicInfo.customer?.name || '',
+          customerContact: {
+            name: proposalData.basicInfo.customer?.name || '',
+            email: proposalData.basicInfo.customer?.email || '',
+            phone: undefined,
+            jobTitle: undefined,
+          },
+          projectType: proposalData.basicInfo.projectType as any,
+          estimatedValue: proposalData.basicInfo.value,
+          currency: proposalData.basicInfo.currency,
+          deadline: new Date(proposalData.basicInfo.dueDate),
+          priority: proposalData.basicInfo.priority as any,
+          tags: proposalData.basicInfo.tags,
+        },
+        // teamAssignments: proposalData.teamData ? [proposalData.teamData] : undefined, // TODO: Transform teamData to proper teamAssignments structure
+      };
+
+      const result = await proposalService.createProposal(transformedData);
 
       logDebug('API response received', {
         component: 'ProposalStore',

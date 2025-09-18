@@ -81,7 +81,7 @@ export function useCreateProposal() {
 
       try {
         const startTime = Date.now();
-        const result = await proposalService.createProposal(data);
+        const result = await proposalService.createProposal(data as any);
         const loadTime = Date.now() - startTime;
 
         logInfo('Proposal created successfully', {
@@ -193,7 +193,7 @@ export function useUpdateProposal() {
         component: 'useUpdateProposal',
         operation: 'cacheUpdated',
         proposalId: variables.id,
-        productCount: data?.products?.length || 0,
+        productCount: (data as any)?.products?.length || 0,
         totalValue: data?.value || 0,
         userStory: 'US-3.2',
         hypothesis: 'H4',

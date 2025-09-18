@@ -221,7 +221,8 @@ export const ProposalQuerySchema = z.object({
     .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   status: ProposalStatusSchema.optional(),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  // Align with backend enums (include URGENT)
+  priority: ProposalPrioritySchema.optional(),
   customerId: z.string().optional(),
   assignedTo: z.string().optional(),
   // Deadline filters (ISO date strings)
@@ -328,11 +329,18 @@ export const ProposalSchema = z.object({
   projectType: z.string().optional(),
   tags: z.array(z.string()).default([]),
   metadata: z.any().nullable(),
-  assignedTo: z.string().optional(),
-  teamMembers: z.array(z.string()).default([]),
-  progress: z.number().min(0).max(100).default(0),
-  stage: z.string().default('draft'),
-  riskLevel: ProposalRiskLevelSchema.default('low'),
+  // Relation: assigned users (optional in some endpoints)
+  assignedTo: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string().optional(),
+        email: z.string().nullable().optional(),
+      })
+    )
+    .optional(),
+  // Track wizard/user story data stored in DB metadata field
+  userStoryTracking: z.any().optional(),
   sections: z
     .array(
       z.object({
@@ -366,7 +374,6 @@ export const ProposalSchema = z.object({
   createdAt: z.date(),
   updatedAt: z.date(),
   version: z.number().default(1),
-  userStoryMappings: z.array(z.string()).default([]),
 });
 
 export const ProposalListSchema = z.object({

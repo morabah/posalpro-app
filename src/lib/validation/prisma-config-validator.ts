@@ -6,6 +6,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { logDebug, logInfo, logWarn, logError } from '@/lib/logger';
 
 export interface PrismaConfigValidationResult {
   isValid: boolean;
@@ -77,6 +78,24 @@ export async function validatePrismaConfiguration(): Promise<PrismaConfigValidat
           clientInfo.constructor.name.includes('NodeAPI')
         ) {
           result.engineType = 'library';
+        }
+      }
+
+      // Fallback inference in development when engine type remains unknown
+      if (result.engineType === 'unknown' && process.env.NODE_ENV !== 'production') {
+        const hinted =
+          process.env.PRISMA_CLIENT_ENGINE_TYPE || process.env.PRISMA_ENGINE_TYPE;
+        if (hinted === 'library' || hinted === 'binary') {
+          result.engineType = hinted as 'library' | 'binary';
+          result.warnings.push(
+            `Engine type inferred from env hint: ${hinted} (runtime detection returned unknown)`
+          );
+        } else {
+          // Prefer library locally
+          result.engineType = 'library';
+          result.warnings.push(
+            'Engine type defaulted to library in development (runtime detection returned unknown)'
+          );
         }
       }
 
@@ -166,12 +185,14 @@ export async function validatePrismaConfigurationOrThrow(): Promise<void> {
       `  PRISMA_ENGINE_TYPE: ${process.env.PRISMA_ENGINE_TYPE || 'not set'}`,
     ].join('\n');
 
+    // Use structured logging before throwing
+    logError('Prisma configuration invalid', { details: errorMessage });
     throw new Error(errorMessage);
   }
 
   // Log warnings if any
   if (validation.warnings.length > 0) {
-    console.warn('Prisma Configuration Warnings:', validation.warnings);
+    logWarn('Prisma Configuration Warnings', { warnings: validation.warnings });
   }
 }
 
@@ -181,30 +202,26 @@ export async function validatePrismaConfigurationOrThrow(): Promise<void> {
 export async function logPrismaConfiguration(): Promise<void> {
   const validation = await validatePrismaConfiguration();
 
-  console.log('🔍 Prisma Configuration Validation:');
-  console.log(`  Engine Type: ${validation.engineType}`);
-  console.log(`  Database URL: ${validation.databaseUrl.replace(/:(.*)@/, ':***@')}`);
-  console.log(`  Data Proxy Mode: ${validation.isDataProxyMode}`);
-  console.log(`  Direct Connection: ${validation.isDirectConnection}`);
-  console.log(`  Valid: ${validation.isValid}`);
+  logInfo('🔍 Prisma Configuration Validation', {
+    engineType: validation.engineType,
+    databaseUrl: validation.databaseUrl.replace(/:(.*)@/, ':***@'),
+    isDataProxyMode: validation.isDataProxyMode,
+    isDirectConnection: validation.isDirectConnection,
+    isValid: validation.isValid,
+  });
 
   if (validation.errors.length > 0) {
-    console.error('  Errors:', validation.errors);
+    logError('Prisma configuration errors', { errors: validation.errors });
   }
 
   if (validation.warnings.length > 0) {
-    console.warn('  Warnings:', validation.warnings);
+    logWarn('Prisma configuration warnings', { warnings: validation.warnings });
   }
 
-  console.log('  Environment Variables:');
-  console.log(
-    `    PRISMA_GENERATE_DATAPROXY: ${process.env.PRISMA_GENERATE_DATAPROXY || 'not set'}`
-  );
-  console.log(
-    `    PRISMA_CLIENT_ENGINE_TYPE: ${process.env.PRISMA_CLIENT_ENGINE_TYPE || 'not set'}`
-  );
-  console.log(
-    `    PRISMA_CLI_QUERY_ENGINE_TYPE: ${process.env.PRISMA_CLI_QUERY_ENGINE_TYPE || 'not set'}`
-  );
-  console.log(`    PRISMA_ENGINE_TYPE: ${process.env.PRISMA_ENGINE_TYPE || 'not set'}`);
+  logDebug('Prisma environment variables', {
+    PRISMA_GENERATE_DATAPROXY: process.env.PRISMA_GENERATE_DATAPROXY || 'not set',
+    PRISMA_CLIENT_ENGINE_TYPE: process.env.PRISMA_CLIENT_ENGINE_TYPE || 'not set',
+    PRISMA_CLI_QUERY_ENGINE_TYPE: process.env.PRISMA_CLI_QUERY_ENGINE_TYPE || 'not set',
+    PRISMA_ENGINE_TYPE: process.env.PRISMA_ENGINE_TYPE || 'not set',
+  });
 }

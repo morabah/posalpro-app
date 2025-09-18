@@ -37,6 +37,7 @@ const PROPOSALS_CACHE_TTL = 180; // 3 minutes
 export const GET = createRoute(
   {
     roles: ['admin', 'sales', 'manager', 'viewer', 'System Administrator', 'Administrator'],
+    entitlements: ['feature.proposals.read'],
     query: ProposalQuerySchema,
   },
   async ({ query, user, requestId }) => {

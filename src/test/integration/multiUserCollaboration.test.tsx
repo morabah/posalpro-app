@@ -12,7 +12,7 @@ import {
   type MultiUserSession,
 } from '@/test/utils/multiUserJourneyHelpers';
 import { render as renderWithProviders } from '@/test/utils/test-utils';
-import { UserType } from '@/types';
+// import { UserType } from '@/types'; // Not used in mocks
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -56,7 +56,7 @@ jest.mock('@/hooks/entities/useAuth', () => ({
       user: {
         id: 'pm-001',
         email: 'pm@posalpro.com',
-        role: UserType.PROPOSAL_MANAGER,
+        role: 'PROPOSAL_MANAGER',
         firstName: 'Test',
         lastName: 'Manager',
       },
@@ -73,10 +73,10 @@ jest.mock('@/hooks/entities/useAuth', () => ({
 // Multi-user test data
 const multiUserTestData = {
   users: [
-    { role: UserType.PROPOSAL_MANAGER, id: 'pm-001', name: 'Project Manager' },
-    { role: UserType.SME, id: 'sme-001', name: 'Subject Expert' },
-    { role: UserType.SME, id: 'sme-002', name: 'Technical Expert' },
-    { role: UserType.EXECUTIVE, id: 'exec-001', name: 'Executive Reviewer' },
+    { role: 'PROPOSAL_MANAGER', id: 'pm-001', name: 'Project Manager' },
+    { role: 'SME', id: 'sme-001', name: 'Subject Expert' },
+    { role: 'SME', id: 'sme-002', name: 'Technical Expert' },
+    { role: 'EXECUTIVE', id: 'exec-001', name: 'Executive Reviewer' },
   ],
   proposalData: {
     id: 'proposal-multi-001',
@@ -630,7 +630,7 @@ describe('Multi-User Collaboration Integration Tests', () => {
 
       // Create extended user configuration for stress testing
       const extendedUsers = Array.from({ length: 12 }, (_, index) => ({
-        role: [UserType.PROPOSAL_MANAGER, UserType.SME, UserType.EXECUTIVE][index % 3],
+        role: ['PROPOSAL_MANAGER', 'SME', 'EXECUTIVE'][index % 3],
         id: `stress-user-${index + 1}`,
         name: `Stress Test User ${index + 1}`,
       }));

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { handleCorsPreflight, withCors } from '@/server/api/cors';
 // Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = "nodejs";
 import { auditLogger } from '@/lib/security/hardening';
@@ -40,6 +41,11 @@ function getClientIp(req: NextRequest): string {
     return xRealIp;
   }
   return 'unknown';
+}
+
+export async function OPTIONS(request: NextRequest) {
+  const res = handleCorsPreflight(request);
+  return res ?? new NextResponse(null, { status: 204 });
 }
 
 export async function POST(request: NextRequest) {
@@ -130,10 +136,11 @@ export async function POST(request: NextRequest) {
 
     // Acknowledge report with 200 OK and minimal body
     const responseData = { status: 'ok' };
-    return errorHandler.createSuccessResponse(
+    const ok = errorHandler.createSuccessResponse(
       responseData,
       'CSP violation report received successfully'
     );
+    return withCors(ok, request);
   } catch (error) {
     // For security routes, return 200 to avoid noisy client errors
     // but still log the error internally for monitoring
@@ -144,6 +151,6 @@ export async function POST(request: NextRequest) {
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       200 // Return 200 to avoid client errors
     );
-    return errorResponse;
+    return withCors(errorResponse, request);
   }
 }

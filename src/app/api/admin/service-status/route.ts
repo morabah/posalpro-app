@@ -18,7 +18,8 @@ import { logDebug, logError, logInfo } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { getErrorHandler } from '@/server/api/errorHandler';
 import { spawn } from 'child_process';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { handleCorsPreflight, withCors } from '@/server/api/cors';
 import { createClient } from 'redis';
 
 export const dynamic = 'force-dynamic';
@@ -835,10 +836,11 @@ export async function GET(request: NextRequest) {
       criticalServices: criticalStatus,
     });
 
-    return errorHandler.createSuccessResponse(
+    const ok = errorHandler.createSuccessResponse(
       response,
       'Service status check completed successfully'
     );
+    return withCors(ok, request);
   } catch (error) {
     await logError('[ServiceStatusAPI] GET failed', error as unknown);
 
@@ -859,6 +861,10 @@ export async function GET(request: NextRequest) {
       ErrorCodes.SYSTEM.INTERNAL_ERROR,
       500
     );
-    return errorResponse;
-  }
+    return withCors(errorResponse, request);
+}
+}
+export async function OPTIONS(request: NextRequest) {
+  const res = handleCorsPreflight(request);
+  return res ?? new NextResponse(null, { status: 204 });
 }

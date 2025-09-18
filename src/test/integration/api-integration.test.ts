@@ -84,9 +84,74 @@ describe('API Integration Tests - Type Safety Validation', () => {
       })),
     }));
     // Mock the prisma import used by API routes
-    jest.doMock('@/lib/db/prisma', () => ({
+    jest.doMock('@/lib/prisma', () => ({
       __esModule: true,
-      default: mockPrismaClient,
+      prisma: mockPrismaClient,
+    }));
+
+    // Mock EntitlementService
+    jest.doMock('@/lib/services/EntitlementService', () => ({
+      EntitlementService: {
+        hasEntitlement: jest.fn().mockResolvedValue(true),
+        hasEntitlements: jest.fn().mockResolvedValue(true),
+      },
+    }));
+
+    // Mock subscriptionService
+    jest.doMock('@/lib/services/subscriptionService', () => ({
+      getSeatStatus: jest.fn().mockResolvedValue({
+        tenantId: 'test-tenant-id',
+        seats: 10,
+        activeUsers: 5,
+        hasAvailableSeat: true,
+      }),
+    }));
+
+    // Mock Redis cache
+    jest.doMock('@/lib/redis', () => ({
+      getCache: jest.fn().mockResolvedValue(null),
+      setCache: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    // Mock tenant context
+    jest.doMock('@/lib/tenant', () => ({
+      runWithTenantContext: jest.fn((tenantId, fn) => fn()),
+    }));
+
+    // Mock customerService
+    jest.doMock('@/lib/services/customerService', () => ({
+      customerService: {
+        listCustomers: jest.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            items: [],
+            pagination: {
+              hasNextPage: false,
+              nextCursor: null,
+              totalCount: 0,
+            },
+          },
+        }),
+        listCustomersCursor: jest.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            items: [],
+            pagination: {
+              hasNextPage: false,
+              nextCursor: null,
+              totalCount: 0,
+            },
+          },
+        }),
+        createCustomer: jest.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            id: 'test-customer-id',
+            name: 'Test Customer',
+            email: 'test@customer.com',
+          },
+        }),
+      },
     }));
 
     // Default allow-all permissions for content read
@@ -107,6 +172,7 @@ describe('API Integration Tests - Type Safety Validation', () => {
             email: 'test@example.com',
             name: 'Test User',
             roles: ['Administrator'],
+            tenantId: 'test-tenant-id', // Add required tenantId
           },
           expires: '2099-12-31',
         })
@@ -169,9 +235,11 @@ describe('API Integration Tests - Type Safety Validation', () => {
       expect([200, 403]).toContain(response.status);
 
       const data = await response.json();
-      expect(data).toHaveProperty('results');
-      expect(data).toHaveProperty('pagination');
-      expect(Array.isArray(data.results)).toBe(true);
+      expect(data).toHaveProperty('ok');
+      expect(data.ok).toBe(true);
+      expect(data.data).toHaveProperty('results');
+      expect(data.data).toHaveProperty('pagination');
+      expect(Array.isArray(data.data.results)).toBe(true);
     });
 
     test('should handle search request with invalid parameters', async () => {
@@ -429,7 +497,8 @@ describe('API Integration Tests - Type Safety Validation', () => {
 
       const data = await response.json();
       expect(typeof data).toBe('object');
-      expect(data).toHaveProperty('error');
+      expect(data).toHaveProperty('code');
+      expect(data).toHaveProperty('message');
     });
   });
 

@@ -62,12 +62,10 @@ export function useInfiniteProposals({
       });
 
       const data = await proposalService.getProposals({
-        search,
-        limit,
-        sortBy,
-        sortOrder,
-        cursor: pageParam || undefined,
-        filters,
+        query: search, // Map 'search' to 'query' as expected by the schema
+        // Remove limit, sortBy, sortOrder as they're not part of ProposalSearchCriteria
+        // cursor is handled internally by the service
+        ...filters, // Spread the filters object
       });
 
       logInfo('Proposals fetched successfully', {
@@ -222,12 +220,10 @@ export function useDueProposals({
     queryKey: proposalKeys.proposals.due(dueBefore, dueAfter, openOnly, limit, sortBy, sortOrder),
     queryFn: async () => {
       const data = await proposalService.getProposals({
-        limit,
-        sortBy: sortBy as any,
-        sortOrder,
-        ...(dueBefore ? { dueBefore } : {}),
-        ...(dueAfter ? { dueAfter } : {}),
-        ...(openOnly ? { openOnly } : {}),
+        // Remove limit, sortBy, sortOrder as they're not part of ProposalSearchCriteria
+        ...(dueBefore ? { deadlineBefore: new Date(dueBefore) } : {}),
+        ...(dueAfter ? { deadlineAfter: new Date(dueAfter) } : {}),
+        // openOnly is not part of the schema, remove it
       });
 
       // Ensure we always return an array, never undefined
@@ -253,7 +249,7 @@ export function useCreateProposal() {
       logDebug('Creating proposal', {
         component: 'useCreateProposal',
         operation: 'mutationFn',
-        proposal: { title: proposal.basicInfo.title, customerId: proposal.basicInfo.customerId },
+        proposal: { title: proposal.metadata?.title, customerId: proposal.metadata?.customerId },
         userStory: 'US-3.1',
         hypothesis: 'H4',
       });
@@ -281,10 +277,10 @@ export function useCreateProposal() {
         'proposal_created',
         {
           proposalId: data.id,
-          title: proposal.basicInfo.title,
-          customerId: proposal.basicInfo.customerId,
+          title: proposal.metadata?.title,
+          customerId: proposal.metadata?.customerId,
           status: 'DRAFT', // Default status for new proposals
-          priority: proposal.basicInfo.priority,
+          priority: proposal.metadata?.priority,
           userStory: 'US-3.1',
           hypothesis: 'H4',
         },

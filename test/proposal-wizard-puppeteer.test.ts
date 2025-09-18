@@ -110,34 +110,31 @@ describe('ProposalWizard Puppeteer Integration Tests', () => {
       // Step 1: Fill basic information
       console.log('📝 Filling basic information...');
 
-      // Wait for step 1 to be visible
-      await page.waitForSelector('[data-testid="step-1"]', { timeout: 10000 });
+      // Wait for the Basic Information step to be visible
+      await page.waitForSelector('#title', { timeout: 10000 });
 
       // Fill proposal title
-      await page.type('[data-testid="proposal-title"]', 'Test Proposal via Puppeteer');
+      await page.type('#title', 'Test Proposal via Puppeteer');
 
       // Fill description
-      await page.type(
-        '[data-testid="proposal-description"]',
-        'This is a test proposal created via Puppeteer automation'
-      );
+      await page.type('#description', 'This is a test proposal created via Puppeteer automation');
 
       // Select customer (assuming there's a customer dropdown)
-      await page.click('[data-testid="customer-select"]');
-      await page.waitForSelector('[data-testid="customer-option"]', { timeout: 5000 });
-      await page.click('[data-testid="customer-option"]');
+      await page.click('#customer');
+      await page.waitForSelector('#customer option', { timeout: 5000 });
+      await page.select('#customer', '1'); // Select first customer option
 
       // Set due date
-      await page.type('[data-testid="due-date"]', '2025-12-31');
+      await page.type('#dueDate', '2025-12-31');
 
       // Set priority (ensure it's uppercase)
-      await page.select('[data-testid="priority-select"]', 'HIGH');
+      await page.select('#priority', 'HIGH');
 
       // Set estimated value
-      await page.type('[data-testid="estimated-value"]', '50000');
+      await page.type('#value', '50000');
 
-      // Click continue to next step
-      await page.click('[data-testid="continue-button"]');
+      // Click next step button
+      await page.click('button:has-text("Next Step")');
 
       // Step 2: Team Assignment (optional - skip if not required)
       console.log('👥 Handling team assignment...');
@@ -244,10 +241,10 @@ describe('ProposalWizard Puppeteer Integration Tests', () => {
       console.log('🧪 Testing validation error handling...');
 
       // Try to create proposal without filling required fields
-      await page.waitForSelector('[data-testid="step-1"]', { timeout: 10000 });
+      await page.waitForSelector('#title', { timeout: 10000 });
 
-      // Click continue without filling required fields
-      await page.click('[data-testid="continue-button"]');
+      // Click next step without filling required fields
+      await page.click('button:has-text("Next Step")');
 
       // Check for validation error messages
       const validationErrors = await page.$$('[data-testid="validation-error"]');
@@ -276,25 +273,25 @@ describe('ProposalWizard Puppeteer Integration Tests', () => {
       console.log('🧪 Testing API error handling...');
 
       // Fill out the form completely
-      await page.waitForSelector('[data-testid="step-1"]', { timeout: 10000 });
+      await page.waitForSelector('#title', { timeout: 10000 });
 
       // Fill all required fields
-      await page.type('[data-testid="proposal-title"]', 'Test Proposal for API Error');
-      await page.type('[data-testid="proposal-description"]', 'Testing API error handling');
+      await page.type('#title', 'Test Proposal for API Error');
+      await page.type('#description', 'Testing API error handling');
 
       // Select customer
-      await page.click('[data-testid="customer-select"]');
-      await page.waitForSelector('[data-testid="customer-option"]', { timeout: 5000 });
-      await page.click('[data-testid="customer-option"]');
+      await page.click('#customer');
+      await page.waitForSelector('option', { timeout: 5000 });
+      await page.select('#customer', '1');
 
       // Set due date
-      await page.type('[data-testid="due-date"]', '2025-12-31');
+      await page.type('#dueDate', '2025-12-31');
 
       // Set priority
-      await page.select('[data-testid="priority-select"]', 'MEDIUM');
+      await page.select('#priority', 'MEDIUM');
 
       // Set estimated value
-      await page.type('[data-testid="estimated-value"]', '25000');
+      await page.type('#value', '25000');
 
       // Navigate to final step
       await page.click('[data-testid="continue-button"]');
@@ -338,10 +335,10 @@ describe('ProposalWizard Puppeteer Integration Tests', () => {
     it('should enable/disable buttons based on form state', async () => {
       console.log('🧪 Testing button state validation...');
 
-      await page.waitForSelector('[data-testid="step-1"]', { timeout: 10000 });
+      await page.waitForSelector('#title', { timeout: 10000 });
 
-      // Initially, continue button should be disabled
-      const initialButtonState = await page.$eval('[data-testid="continue-button"]', button =>
+      // Initially, next step button should be disabled
+      const initialButtonState = await page.$eval('button:has-text("Next Step")', button =>
         button.hasAttribute('disabled')
       );
 
@@ -402,7 +399,7 @@ describe('ProposalWizard Puppeteer Integration Tests', () => {
       });
 
       // Fill out the form
-      await page.waitForSelector('[data-testid="step-1"]', { timeout: 10000 });
+      await page.waitForSelector('#title', { timeout: 10000 });
 
       await page.type('[data-testid="proposal-title"]', 'Data Transformation Test');
       await page.type('[data-testid="proposal-description"]', 'Testing data transformation');

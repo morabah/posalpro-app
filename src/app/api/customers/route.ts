@@ -105,6 +105,7 @@ export const POST = createRoute(
 export const GET = createRoute(
   {
     roles: ['admin', 'sales', 'viewer', 'System Administrator', 'Administrator'],
+    entitlements: ['feature.customers.read'],
     query: CustomerQuerySchema,
   },
   async ({ query, user, requestId }) => {

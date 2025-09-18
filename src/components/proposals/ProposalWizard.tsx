@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { useCreateProposal, useProposal, useUpdateProposal } from '@/features/proposals/hooks';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { http } from '@/lib/http';
+import type { ProposalWithRelations } from '@/types/proposal';
 import { logDebug, logError, logWarn } from '@/lib/logger';
 import {
   useProposalCanGoBack,
@@ -228,9 +229,12 @@ export function ProposalWizard({
   });
 
   // Fetch proposal data for edit mode - only when we have a valid proposalId
-  const { data: proposalData, isLoading: isLoadingProposal } = useProposal(
+  const { data: proposalDataRaw, isLoading: isLoadingProposal } = useProposal(
     editMode && proposalId && typeof proposalId === 'string' ? proposalId : ''
   );
+
+  // Cast to the correct type that includes relations
+  const proposalData = proposalDataRaw as ProposalWithRelations | undefined;
 
   // Initialize wizard with existing data when in edit mode (prevent duplicate initialization)
   useEffect(() => {
@@ -252,9 +256,9 @@ export function ProposalWizard({
         initializeFromData({
           ...proposalData,
           description: proposalData.description || undefined,
-          dueDate: proposalData.dueDate || undefined,
-          assignedTo: proposalData.assignedTo ? [proposalData.assignedTo] : undefined,
-          submittedAt: proposalData.submittedAt || undefined,
+          dueDate: proposalData.dueDate ? (typeof proposalData.dueDate === 'string' ? proposalData.dueDate : (proposalData.dueDate as Date).toISOString()) : undefined,
+          assignedTo: (proposalData as any).assignedTo ? [(proposalData as any).assignedTo] : undefined,
+          submittedAt: proposalData.submittedAt ? (typeof proposalData.submittedAt === 'string' ? proposalData.submittedAt : (proposalData.submittedAt as Date).toISOString()) : undefined,
         });
         // Ensure edit opens on step 4 directly
         setCurrentStep(4);
@@ -701,7 +705,7 @@ export function ProposalWizard({
         const result = await updateProposalMutation.mutateAsync({
           id: proposalId,
           proposal: proposalData,
-        });
+        }) as ProposalWithRelations;
         resultProposalId = result.id;
 
         // ✅ ADDED: Verify the update was successful by checking product count

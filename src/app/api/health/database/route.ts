@@ -9,17 +9,26 @@ export const dynamic = 'force-dynamic';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 
-export async function GET() {
+import { handleCorsPreflight, withCors } from '@/server/api/cors';
+
+export async function OPTIONS(req: Request) {
+  // Preflight support
+  const res = handleCorsPreflight(req as any);
+  return res ?? new Response(null, { status: 204 });
+}
+
+export async function GET(req: Request) {
   try {
     const result = await prisma.$queryRaw`SELECT 1 as ok`;
-    return NextResponse.json({
+    const res = NextResponse.json({
       db: 'up',
       ok: result,
       timestamp: new Date().toISOString(),
       engine: 'library',
     });
+    return withCors(res, req as any);
   } catch (error) {
-    return NextResponse.json(
+    const res = NextResponse.json(
       {
         db: 'down',
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -27,5 +36,6 @@ export async function GET() {
       },
       { status: 500 }
     );
+    return withCors(res, req as any);
   }
 }

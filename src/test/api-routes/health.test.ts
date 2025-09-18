@@ -6,7 +6,8 @@ describe('API Route - /api/health', () => {
     const res = await GET(req as any);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.status).toBe('healthy');
-    expect(typeof body.responseTime).toBe('number');
+    expect(body.ok).toBe(true);
+    expect(body.data.status).toBe('healthy');
+    expect(typeof body.data.responseTime).toBe('number');
   });
 });

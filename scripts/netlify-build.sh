@@ -38,15 +38,13 @@ if [[ "$DATABASE_URL" == prisma://* ]]; then
     export DATABASE_URL="$CLOUD_DATABASE_URL"
     echo "   Using CLOUD_DATABASE_URL: ${DATABASE_URL:0:30}..."
   else
-    # Fallback: Use the known Neon database pattern
-    # This should be replaced with the actual credentials
-    export DATABASE_URL="postgresql://neondb_owner:Targo2000@ep-ancient-sun-a9gve4ul-pooler.gwc.azure.neon.tech/neondb?sslmode=require"
-    echo "   Using fallback DATABASE_URL: ${DATABASE_URL:0:30}..."
-    echo "   ⚠️  WARNING: Using placeholder credentials - update with actual values!"
+    echo "❌ DATABASE_URL is prisma:// but CLOUD_DATABASE_URL is not set."
+    echo "   Please configure CLOUD_DATABASE_URL in Netlify environment settings."
+    echo "   Aborting build to prevent accidental use of placeholder credentials."
+    exit 1
   fi
 
-  echo "   ⚠️  This is a temporary workaround!"
-  echo "   💡 Fix properly by updating Netlify environment variables"
+  echo "   ✅ Using CLOUD_DATABASE_URL for Prisma client generation"
 fi
 
 # Force all Prisma environment variables to ensure library engine generation (more reliable for serverless)

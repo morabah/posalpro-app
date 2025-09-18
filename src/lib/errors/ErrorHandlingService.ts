@@ -3,7 +3,7 @@
  * Centralized error processing logic for consistent error handling across the application
  */
 
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logError, logWarn } from '../logger';
@@ -77,19 +77,13 @@ export class ErrorHandlingService {
     }
 
     // Process based on error type with protected instanceof checks
-    try {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        return this.processPrismaError(error, defaultMessage, metadata);
-      }
-    } catch {
-      // Prisma instanceof failed, check manually
-      if (error && typeof error === 'object' && 'code' in error && 'clientVersion' in error) {
-        return this.processPrismaError(
-          error as Prisma.PrismaClientKnownRequestError,
-          defaultMessage,
-          metadata
-        );
-      }
+    // Edge-safe Prisma error detection (no runtime Prisma import)
+    if (error && typeof error === 'object' && 'code' in error && 'clientVersion' in error) {
+      return this.processPrismaError(
+        error as Prisma.PrismaClientKnownRequestError,
+        defaultMessage,
+        metadata
+      );
     }
 
     try {

@@ -15,6 +15,39 @@ import { useProposal } from '@/hooks/useProposal';
 import { logInfo } from '@/lib/logger';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
+import type { Proposal } from '@/features/proposals/schemas';
+
+// Extended Proposal type that includes relations returned by the API
+interface ProposalWithRelations extends Omit<Proposal, 'customer' | 'products'> {
+  products: Array<{
+    id: string;
+    productId: string;
+    name: string; // Add name property for compatibility
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    product?: {
+      id: string;
+      name: string;
+      category: string[];
+    } | null;
+  }>;
+  customer: {
+    id: string;
+    name: string;
+    email: string | null;
+    industry: string | null;
+  } | null;
+  // Add missing properties that the component expects
+  teamMembers?: Array<{
+    id: string;
+    name: string;
+    role: string;
+    email?: string;
+  }>;
+  stage?: string;
+  riskLevel?: string;
+}
 
 // ✅ TYPES: Define proper interfaces for proposal detail view
 interface ProposalMetadata {
@@ -158,7 +191,10 @@ export const ProposalDetailView = React.memo(function ProposalDetailView({
   const router = useRouter();
   const { trackOptimized: analytics } = useOptimizedAnalytics();
   const queryClient = useQueryClient();
-  const { data: proposal, isLoading, error, refetch } = useProposal(proposalId);
+  const { data: proposalData, isLoading, error, refetch } = useProposal(proposalId);
+
+  // Cast to the correct type that includes relations
+  const proposal = proposalData as ProposalWithRelations | undefined;
 
   // ✅ OPTIMIZED: Remove manual refetch since useProposal handles refetchOnMount
   // The useProposal hook already handles data freshness with appropriate staleTime

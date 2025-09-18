@@ -22,6 +22,7 @@ import {
 import { useUnifiedProposalData } from '@/features/proposals/hooks/useProposals';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logError } from '@/lib/logger';
+import type { ProposalWithRelations } from '@/types/proposal';
 import {
   AlertTriangleIcon,
   ArrowUpDownIcon,
@@ -204,6 +205,8 @@ function PriorityBadge({ priority }: { priority: z.infer<typeof ProposalPriority
         return { label: 'Medium', className: 'bg-yellow-100 text-yellow-800' };
       case 'HIGH':
         return { label: 'High', className: 'bg-red-100 text-red-800' };
+      case 'URGENT':
+        return { label: 'Urgent', className: 'bg-red-200 text-red-900' };
       default:
         return { label: priority, className: 'bg-gray-100 text-gray-800' };
     }
@@ -643,7 +646,8 @@ function ProposalTableOptimized({
   const { data, error, fetchNextPage, hasNextPage, isFetchingNextPage } = proposalsResult;
 
   const proposals = useMemo(() => {
-    return data?.pages.flatMap(page => page.items || []).filter(Boolean) ?? [];
+    return (data?.pages.flatMap(page => page.items || []).filter(Boolean) ??
+      []) as ProposalWithRelations[];
   }, [data]);
 
   const handleProposalClick = useCallback(
@@ -1022,6 +1026,7 @@ function ProposalCard({ proposal }: { proposal: any }) {
   // Get risk level styling
   const getRiskStyling = () => {
     if (isOverdue) return 'border-l-4 border-l-red-500 bg-red-50';
+    if (proposal.priority === 'URGENT') return 'border-l-4 border-l-red-600 bg-red-50';
     if (daysUntilDue <= 7 && daysUntilDue > 0) return 'border-l-4 border-l-yellow-500 bg-yellow-50';
     if (proposal.priority === 'HIGH') return 'border-l-4 border-l-orange-500';
     return 'border-l-4 border-l-blue-500';
@@ -1413,7 +1418,7 @@ export default function ProposalList() {
   // Flatten proposals from all pages
   const proposals = useMemo(() => {
     if (!proposalsData?.pages) return [];
-    return proposalsData.pages.flatMap(page => page.items || []);
+    return proposalsData.pages.flatMap(page => page.items || []) as ProposalWithRelations[];
   }, [proposalsData]);
 
   // Filter proposals based on current filters

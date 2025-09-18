@@ -18,7 +18,8 @@ import {
   isTemplateAvailable,
   TEMPLATE_REGISTRY,
 } from '@/server/pdf/templateRegistry';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { handleCorsPreflight, withCors } from '@/server/api/cors';
 
 function getIdFromPath(req: NextRequest): string | null {
   const parts = new URL(req.url).pathname.split('/').filter(Boolean);
@@ -35,6 +36,11 @@ function getOrigin(req: NextRequest): string {
 }
 
 export const dynamic = 'force-dynamic';
+
+export async function OPTIONS(req: NextRequest) {
+  const res = handleCorsPreflight(req);
+  return res ?? new NextResponse(null, { status: 204 });
+}
 
 export async function GET(req: NextRequest) {
   const id = getIdFromPath(req);
@@ -272,7 +278,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      return new Response(Buffer.from(pdfBuffer), {
+      const resp = new Response(Buffer.from(pdfBuffer), {
         status: 200,
         headers: {
           'content-type': 'application/pdf',
@@ -280,6 +286,7 @@ export async function GET(req: NextRequest) {
           'cache-control': 'no-store',
         },
       });
+      return withCors(resp as any, req);
     }
 
     // For preview template, use strict template with preview styling
@@ -361,7 +368,7 @@ export async function GET(req: NextRequest) {
         displayHeaderFooter: false,
       });
 
-      return new Response(Buffer.from(pdfBuffer), {
+      const resp = new Response(Buffer.from(pdfBuffer), {
         status: 200,
         headers: {
           'content-type': 'application/pdf',
@@ -369,6 +376,7 @@ export async function GET(req: NextRequest) {
           'cache-control': 'no-store',
         },
       });
+      return withCors(resp as any, req);
     } else {
       // Default: render the existing preview UI
       try {
@@ -381,7 +389,7 @@ export async function GET(req: NextRequest) {
           displayHeaderFooter: false,
         });
 
-        return new Response(Buffer.from(pdfBuffer), {
+        const resp = new Response(Buffer.from(pdfBuffer), {
           status: 200,
           headers: {
             'content-type': 'application/pdf',
@@ -389,6 +397,7 @@ export async function GET(req: NextRequest) {
             'cache-control': 'no-store',
           },
         });
+        return withCors(resp as any, req);
       } catch (error) {
         console.error('PDF generation error:', error);
         throw new Error(
@@ -398,7 +407,7 @@ export async function GET(req: NextRequest) {
     }
   } catch (error: any) {
     console.error('PDF generation error:', error);
-    return new Response(
+    const err = new Response(
       JSON.stringify({
         ok: false,
         code: 'PDF_GENERATION_FAILED',
@@ -407,5 +416,6 @@ export async function GET(req: NextRequest) {
       }),
       { status: 500, headers: { 'content-type': 'application/json' } }
     );
+    return withCors(err as any, req);
   }
 }

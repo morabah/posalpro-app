@@ -47,10 +47,16 @@ export interface ProposalApiData {
   createdAt: string | Date;
   updatedAt: string | Date;
   deadline?: string | Date | null;
-  estimatedValue?: number | null;
-  riskLevel?: 'low' | 'medium' | 'high';
-  completionRate?: number;
-  metadata?: Record<string, unknown> | null;
+  estimatedValue?: number | null; // legacy alias of value
+  value?: number | null; // DB-aligned
+  currency?: string;
+  validUntil?: string | Date | null;
+  submittedAt?: string | Date | null;
+  approvedAt?: string | Date | null;
+  tags?: string[];
+  userStoryTracking?: Record<string, unknown> | null;
+  assignedTo?: Array<{ id: string; name?: string; email?: string | null }>; // relation mapping
+  metadata?: Record<string, unknown> | null; // passthrough (DB metadata)
 }
 
 export interface UserApiData {

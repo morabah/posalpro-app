@@ -36,6 +36,7 @@ const PRIORITY_OPTIONS = [
   { value: 'LOW', label: 'Low Priority' },
   { value: 'MEDIUM', label: 'Medium Priority' },
   { value: 'HIGH', label: 'High Priority' },
+  { value: 'URGENT', label: 'Urgent' },
 ];
 
 // Currency options

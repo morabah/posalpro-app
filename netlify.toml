@@ -111,8 +111,8 @@ echo '=== Clean ===' \
   for = "/api/*"
   [headers.values]
     Content-Type = "application/json; charset=utf-8"
-    # CORS is handled dynamically in Next.js middleware with an origin allowlist.
-    # Remove static wildcard CORS headers to avoid conflicts.
+    # CORS is enforced per-route in Node runtime using src/server/api/cors.ts.
+    # Keep static headers lean to avoid conflicts with dynamic CORS.
     Cache-Control = "no-cache, no-store, must-revalidate"
     Pragma = "no-cache"
     Expires = "0"

@@ -86,13 +86,13 @@ import { prisma } from '../src/lib/prisma';
 // ✅ ENHANCED: Structured logging integration
 import { logDebug, logError, logInfo, logWarn } from '../src/lib/logger';
 
+const ENV_FILES = ['.env', '.env.local', '.env.development', '.env.production'] as const;
+
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
 // ✅ ENHANCED: Load environment variables from .env files
 function loadEnvironmentVariables() {
-  const envFiles = ['.env', '.env.local', '.env.development', '.env.production'];
-
-  for (const envFile of envFiles) {
+  for (const envFile of ENV_FILES) {
     const envPath = path.resolve(process.cwd(), envFile);
     if (fs.existsSync(envPath)) {
       config({ path: envPath });
@@ -196,6 +196,15 @@ class CookieJar {
   constructor(storageFile: string) {
     this.storageFile = storageFile;
     this.loadFromDisk();
+  }
+
+  getAllCookies(): Map<string, string> {
+    return new Map(this.cookies);
+  }
+
+  replaceCookies(cookies: Iterable<[string, string]>) {
+    this.cookies = new Map(cookies);
+    this.saveToDisk();
   }
 
   private loadFromDisk() {
@@ -316,19 +325,16 @@ class ApiClient {
     });
 
     // Save current session cookies before switching
-    const currentCookies = new Map(this.jar.cookies);
+    const currentCookies = this.jar.getAllCookies();
 
     // Create new session jar
     const newJar = new CookieJar(sessionPath);
 
     // Copy all cookies from current session to new session
     // This preserves authentication cookies across session switches
-    currentCookies.forEach((value, key) => {
-      newJar.cookies.set(key, value);
-    });
-
-    // Save the new session with copied cookies
-    newJar.saveToDisk();
+    if (currentCookies.size > 0) {
+      newJar.replaceCookies(currentCookies);
+    }
 
     // Update the jar reference
     this.jar = newJar;
@@ -746,15 +752,11 @@ function printHelp() {
   schema integrity                           # Data integrity and referential integrity check
   schema validate                            # Zod schema validation against live data
   schema detect-mismatch [componentName]     # 🆕 Dynamic frontend-backend field mismatch detection (includes query parameter structure)
-
-🔧 DEVELOPMENT WORKFLOW TESTING
-  schema detect-mismatch [componentName]     # Automated frontend-backend field validation
                                             # - Analyzes React components for form field usage
                                             # - Matches components to backend Zod schemas dynamically
                                             # - Detects query parameter structure issues (filters.category vs category)
                                             # - Provides actionable suggestions for parameter alignment
                                             # - Detects enum mismatches, missing fields, type conflicts
-                                            # - Provides actionable developer suggestions
                                             # - Optional: Filter by specific component name
 
 ⚙️ SYSTEM
@@ -873,10 +875,9 @@ async function handleDetectDb() {
   // 1. Check environment variables
   console.log('📋 Checking environment variables...');
 
-  const envFiles = ['.env', '.env.local', '.env.development', '.env.production'];
   const dbVars = ['DATABASE_URL', 'DIRECT_URL', 'CLOUD_DATABASE_URL'];
 
-  for (const envFile of envFiles) {
+  for (const envFile of ENV_FILES) {
     try {
       const content = await fs.promises.readFile(path.resolve(process.cwd(), envFile), 'utf8');
       const lines = content.split('\n').filter(line => line.trim() && !line.startsWith('#'));
@@ -1251,7 +1252,7 @@ async function handleHealth(api: ApiClient) {
   console.log('\n⚙️ Checking environment configuration...');
 
   try {
-    const envFiles = ['.env', '.env.local', '.env.development', '.env.production'];
+    const envFiles = ENV_FILES;
     const requiredVars = ['DATABASE_URL', 'NEXTAUTH_SECRET', 'JWT_SECRET'];
     const optionalVars = ['NEXTAUTH_URL', 'NODE_ENV'];
 
@@ -6122,8 +6123,7 @@ async function handleEnv(tokens: string[]) {
 
     // Show loaded .env files
     console.log('\n📁 Environment Files Loaded:');
-    const envFiles = ['.env', '.env.local', '.env.development', '.env.production'];
-    for (const envFile of envFiles) {
+    for (const envFile of ENV_FILES) {
       const envPath = path.resolve(process.cwd(), envFile);
       const exists = fs.existsSync(envPath);
       console.log(
@@ -6296,6 +6296,12 @@ function classifyComponent(componentName: string, content: string): ComponentCla
     { pattern: /zodResolver/g, score: 2, reason: 'Uses Zod validation' },
 
     // Form field patterns
+    { pattern: /register\s*\(/g, score: 2, reason: 'Uses form field registration' },
+    { pattern: /handleSubmit\s*\(/g, score: 2, reason: 'Uses form submission' },
+    { pattern: /formState/g, score: 1, reason: 'Uses form state' },
+    { pattern: /errors\./g, score: 1, reason: 'Uses form validation errors' },
+
+    // Form field patterns
     { pattern: /FormField/g, score: 2, reason: 'Uses FormField components' },
     { pattern: /Input\s+name=/g, score: 2, reason: 'Has named input fields' },
     { pattern: /Select\s+name=/g, score: 2, reason: 'Has named select fields' },
@@ -6332,6 +6338,21 @@ function classifyComponent(componentName: string, content: string): ComponentCla
     // UI-only patterns
     { pattern: /Badge|Button|Card|Modal|Dropdown/g, score: 1, reason: 'Uses UI components' },
     { pattern: /className.*=.*["'].*["']/g, score: 1, reason: 'Has styling classes' },
+
+    // Image/Media components (likely UI, not forms)
+    {
+      pattern: /ImageUpload|ImageGallery|productImages/g,
+      score: 3,
+      reason: 'Handles image/media (UI component)',
+    },
+    { pattern: /useState.*Images/g, score: 2, reason: 'Manages image state (UI component)' },
+
+    // Loading/Error states (UI components)
+    {
+      pattern: /LoadingSpinner|ErrorDisplay|isLoading|isError/g,
+      score: 2,
+      reason: 'Handles loading/error states (UI component)',
+    },
   ];
 
   // Score API Data Fetching patterns
@@ -6503,6 +6524,11 @@ function shouldSkipComponent(componentName: string, content: string): boolean {
     'CardLayout',
     'AppSidebar',
     'MobileNavigation',
+    'ImageUpload',
+    'ImageGallery',
+    'Toast',
+    'ErrorDisplay',
+    'FormField', // This is a UI wrapper, not a form itself
   ];
 
   if (uiOnlyComponents.some(ui => componentName.includes(ui))) {
@@ -6519,8 +6545,31 @@ function shouldSkipComponent(componentName: string, content: string): boolean {
     return true;
   }
 
-  // Use component classification to make smarter decisions
+  // Skip components that are primarily UI components (high UI score, low form score)
   const classification = classifyComponent(componentName, content);
+
+  // Skip if it's classified as UI display with high confidence
+  if (classification.type === 'ui-display' && classification.confidence > 0.7) {
+    return true;
+  }
+
+  // Skip if it has image/media handling patterns (likely UI component)
+  if (
+    content.includes('productImages') ||
+    content.includes('ImageUpload') ||
+    content.includes('ImageGallery')
+  ) {
+    return true;
+  }
+
+  // Skip if it's primarily a display component with no form patterns
+  if (
+    classification.type === 'ui-display' &&
+    !content.includes('useForm') &&
+    !content.includes('register(')
+  ) {
+    return true;
+  }
 
   // Skip form components and UI display components with high confidence
   if (
@@ -6704,11 +6753,23 @@ async function detectFieldMismatches(
     const allSchemaFields = extractAllSchemaFields(backendSchemas[relatedSchemaKey]);
 
     // Check for missing fields in frontend that exist in backend
+    // Skip enum schema names as they are used for validation, not as direct form fields
     for (const [schemaFieldName, schemaFieldData] of Object.entries(allSchemaFields)) {
       const frontendField = componentData.fields[schemaFieldName];
       const fieldData = schemaFieldData as any;
 
-      if (!frontendField && fieldData.enum && fieldData.enum.length > 0) {
+      // Skip enum schema names (like CustomerStatus, CustomerTier, CompanySize, etc.) as they are validation schemas
+      // not direct form fields. Components use the actual field names (status, tier, companySize, etc.)
+      // Also skip duplicate references with underscore patterns
+      const isEnumSchema =
+        schemaFieldName.match(
+          /^(Customer|Product|Proposal|Auth|Version|Company)(Status|Tier|Type|Level|Priority|Risk|Plan|Size|Industry|Relationship)$/
+        ) ||
+        schemaFieldName.match(
+          /^(Customer|Product|Proposal|Auth|Version|Company)(Status|Tier|Type|Level|Priority|Risk|Plan|Size|Industry|Relationship)_[a-z]+$/
+        );
+
+      if (!frontendField && fieldData.enum && fieldData.enum.length > 0 && !isEnumSchema) {
         console.log(
           `❌ MISSING ENUM FIELD: '${schemaFieldName}' with enum values ${JSON.stringify(fieldData.enum)} missing from ${componentName}`
         );
@@ -6853,62 +6914,87 @@ function extractComponentFields(content: string): string[] {
     fields.add(match[1]);
   }
 
-  // Pattern 5: State variables that suggest form fields - improved detection
+  // Pattern 5: State variables that suggest form fields - FIXED: Only detect actual form fields
   const stateMatches = content.matchAll(/const\s+\[([^,]+),\s*set[^\]]+\]\s*=\s*useState/g);
   for (const match of stateMatches) {
     const varName = match[1].trim();
-    // Add common form-related state variables
+    // Only add state variables that are clearly form fields, not UI state
+    // Exclude UI-related state like productImages, loading states, etc.
     if (
-      varName.match(/^(selected|form|data|team|product|content|section|review|submission|version)/i)
+      varName.match(/^(formData|selectedForm|formValues|formState)$/i) &&
+      !varName.match(
+        /^(productImages|loading|error|success|isOpen|isVisible|isActive|isExpanded|isSelected|isValid|isDirty|isSubmitting|isLoading|isError|isSuccess|isOpen|isVisible|isActive|isExpanded|isSelected|isValid|isDirty|isSubmitting|isLoading|isError|isSuccess)$/i
+      )
     ) {
-      fields.add(varName.toLowerCase());
+      fields.add(varName); // Keep original case, don't convert to lowercase
     }
   }
 
-  // Pattern 6: Props interface/type definitions for step components
+  // Pattern 6: Props interface/type definitions for step components - FIXED: Keep original case
   const propsMatches = content.matchAll(/interface\s+\w+Props[^{]*{([^}]+)}/g);
   for (const match of propsMatches) {
     const propsContent = match[1];
     const propFields = propsContent.matchAll(/(\w+)[\?\:].*?(?:Data|Props)/g);
     for (const propMatch of propFields) {
-      fields.add(propMatch[1].toLowerCase());
+      fields.add(propMatch[1]); // Keep original case, don't convert to lowercase
     }
   }
 
-  // Pattern 7: Step-specific field patterns - look for wizard step data structures
+  // Pattern 7: Step-specific field patterns - FIXED: Keep original case and be more specific
   const stepDataMatches = content.matchAll(
     /(?:teamLead|salesRepresentative|subjectMatterExperts|executiveReviewers|selectedProducts|selectedTemplates|customContent|products|quantity|unitPrice|total|category|configuration)/g
   );
   for (const match of stepDataMatches) {
-    fields.add(match[0].toLowerCase());
+    // Only add if it's actually used as a form field (not just mentioned in comments or types)
+    const fieldName = match[0];
+    // Check if this field is used in form context (register, formData, etc.)
+    const isFormField =
+      content.includes(`register('${fieldName}')`) ||
+      content.includes(`formData.${fieldName}`) ||
+      content.includes(`handleFieldChange('${fieldName}')`) ||
+      content.includes(`name="${fieldName}"`);
+
+    if (isFormField) {
+      fields.add(fieldName); // Keep original case, don't convert to lowercase
+    }
   }
 
-  // Pattern 8: Props or data object destructuring that suggests fields - expanded
+  // Pattern 8: Props or data object destructuring that suggests fields - FIXED: More precise matching
   const destructureMatches = content.matchAll(/(?:props|data)\.(\w+)/g);
   for (const match of destructureMatches) {
     const fieldName = match[1];
-    // Expanded list of field patterns
-    const formFieldPatterns = [
-      'products',
-      'items',
-      'selection',
-      'quantity',
-      'price',
-      'category',
-      'name',
-      'description',
-      'team',
-      'content',
-      'sections',
-      'templates',
-      'lead',
-      'representative',
-      'experts',
-      'reviewers',
-    ];
-    if (formFieldPatterns.some(pattern => fieldName.toLowerCase().includes(pattern))) {
+    // Only add if it's clearly a form field and not UI state
+    const isFormField = fieldName.match(
+      /^(teamLead|salesRepresentative|subjectMatterExperts|executiveReviewers|selectedProducts|selectedTemplates|customContent|products|quantity|unitPrice|total|category|name|description|title|customerId|dueDate|priority|value|currency|projectType|tags)$/
+    );
+
+    if (isFormField) {
+      fields.add(fieldName); // Keep original case
+    }
+  }
+
+  // Pattern 9: Additional form field detection - look for actual form usage patterns
+  // Check for fields used in form validation, submission, or data binding
+  const formUsageMatches = content.matchAll(
+    /(?:watch|getValues|setValue|trigger)\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+  );
+  for (const match of formUsageMatches) {
+    const fieldName = match[1];
+    // Only add if it's a valid form field name (not UI state)
+    if (
+      !fieldName.match(
+        /^(productImages|loading|error|success|isOpen|isVisible|isActive|isExpanded|isSelected|isValid|isDirty|isSubmitting|isLoading|isError|isSuccess)$/i
+      )
+    ) {
       fields.add(fieldName);
     }
+  }
+
+  // Pattern 10: Form field validation patterns
+  const validationMatches = content.matchAll(/errors\.(\w+)/g);
+  for (const match of validationMatches) {
+    const fieldName = match[1];
+    fields.add(fieldName);
   }
 
   return Array.from(fields);
@@ -7306,15 +7392,17 @@ function analyzeComponentContent(content: string, availableSchemas: string[]): s
     }
   }
 
-  // 3. Look for specific field patterns that indicate data domain
+  // 3. Look for specific field patterns that indicate data domain - IMPROVED: More precise patterns
   const fieldPatterns = {
     proposals: [
+      // Proposal-specific fields (high confidence)
       'teamLead',
       'salesRepresentative',
       'subjectMatterExperts',
       'executiveReviewers',
       'proposalStatus',
       'riskLevel',
+      'planType',
       'BasicInformationStep',
       'TeamAssignmentStep',
       'ContentSelectionStep',
@@ -7322,28 +7410,24 @@ function analyzeComponentContent(content: string, availableSchemas: string[]): s
       'SectionAssignmentStep',
       'ReviewStep',
       'EnhancedProductSelectionStep',
-      'formData',
-      'onUpdate',
-      'wizard',
-      'step',
       'selectedProducts',
       'selectedTemplates',
       'customContent',
-      'title',
-      'description',
-      'priority',
-      'planType',
-      'status',
+      'wizard',
+      'step',
     ],
     customers: [
+      // Customer-specific fields (high confidence)
       'customerStatus',
+      'customerTier',
       'companySize',
       'industry',
-      'tier',
       'CustomerCreation',
       'CustomerEdit',
+      'CustomerProfile',
     ],
     products: [
+      // Product-specific fields (high confidence)
       'productStatus',
       'productRelationshipType',
       'sku',
@@ -7351,10 +7435,35 @@ function analyzeComponentContent(content: string, availableSchemas: string[]): s
       'category',
       'ProductCreate',
       'ProductEdit',
+      'ProductForm',
     ],
-    'version-history': ['versionId', 'changeType', 'versionStatus', 'VersionHistory'],
-    auth: ['email', 'password', 'role', 'permissions', 'Login', 'Signup', 'Auth'],
-    search: ['search', 'query', 'filter', 'ContentSearch'],
+    'version-history': [
+      // Version history specific fields
+      'versionId',
+      'changeType',
+      'versionStatus',
+      'VersionHistory',
+    ],
+    auth: [
+      // Auth-specific fields (high confidence)
+      'email',
+      'password',
+      'role',
+      'permissions',
+      'Login',
+      'Signup',
+      'Auth',
+      'rememberMe',
+      'confirmPassword',
+      'newPassword',
+    ],
+    search: [
+      // Search-specific fields
+      'search',
+      'query',
+      'filter',
+      'ContentSearch',
+    ],
   };
 
   for (const [domain, fields] of Object.entries(fieldPatterns)) {
@@ -7362,8 +7471,17 @@ function analyzeComponentContent(content: string, availableSchemas: string[]): s
       content.toLowerCase().includes(field.toLowerCase())
     ).length;
 
-    // Use lower threshold for proposal steps since they have many identifying patterns
-    const threshold = domain === 'proposals' ? 1 : 2;
+    // Use domain-specific thresholds for more accurate matching
+    const thresholds = {
+      proposals: 2, // Need at least 2 proposal-specific fields
+      customers: 2, // Need at least 2 customer-specific fields
+      products: 2, // Need at least 2 product-specific fields
+      auth: 2, // Need at least 2 auth-specific fields
+      'version-history': 1, // Version history is more specific
+      search: 1, // Search is more specific
+    };
+
+    const threshold = thresholds[domain as keyof typeof thresholds] || 2;
 
     if (matchCount >= threshold) {
       const matchingSchema = availableSchemas.find(schema => schema.toLowerCase().includes(domain));
@@ -7377,15 +7495,74 @@ function analyzeComponentContent(content: string, availableSchemas: string[]): s
 }
 
 /**
- * Intelligent name-based matching as fallback
+ * Intelligent name-based matching as fallback - FIXED: More precise matching
  */
 function intelligentNameBasedMatching(
   componentLower: string,
   availableSchemas: string[]
 ): string | undefined {
-  // Direct name matching with higher priority domains
-  const priorityDomains = ['proposals', 'customers', 'products', 'version-history', 'auth'];
+  // Priority 1: Exact domain matching with strict rules
+  const domainMappings = {
+    // Auth components - must contain auth keywords
+    auth: ['login', 'signup', 'signin', 'register', 'registration', 'password', 'reset', 'auth'],
+    // Customer components - must contain customer keywords
+    customers: ['customer', 'client', 'company'],
+    // Product components - must contain product keywords
+    products: ['product', 'catalog', 'inventory'],
+    // Proposal components - must contain proposal keywords
+    proposals: ['proposal', 'wizard', 'step', 'team', 'content', 'section', 'review'],
+    // Version history components
+    'version-history': ['version', 'history', 'change', 'audit'],
+  };
 
+  // Check for exact domain matches first
+  for (const [domain, keywords] of Object.entries(domainMappings)) {
+    const hasDomainKeyword = keywords.some(keyword => componentLower.includes(keyword));
+    if (hasDomainKeyword) {
+      const matchingSchema = availableSchemas.find(schema => schema.toLowerCase().includes(domain));
+      if (matchingSchema) {
+        return matchingSchema;
+      }
+    }
+  }
+
+  // Priority 2: Component name pattern matching (more restrictive)
+  const componentPatterns = {
+    // Login forms should always match auth
+    loginform: 'auth',
+    enhancedloginform: 'auth',
+    optimizedloginform: 'auth',
+    passwordresetform: 'auth',
+    registrationform: 'auth',
+
+    // Customer forms should match customers
+    customercreation: 'customers',
+    customeredit: 'customers',
+    customersidebar: 'customers',
+
+    // Product forms should match products
+    productcreate: 'products',
+    productedit: 'products',
+    productform: 'products',
+
+    // Proposal components should match proposals
+    proposalwizard: 'proposals',
+    proposalcreate: 'proposals',
+    proposaledit: 'proposals',
+  };
+
+  // Check component name patterns
+  for (const [pattern, domain] of Object.entries(componentPatterns)) {
+    if (componentLower.includes(pattern)) {
+      const matchingSchema = availableSchemas.find(schema => schema.toLowerCase().includes(domain));
+      if (matchingSchema) {
+        return matchingSchema;
+      }
+    }
+  }
+
+  // Priority 3: Fallback to direct domain matching (only if no other match found)
+  const priorityDomains = ['auth', 'customers', 'products', 'proposals', 'version-history'];
   for (const domain of priorityDomains) {
     if (componentLower.includes(domain.replace('-', ''))) {
       const matchingSchema = availableSchemas.find(schema => schema.toLowerCase().includes(domain));
@@ -7395,16 +7572,7 @@ function intelligentNameBasedMatching(
     }
   }
 
-  // Fuzzy matching - check if any schema name appears in component name
-  for (const schema of availableSchemas) {
-    const schemaLower = schema.toLowerCase().replace('-', '');
-    const componentClean = componentLower.replace(/[^a-z]/g, '');
-
-    if (componentClean.includes(schemaLower) || schemaLower.includes(componentClean.slice(0, 6))) {
-      return schema;
-    }
-  }
-
+  // No fuzzy matching - return undefined if no clear match
   return undefined;
 }
 
@@ -7420,7 +7588,8 @@ function extractAllSchemaFields(schemaData: any): Record<string, any> {
 
       // Handle enum schemas - make them available as field types
       if (schemaObj.type === 'enum' && schemaObj.enum) {
-        const fieldName = schemaName.toLowerCase().replace('schema', '').replace('proposal', '');
+        // Keep original case and only remove 'Schema' suffix
+        const fieldName = schemaName.replace(/Schema$/, '');
         allFields[fieldName] = { enum: schemaObj.enum };
       }
 
@@ -7452,7 +7621,8 @@ function extractAllSchemaFields(schemaData: any): Record<string, any> {
               for (const [nestedFieldName, nestedFieldInfo] of Object.entries(
                 nestedSchema.fields
               )) {
-                const prefixedFieldName = `${nestedSchemaName.toLowerCase().replace('schema', '')}_${nestedFieldName}`;
+                // Keep original case and only add prefix if needed
+                const prefixedFieldName = `${nestedSchemaName.replace(/Schema$/, '')}_${nestedFieldName}`;
                 allFields[prefixedFieldName] = nestedFieldInfo;
               }
             }

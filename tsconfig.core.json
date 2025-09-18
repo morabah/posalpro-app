@@ -8,6 +8,7 @@
   },
   "include": [
     "next-env.d.ts",
+    "src/middleware.ts",
     "src/lib/**/*.ts",
     "src/lib/**/*.tsx",
     "src/types/**/*.ts",

@@ -16,33 +16,63 @@
  * - Analytics integration
  */
 
-import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactNode } from 'react';
+import { renderHook, waitFor } from '@testing-library/react';
+import React, { ReactNode } from 'react';
 
 // Import hooks to test
 import {
+  useDeleteVersionHistoryBulk,
   useInfiniteVersionHistory,
-  useVersionHistoryEntry,
   useProposalVersionHistory,
-  useVersionHistoryDetail,
-  useVersionHistoryStats,
   useSearchVersionHistory,
   useUserVersionHistory,
+  useVersionHistoryDetail,
   useVersionHistoryEntries,
-  useDeleteVersionHistoryBulk,
+  useVersionHistoryEntry,
+  useVersionHistoryStats,
 } from '../useVersionHistory';
 
 // Mock service and dependencies
-import { versionHistoryService } from '@/services/versionHistoryService';
 import { versionHistoryKeys } from '@/features/version-history/keys';
-import { logDebug, logInfo, logError } from '@/lib/logger';
+import { logError, logInfo } from '@/lib/logger';
+import { versionHistoryService } from '@/services/versionHistoryService';
 
 // Mock all dependencies
 jest.mock('@/services/versionHistoryService');
-jest.mock('@/features/version-history/keys');
+jest.mock('@/features/version-history/keys', () => ({
+  versionHistoryKeys: {
+    all: ['version-history'],
+    lists: jest.fn(() => ['version-history', 'list']),
+    list: jest.fn(params => ['version-history', 'list', params]),
+    infiniteLists: jest.fn(() => ['version-history', 'infinite']),
+    infiniteList: jest.fn(params => ['version-history', 'infinite', params]),
+    entries: jest.fn(() => ['version-history', 'entries']),
+    entry: jest.fn(id => ['version-history', 'entries', id]),
+    byId: jest.fn(id => ['version-history', 'entries', id]),
+    detail: jest.fn((proposalId, version) => ['version-history', 'detail', proposalId, version]),
+    byProposal: jest.fn(proposalId => ['version-history', 'byProposal', proposalId]),
+    proposalVersions: jest.fn(proposalId => ['version-history', 'proposal', proposalId]),
+    proposalVersion: jest.fn((proposalId, version) => [
+      'version-history',
+      'proposal',
+      proposalId,
+      version,
+    ]),
+    byUser: jest.fn(userId => ['version-history', 'byUser', userId]),
+    userVersions: jest.fn(userId => ['version-history', 'user', userId]),
+    search: jest.fn(query => ['version-history', 'search', query]),
+    searchVersions: jest.fn((query, filters) => ['version-history', 'search', query, filters]),
+    stats: jest.fn(() => ['version-history', 'stats']),
+    globalStats: jest.fn(() => ['version-history', 'stats', 'global']),
+  },
+}));
 jest.mock('@/lib/logger');
-jest.mock('@/hooks/useOptimizedAnalytics');
+jest.mock('@/hooks/useOptimizedAnalytics', () => ({
+  useOptimizedAnalytics: () => ({
+    trackOptimized: jest.fn(),
+  }),
+}));
 
 // Mock data
 const mockVersionHistoryEntry = {
@@ -98,8 +128,7 @@ describe('useInfiniteVersionHistory', () => {
     // Mock service methods
     (versionHistoryService.getVersionHistory as jest.Mock).mockResolvedValue(mockApiResponse);
 
-    // Mock query keys
-    (versionHistoryKeys.list as jest.Mock).mockReturnValue(['version-history', 'list', { limit: 20 }]);
+    // Query keys are already mocked in jest.mock
   });
 
   it('should fetch version history with default parameters', async () => {
@@ -271,7 +300,7 @@ describe('useVersionHistoryEntry', () => {
       ok: true,
       data: mockVersionHistoryEntry,
     });
-    (versionHistoryKeys.byId as jest.Mock).mockReturnValue(['version-history', 'byId', 'test-entry-1']);
+    // Query keys are already mocked in jest.mock
   });
 
   it('should fetch a single version history entry', async () => {
@@ -289,7 +318,9 @@ describe('useVersionHistoryEntry', () => {
 
   it('should handle entry not found', async () => {
     const mockNotFoundError = new Error('Entry not found');
-    (versionHistoryService.getVersionHistoryEntry as jest.Mock).mockRejectedValue(mockNotFoundError);
+    (versionHistoryService.getVersionHistoryEntry as jest.Mock).mockRejectedValue(
+      mockNotFoundError
+    );
 
     const { result } = renderHook(() => useVersionHistoryEntry('non-existent-id'), {
       wrapper: createWrapper(),
@@ -306,8 +337,10 @@ describe('useVersionHistoryEntry', () => {
 describe('useProposalVersionHistory', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (versionHistoryService.getProposalVersionHistory as jest.Mock).mockResolvedValue(mockApiResponse);
-    (versionHistoryKeys.proposalVersions as jest.Mock).mockReturnValue(['version-history', 'proposal', 'test-proposal-1']);
+    (versionHistoryService.getProposalVersionHistory as jest.Mock).mockResolvedValue(
+      mockApiResponse
+    );
+    // Query keys are already mocked in jest.mock
   });
 
   it('should fetch version history for a specific proposal', async () => {
@@ -319,7 +352,10 @@ describe('useProposalVersionHistory', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(versionHistoryService.getProposalVersionHistory).toHaveBeenCalledWith('test-proposal-1', { limit: 20 });
+    expect(versionHistoryService.getProposalVersionHistory).toHaveBeenCalledWith(
+      'test-proposal-1',
+      { limit: 20 }
+    );
     expect(result.current.data?.pages[0]).toEqual(mockVersionHistoryList);
   });
 
@@ -334,7 +370,10 @@ describe('useProposalVersionHistory', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(versionHistoryService.getProposalVersionHistory).toHaveBeenCalledWith('test-proposal-1', params);
+    expect(versionHistoryService.getProposalVersionHistory).toHaveBeenCalledWith(
+      'test-proposal-1',
+      params
+    );
   });
 });
 
@@ -345,7 +384,7 @@ describe('useVersionHistoryDetail', () => {
       ok: true,
       data: mockVersionHistoryEntry,
     });
-    (versionHistoryKeys.detail as jest.Mock).mockReturnValue(['version-history', 'detail', 'test-proposal-1', 1]);
+    // Query keys are already mocked in jest.mock
   });
 
   it('should fetch detailed version history information', async () => {
@@ -357,7 +396,10 @@ describe('useVersionHistoryDetail', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(versionHistoryService.getVersionHistoryDetail).toHaveBeenCalledWith('test-proposal-1', 1);
+    expect(versionHistoryService.getVersionHistoryDetail).toHaveBeenCalledWith(
+      'test-proposal-1',
+      1
+    );
     expect(result.current.data).toEqual(mockVersionHistoryEntry);
   });
 });
@@ -378,7 +420,7 @@ describe('useVersionHistoryStats', () => {
         },
       },
     });
-    (versionHistoryKeys.stats as jest.Mock).mockReturnValue(['version-history', 'stats']);
+    // Query keys are already mocked in jest.mock
   });
 
   it('should fetch version history statistics', async () => {
@@ -399,7 +441,7 @@ describe('useSearchVersionHistory', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (versionHistoryService.searchVersionHistory as jest.Mock).mockResolvedValue(mockApiResponse);
-    (versionHistoryKeys.search as jest.Mock).mockReturnValue(['version-history', 'search', 'test query']);
+    // Query keys are already mocked in jest.mock
   });
 
   it('should search version history entries', async () => {
@@ -411,7 +453,9 @@ describe('useSearchVersionHistory', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(versionHistoryService.searchVersionHistory).toHaveBeenCalledWith('test query', { limit: 20 });
+    expect(versionHistoryService.searchVersionHistory).toHaveBeenCalledWith('test query', {
+      limit: 20,
+    });
     expect(result.current.data?.pages[0]).toEqual(mockVersionHistoryList);
   });
 
@@ -430,7 +474,7 @@ describe('useUserVersionHistory', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (versionHistoryService.getUserVersionHistory as jest.Mock).mockResolvedValue(mockApiResponse);
-    (versionHistoryKeys.userVersions as jest.Mock).mockReturnValue(['version-history', 'user', 'user-1']);
+    // Query keys are already mocked in jest.mock
   });
 
   it('should fetch version history for a specific user', async () => {
@@ -442,7 +486,9 @@ describe('useUserVersionHistory', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(versionHistoryService.getUserVersionHistory).toHaveBeenCalledWith('user-1', { limit: 20 });
+    expect(versionHistoryService.getUserVersionHistory).toHaveBeenCalledWith('user-1', {
+      limit: 20,
+    });
     expect(result.current.data?.pages[0]).toEqual(mockVersionHistoryList);
   });
 });
@@ -454,7 +500,7 @@ describe('useVersionHistoryEntries', () => {
       ok: true,
       data: mockVersionHistoryEntry,
     });
-    (versionHistoryKeys.byId as jest.Mock).mockReturnValue(['version-history', 'byId', 'test-entry-1']);
+    // Query keys are already mocked in jest.mock
   });
 
   it('should fetch multiple version history entries', async () => {
@@ -493,7 +539,11 @@ describe('useDeleteVersionHistoryBulk', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    expect(versionHistoryService.bulkDeleteVersionHistory).toHaveBeenCalledWith(['entry-1', 'entry-2', 'entry-3']);
+    expect(versionHistoryService.bulkDeleteVersionHistory).toHaveBeenCalledWith([
+      'entry-1',
+      'entry-2',
+      'entry-3',
+    ]);
     expect(result.current.data).toEqual({ processed: 3, successful: 3, failed: 0 });
   });
 
@@ -524,8 +574,6 @@ describe('useDeleteVersionHistoryBulk', () => {
 
 describe('Query Key Integration', () => {
   it('should use correct query keys for caching', async () => {
-    (versionHistoryKeys.list as jest.Mock).mockReturnValue(['version-history', 'list', { limit: 20 }]);
-
     const { result } = renderHook(() => useInfiniteVersionHistory(), {
       wrapper: createWrapper(),
     });

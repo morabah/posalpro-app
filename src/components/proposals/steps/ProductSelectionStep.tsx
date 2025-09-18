@@ -639,7 +639,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
       // Increased debounce to 2 seconds to reduce server load
       pendingSaveTimeoutRef.current = setTimeout(() => {
         updateProposalMutation.mutate(
-          { id: proposalId, proposal: autoSaveData as WizardProposalUpdateData },
+          { id: proposalId, proposal: autoSaveData as any },
           {
             onSuccess: () => {
               // Update last saved state only on success

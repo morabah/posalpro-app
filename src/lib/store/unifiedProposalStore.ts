@@ -38,7 +38,7 @@ export interface WizardStepData {
       industry?: string;
     };
     dueDate?: string;
-    priority: 'LOW' | 'MEDIUM' | 'HIGH';
+    priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
     value?: number; // Estimated value
     currency: string;
     projectType?: string;

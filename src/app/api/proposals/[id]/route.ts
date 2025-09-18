@@ -197,17 +197,16 @@ export const GET = createRoute(
         sections,
         products: productsWithDetails,
         assignedTo: assignedUsers,
-        metadata: proposal.userStoryTracking || {}, // Include wizard data as metadata
+        // Align with DB: expose wizard data under userStoryTracking (not metadata)
+        userStoryTracking: (proposal as any).userStoryTracking || {},
       };
 
       // Transform for frontend compatibility
       const transformedProposal = {
         ...optimizedProposal,
         title: optimizedProposal.title || 'Untitled Proposal',
-        assignedTo:
-          optimizedProposal.assignedTo && optimizedProposal.assignedTo.length > 0
-            ? optimizedProposal.assignedTo[0].id
-            : undefined,
+        // Keep assignedTo as array to match DB relation and updated schema
+        assignedTo: optimizedProposal.assignedTo,
         // Transform products for frontend compatibility
         products: optimizedProposal.products.map(pp => ({
           ...pp,

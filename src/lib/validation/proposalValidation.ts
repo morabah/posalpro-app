@@ -29,7 +29,8 @@ export const BasicInformationSchema = z.object({
     })
     .optional(),
   dueDate: z.string().optional(), // API expects string, converts to Date
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
+  // Align with backend enum (LOW | MEDIUM | HIGH | URGENT)
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).default('MEDIUM'),
   value: z.number().min(0, 'Value must be non-negative').optional().default(0),
   currency: z.string().length(3, 'Currency must be 3 characters').default('USD'),
   projectType: z.string().optional(),
@@ -171,7 +172,7 @@ export const ProposalQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
   cursor: z.string().nullable().optional(),
   sortBy: z
-    .enum(['createdAt', 'updatedAt', 'title', 'status', 'priority', 'value'])
+    .enum(['createdAt', 'updatedAt', 'title', 'status', 'priority', 'value', 'dueDate'])
     .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   status: z
@@ -186,7 +187,8 @@ export const ProposalQuerySchema = z.object({
       'DECLINED',
     ])
     .optional(),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  // Align with backend enum (include URGENT)
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
   customerId: z.string().optional(),
   assignedTo: z.string().optional(),
 });

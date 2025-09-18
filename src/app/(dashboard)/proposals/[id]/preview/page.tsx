@@ -22,20 +22,34 @@ import { Download, Printer } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import type { Proposal } from '@/features/proposals/schemas';
 
 interface ProposalPreviewPageProps {
   params: Promise<{ id: string }>;
 }
 
+// Extended Proposal type that includes relations returned by the API
+interface ProposalWithRelations extends Omit<Proposal, 'customer' | 'products'> {
+  products: ProposalProduct[];
+  customer: {
+    id: string;
+    name: string;
+    email: string | null;
+    industry: string | null;
+  } | null;
+}
+
 interface ProposalProduct {
+  id: string;
   productId: string;
   quantity: number;
   unitPrice: number;
   total: number;
   product?: {
+    id: string;
     name: string;
-    category?: string;
-  };
+    category: string[];
+  } | null;
 }
 
 interface ProductResponse {
@@ -127,10 +141,13 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
   const analytics = useOptimizedAnalytics();
   const router = useRouter();
   const apiClient = useApiClient();
-  const { data: proposal, isLoading, error } = useProposal(proposalId, {
+  const { data: proposalData, isLoading, error } = useProposal(proposalId, {
     staleTime: 0,
     refetchOnMount: true,
   });
+
+  // Cast to the correct type that includes relations
+  const proposal = proposalData as ProposalWithRelations | undefined;
 
   const [isExportingPDF, setIsExportingPDF] = useState(false);
 

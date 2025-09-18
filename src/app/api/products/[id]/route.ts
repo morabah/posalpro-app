@@ -24,7 +24,8 @@ import { apiRateLimiter } from '@/lib/security/hardening';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { handleCorsPreflight, withCors } from '@/server/api/cors';
 import { z } from 'zod';
 
 // Import consolidated schemas from feature folder
@@ -1041,4 +1042,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     );
     return errorResponse;
   }
+}
+// Preflight for CORS
+export async function OPTIONS(request: NextRequest) {
+  const res = handleCorsPreflight(request);
+  return res ?? new NextResponse(null, { status: 204 });
 }

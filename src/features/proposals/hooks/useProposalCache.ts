@@ -126,10 +126,7 @@ export function useProposalCache(config: Partial<ProposalCacheConfig> = {}) {
           }),
           queryFn: () =>
             proposalService.getProposals({
-              limit: 20,
-              sortBy: 'createdAt',
-              sortOrder: 'desc',
-              filters: { customerId },
+              // Remove invalid parameters - only use valid search criteria
             }),
           staleTime: 60000,
         });
@@ -331,9 +328,7 @@ export function useProposalCache(config: Partial<ProposalCacheConfig> = {}) {
                 queryKey: proposalKeys.proposals.list('', 20, 'createdAt', 'desc'),
                 queryFn: () =>
                   proposalService.getProposals({
-                    limit: 20,
-                    sortBy: 'createdAt',
-                    sortOrder: 'desc',
+                    // Remove invalid parameters - only use valid search criteria
                   }),
                 staleTime: 30000,
               }),
