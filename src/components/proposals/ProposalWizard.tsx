@@ -103,13 +103,35 @@ import { flushPendingSectionCreatesAndUpdates } from '@/features/proposal-sectio
 import { useSectionAssignmentStore } from '@/features/proposal-sections/store';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-// Step components
-import { BasicInformationStep } from './steps/BasicInformationStep';
-import { ContentSelectionStep } from './steps/ContentSelectionStep';
-import { ProductSelectionStep } from './steps/ProductSelectionStep';
-import { ReviewStep } from './steps/ReviewStep';
-import { SectionAssignmentStep } from './steps/SectionAssignmentStep';
-import { TeamAssignmentStep } from './steps/TeamAssignmentStep';
+// Step components - Lazy loaded for code splitting
+import { lazy, Suspense } from 'react';
+
+const BasicInformationStep = lazy(() =>
+  import('./steps/BasicInformationStep').then(m => ({ default: m.BasicInformationStep }))
+);
+const ContentSelectionStep = lazy(() =>
+  import('./steps/ContentSelectionStep').then(m => ({ default: m.ContentSelectionStep }))
+);
+const ProductSelectionStep = lazy(() =>
+  import('./steps/ProductSelectionStep').then(m => ({ default: m.ProductSelectionStep }))
+);
+const ReviewStep = lazy(() => import('./steps/ReviewStep').then(m => ({ default: m.ReviewStep })));
+const SectionAssignmentStep = lazy(() =>
+  import('./steps/SectionAssignmentStep').then(m => ({ default: m.SectionAssignmentStep }))
+);
+const TeamAssignmentStep = lazy(() =>
+  import('./steps/TeamAssignmentStep').then(m => ({ default: m.TeamAssignmentStep }))
+);
+
+// Loading component for step chunks
+const StepLoadingFallback = () => (
+  <div className="flex items-center justify-center p-8">
+    <div className="flex flex-col items-center space-y-4">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <p className="text-sm text-gray-600">Loading step...</p>
+    </div>
+  </div>
+);
 
 // Step metadata
 const STEP_META = [
@@ -256,9 +278,19 @@ export function ProposalWizard({
         initializeFromData({
           ...proposalData,
           description: proposalData.description || undefined,
-          dueDate: proposalData.dueDate ? (typeof proposalData.dueDate === 'string' ? proposalData.dueDate : (proposalData.dueDate as Date).toISOString()) : undefined,
-          assignedTo: (proposalData as any).assignedTo ? [(proposalData as any).assignedTo] : undefined,
-          submittedAt: proposalData.submittedAt ? (typeof proposalData.submittedAt === 'string' ? proposalData.submittedAt : (proposalData.submittedAt as Date).toISOString()) : undefined,
+          dueDate: proposalData.dueDate
+            ? typeof proposalData.dueDate === 'string'
+              ? proposalData.dueDate
+              : (proposalData.dueDate as Date).toISOString()
+            : undefined,
+          assignedTo: (proposalData as any).assignedTo
+            ? [(proposalData as any).assignedTo]
+            : undefined,
+          submittedAt: proposalData.submittedAt
+            ? typeof proposalData.submittedAt === 'string'
+              ? proposalData.submittedAt
+              : (proposalData.submittedAt as Date).toISOString()
+            : undefined,
         });
         // Ensure edit opens on step 4 directly
         setCurrentStep(4);
@@ -303,6 +335,32 @@ export function ProposalWizard({
     const step = STEP_META.find(s => s.id === currentStep);
     return step?.component || BasicInformationStep;
   }, [currentStep]);
+
+  // Preload next step for better UX
+  const preloadNextStep = useCallback(() => {
+    const nextStep = STEP_META.find(s => s.id === currentStep + 1);
+    if (nextStep) {
+      // Map component names to their file names for preloading
+      const stepFileMap: Record<string, string> = {
+        BasicInformationStep: 'BasicInformationStep',
+        TeamAssignmentStep: 'TeamAssignmentStep',
+        ContentSelectionStep: 'ContentSelectionStep',
+        ProductSelectionStep: 'ProductSelectionStep',
+        SectionAssignmentStep: 'SectionAssignmentStep',
+        ReviewStep: 'ReviewStep',
+      };
+
+      const fileName = stepFileMap[nextStep.component.name];
+      if (fileName) {
+        import(`./steps/${fileName}`);
+      }
+    }
+  }, [currentStep]);
+
+  // Preload the first step on mount for better UX
+  useEffect(() => {
+    preloadNextStep();
+  }, [preloadNextStep]);
 
   // Build payload to save (used for per-step update)
   const buildWizardPayload = useCallback(() => buildWizardPayloadFromStore(planType), [planType]);
@@ -564,6 +622,9 @@ export function ProposalWizard({
       });
 
       await nextStep();
+
+      // Preload the next step for better UX
+      preloadNextStep();
     } catch (error) {
       analytics.trackOptimized('wizard_error', {
         action: 'next_step_failed',
@@ -575,7 +636,7 @@ export function ProposalWizard({
         hypothesis: 'H4',
       });
     }
-  }, [currentStep, nextStep, editMode, proposalId]); // ✅ Removed unstable analytics dependency
+  }, [currentStep, nextStep, editMode, proposalId, preloadNextStep]); // ✅ Removed unstable analytics dependency
 
   const handleBack = useCallback(() => {
     analytics.trackOptimized('wizard_navigation', {
@@ -702,10 +763,10 @@ export function ProposalWizard({
           hypothesis: 'H4',
         });
 
-        const result = await updateProposalMutation.mutateAsync({
+        const result = (await updateProposalMutation.mutateAsync({
           id: proposalId,
           proposal: proposalData,
-        }) as ProposalWithRelations;
+        })) as ProposalWithRelations;
         resultProposalId = result.id;
 
         // ✅ ADDED: Verify the update was successful by checking product count
@@ -991,23 +1052,25 @@ export function ProposalWizard({
             {/* Step Content */}
             <div className="lg:col-span-3">
               <Card className="p-6">
-                <CurrentStepComponent
-                  // For step 4 (ProductSelectionStep), use proposal products data in edit mode
-                  data={
-                    currentStep === 4 && editMode && proposalData?.products
-                      ? { products: proposalData.products }
-                      : currentStep === 2 && editMode && step2Data
-                        ? step2Data
-                        : currentStepData
-                  }
-                  onNext={handleNext}
-                  onBack={handleBack}
-                  onSubmit={handleSubmit}
-                  onUpdate={handleStepUpdate}
-                  // Pass proposalId to ProductSelectionStep (step 4) to fix caching issues
-                  {...(currentStep === 4 && proposalId ? { proposalId } : {})}
-                  // editMode prop removed - not needed by step components
-                />
+                <Suspense fallback={<StepLoadingFallback />}>
+                  <CurrentStepComponent
+                    // For step 4 (ProductSelectionStep), use proposal products data in edit mode
+                    data={
+                      currentStep === 4 && editMode && proposalData?.products
+                        ? { products: proposalData.products }
+                        : currentStep === 2 && editMode && step2Data
+                          ? step2Data
+                          : currentStepData
+                    }
+                    onNext={handleNext}
+                    onBack={handleBack}
+                    onSubmit={handleSubmit}
+                    onUpdate={handleStepUpdate}
+                    // Pass proposalId to ProductSelectionStep (step 4) to fix caching issues
+                    {...(currentStep === 4 && proposalId ? { proposalId } : {})}
+                    // editMode prop removed - not needed by step components
+                  />
+                </Suspense>
                 <div className="mt-4 flex justify-between items-center">
                   {/* Left area: step-specific action (Preview on step 4) */}
                   <div>
