@@ -7,7 +7,6 @@
  * Hypothesis: H8 (Technical Configuration Validation - 50% error reduction)
  */
 
-import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
@@ -17,8 +16,21 @@ import type { HybridProduct } from '@/hooks/useHybridProducts';
 import { useHybridProducts } from '@/hooks/useHybridProducts';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logError } from '@/lib/logger';
-import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
+
+// Lazy-loaded components for code splitting
+const AdvancedProductCard = lazy(() => import('./components/AdvancedProductCard'));
+const ProductFilters = lazy(() => import('./components/ProductFilters'));
+
+// Loading fallback for product components
+const ProductLoadingFallback = () => (
+  <div className="flex items-center justify-center p-4">
+    <div className="flex flex-col items-center space-y-2">
+      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+      <p className="text-sm text-gray-600">Loading product...</p>
+    </div>
+  </div>
+);
 
 interface AdvancedProductListProps {
   onAddProduct?: () => void;
@@ -44,437 +56,6 @@ interface ProductFilters {
   searchQuery: string;
 }
 
-// Enhanced product card with PDP features
-function AdvancedProductCard({ product }: { product: HybridProduct }) {
-  const { trackOptimized: analytics } = useOptimizedAnalytics();
-  const [selectedSize, setSelectedSize] = useState('');
-  const [selectedColor, setSelectedColor] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [isAddingToCart, setIsAddingToCart] = useState(false);
-  const [cartMessage, setCartMessage] = useState('');
-
-  // Mock product data for PDP features
-  const sizes = product.isMockData ? ['XS', 'S', 'M', 'L', 'XL'] : [];
-  const colors = product.isMockData
-    ? ['Natural Beige', 'Forest Green', 'Earth Brown', 'Sage Gray']
-    : [];
-  const sustainableFeatures = product.isMockData ? ['organic', 'fairTrade', 'carbonNeutral'] : [];
-  const reviews = product.isMockData ? { count: 24, average: 4.8 } : { count: 0, average: 0 };
-
-  const handleViewDetails = useCallback(() => {
-    analytics('product_detail_viewed', {
-      productId: product.id,
-      isMockData: product.isMockData,
-      userStory: 'US-3.2',
-      hypothesis: 'H8',
-    });
-  }, [product.id, product.isMockData, analytics]);
-
-  const handleAddToCart = useCallback(async () => {
-    if (!selectedSize && sizes.length > 0) {
-      setCartMessage('Please select a size');
-      setTimeout(() => setCartMessage(''), 3000);
-      return;
-    }
-    if (!selectedColor && colors.length > 0) {
-      setCartMessage('Please select a color');
-      setTimeout(() => setCartMessage(''), 3000);
-      return;
-    }
-
-    setIsAddingToCart(true);
-    setCartMessage('Adding to cart...');
-
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    analytics('product_added_to_cart', {
-      productId: product.id,
-      quantity,
-      selectedSize,
-      selectedColor,
-      isMockData: product.isMockData,
-      userStory: 'US-3.2',
-      hypothesis: 'H8',
-    });
-
-    setIsAddingToCart(false);
-    setCartMessage('Added to cart! 🎉');
-    setTimeout(() => setCartMessage(''), 3000);
-  }, [product.id, quantity, selectedSize, selectedColor, sizes.length, colors.length, analytics]);
-
-  const handleQuantityChange = useCallback((delta: number) => {
-    setQuantity(prev => Math.max(1, Math.min(10, prev + delta)));
-  }, []);
-
-  const handleEdit = useCallback(() => {
-    analytics('product_edit_initiated', {
-      productId: product.id,
-      isMockData: product.isMockData,
-      userStory: 'US-3.2',
-      hypothesis: 'H8',
-    });
-  }, [product.id, product.isMockData, analytics]);
-
-  return (
-    <Card className="group relative overflow-hidden bg-gradient-to-br from-white via-green-50/20 to-emerald-50/30 border border-green-200/40 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-      {/* Sustainable background pattern */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-green-400 to-transparent rounded-full -translate-y-8 translate-x-8"></div>
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-emerald-400 to-transparent rounded-full translate-y-6 -translate-x-6"></div>
-      </div>
-
-      <div className="relative p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            {/* Product Header with sustainable branding */}
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg">
-                  🌱
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 group-hover:text-emerald-700 transition-colors duration-200">
-                    {product.name}
-                  </h2>
-                  {product.productId && (
-                    <p className="text-sm text-gray-600 font-medium">{product.productId}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {product.isMockData && (
-                  <Badge className="bg-gradient-to-r from-orange-400 to-orange-500 text-white border-0 text-xs font-semibold px-2 py-1">
-                    ✨ DEMO
-                  </Badge>
-                )}
-                {product.visibilitySettings?.featured && (
-                  <Badge className="bg-gradient-to-r from-emerald-400 to-emerald-500 text-white border-0 text-xs font-semibold px-2 py-1">
-                    🌟 FEATURED
-                  </Badge>
-                )}
-                {product.priceModel && (
-                  <Badge className="bg-gradient-to-r from-teal-400 to-teal-500 text-white border-0 text-xs font-semibold px-2 py-1">
-                    {product.priceModel}
-                  </Badge>
-                )}
-              </div>
-            </div>
-
-            {/* Status and Quick Info */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-2 h-2 rounded-full ${
-                    product.isMockData && product.visibilitySettings
-                      ? product.visibilitySettings.status === 'Active'
-                        ? 'bg-green-400 animate-pulse'
-                        : 'bg-gray-400'
-                      : product.isActive
-                        ? 'bg-green-400 animate-pulse'
-                        : 'bg-gray-400'
-                  }`}
-                ></div>
-                <span className="text-xs font-medium text-gray-600">
-                  {product.isMockData && product.visibilitySettings
-                    ? product.visibilitySettings.status
-                    : product.isActive
-                      ? 'Active'
-                      : 'Inactive'}
-                </span>
-              </div>
-
-              {product.category.length > 0 && (
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-gray-500">•</span>
-                  <span className="text-xs text-gray-600">{product.category[0]}</span>
-                </div>
-              )}
-
-              {product.subCategory && (
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-gray-500">•</span>
-                  <span className="text-xs text-blue-600 font-medium">{product.subCategory}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Description */}
-            <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
-
-            {/* Categories and Tags */}
-            <div className="flex flex-wrap gap-2 mb-3">
-              {product.category.map(cat => (
-                <Badge key={cat} variant="outline" className="text-xs">
-                  {cat}
-                </Badge>
-              ))}
-              {product.subCategory && (
-                <Badge variant="secondary" className="text-xs">
-                  {product.subCategory}
-                </Badge>
-              )}
-            </div>
-
-            {/* Customization Options Preview */}
-            {product.customizationOptions && product.customizationOptions.length > 0 && (
-              <div className="mb-3">
-                <span className="text-xs text-gray-500 mb-1 block">Customizations:</span>
-                <div className="flex flex-wrap gap-1">
-                  {product.customizationOptions.slice(0, 2).map(option => (
-                    <Badge key={option.name} variant="outline" className="text-xs">
-                      {option.name}
-                    </Badge>
-                  ))}
-                  {product.customizationOptions.length > 2 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{product.customizationOptions.length - 2} more
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Resources Preview */}
-            {product.relatedResources && product.relatedResources.length > 0 && (
-              <div className="mb-3">
-                <span className="text-xs text-gray-500 mb-1 block">Resources:</span>
-                <div className="flex gap-2">
-                  {product.relatedResources.slice(0, 3).map(resource => (
-                    <div key={resource.name} className="flex items-center gap-1">
-                      <span className="text-xs">
-                        {resource.type === 'document'
-                          ? '📄'
-                          : resource.type === 'image'
-                            ? '🖼️'
-                            : '🎥'}
-                      </span>
-                      <span className="text-xs text-gray-600 truncate max-w-20">
-                        {resource.name}
-                      </span>
-                    </div>
-                  ))}
-                  {product.relatedResources.length > 3 && (
-                    <span className="text-xs text-gray-500">
-                      +{product.relatedResources.length - 3} more
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Sustainable Materials Badges */}
-            {sustainableFeatures.length > 0 && (
-              <div className="mb-3">
-                <span className="text-xs text-gray-500 mb-2 block">Sustainable Features:</span>
-                <div className="flex flex-wrap gap-2">
-                  {sustainableFeatures.map(feature => {
-                    const badge = SUSTAINABLE_BADGES[feature as keyof typeof SUSTAINABLE_BADGES];
-                    return (
-                      <Badge
-                        key={feature}
-                        className={`${badge.color} text-xs font-semibold px-2 py-1 border-0`}
-                      >
-                        <span className="mr-1">{badge.icon}</span>
-                        {badge.label}
-                      </Badge>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Customer Reviews */}
-            {reviews.count > 0 && (
-              <div className="mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1">
-                    {[...Array(5)].map((_, i) => (
-                      <span
-                        key={i}
-                        className={`text-xs ${i < Math.floor(reviews.average) ? 'text-yellow-400' : 'text-gray-300'}`}
-                      >
-                        ⭐
-                      </span>
-                    ))}
-                  </div>
-                  <span className="text-xs text-gray-600 font-medium">
-                    {reviews.average} ({reviews.count} reviews)
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* PDP Features - Size and Color Selection */}
-            {product.isMockData && (sizes.length > 0 || colors.length > 0) && (
-              <div className="mb-4 space-y-3">
-                <h4 className="text-sm font-semibold text-gray-900">Select Options</h4>
-
-                {/* Size Selection */}
-                {sizes.length > 0 && (
-                  <div>
-                    <label className="text-xs text-gray-600 mb-2 block">Size</label>
-                    <select
-                      value={selectedSize}
-                      onChange={e => {
-                        if (!e || !e.target) {
-                          logError('AdvancedProductList: Invalid event object for size onChange', {
-                            event: e,
-                            component: 'AdvancedProductList',
-                            operation: 'size_filter_change',
-                          });
-                          return;
-                        }
-                        setSelectedSize(e.target.value);
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
-                    >
-                      <option value="">Select Size</option>
-                      {sizes.map(size => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Color Selection */}
-                {colors.length > 0 && (
-                  <div>
-                    <label className="text-xs text-gray-600 mb-2 block">Color</label>
-                    <select
-                      value={selectedColor}
-                      onChange={e => {
-                        if (!e || !e.target) {
-                          logError('AdvancedProductList: Invalid event object for color onChange', {
-                            event: e,
-                            component: 'AdvancedProductList',
-                            operation: 'color_filter_change',
-                          });
-                          return;
-                        }
-                        setSelectedColor(e.target.value);
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
-                    >
-                      <option value="">Select Color</option>
-                      {colors.map(color => (
-                        <option key={color} value={color}>
-                          {color}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Quantity Selector */}
-            {product.isMockData && (
-              <div className="mb-4">
-                <label className="text-xs text-gray-600 mb-2 block">Quantity</label>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => handleQuantityChange(-1)}
-                    className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-sm font-medium transition-colors"
-                    disabled={quantity <= 1}
-                  >
-                    -
-                  </button>
-                  <span className="text-sm font-medium min-w-[2rem] text-center">{quantity}</span>
-                  <button
-                    onClick={() => handleQuantityChange(1)}
-                    className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-sm font-medium transition-colors"
-                    disabled={quantity >= 10}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Cart Message */}
-            {cartMessage && (
-              <div className="mb-3 p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-                <p className="text-xs text-emerald-700 font-medium">{cartMessage}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Enhanced Price and Actions */}
-          <div className="flex flex-col items-end gap-4">
-            {/* Price Section */}
-            <div className="text-right">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="text-right">
-                  <div className="text-2xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-                    {product.price ? `$${product.price.toLocaleString()}` : 'Contact for pricing'}
-                  </div>
-                  <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">
-                    {product.currency || 'USD'}
-                  </div>
-                </div>
-              </div>
-
-              {product.discountOptions?.volumeDiscount && (
-                <div className="flex items-center gap-1 px-2 py-1 bg-green-50 rounded-full border border-green-200">
-                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                  <span className="text-xs font-medium text-green-700">Volume discounts</span>
-                </div>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-2 w-full">
-              {/* Add to Cart Button for Mock Products */}
-              {product.isMockData && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleAddToCart}
-                  disabled={isAddingToCart}
-                  className="text-sm px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isAddingToCart ? (
-                    <span className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Adding...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">🛒 Add to Cart</span>
-                  )}
-                </Button>
-              )}
-
-              {/* View and Edit Buttons */}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleViewDetails}
-                  className="text-xs px-3 py-1.5 border-gray-300 hover:border-emerald-400 hover:bg-emerald-50 transition-all duration-200 flex-1"
-                >
-                  <span className="flex items-center gap-1">👁️ View</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleEdit}
-                  className="text-xs px-3 py-1.5 border-gray-300 hover:border-emerald-400 hover:bg-emerald-50 transition-all duration-200 flex-1"
-                >
-                  <span className="flex items-center gap-1">✏️ Edit</span>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 // Enhanced filter panel
 function AdvancedFilterPanel({
   filters,
@@ -488,13 +69,15 @@ function AdvancedFilterPanel({
   return (
     <Card className="relative overflow-hidden bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200/50 shadow-lg mb-6">
       {/* Background decoration */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-200/30 to-transparent rounded-full -translate-y-8 translate-x-8"></div>
-      <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-indigo-200/30 to-transparent rounded-full translate-y-6 -translate-x-6"></div>
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-400 to-transparent rounded-full -translate-y-8 translate-x-8"></div>
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-indigo-400 to-transparent rounded-full translate-y-6 -translate-x-6"></div>
+      </div>
 
       <div className="relative p-6">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-            <span className="text-white text-sm font-bold">🔍</span>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+            🔍
           </div>
           <div>
             <h3 className="font-bold text-gray-900 text-lg">Advanced Filters</h3>
@@ -504,24 +87,15 @@ function AdvancedFilterPanel({
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Search */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-              <span className="w-4 h-4 bg-gradient-to-r from-blue-500 to-indigo-500 rounded text-white flex items-center justify-center text-xs">
-                🔍
-              </span>
-              Search Products
-            </label>
+          <div className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Search Products</label>
             <div className="relative">
               <Input
-                placeholder="Search by name, SKU, or description..."
+                type="text"
+                placeholder="Search by name, description..."
                 value={filters.searchQuery}
                 onChange={e => {
-                  if (!e || !e.target) {
-                    logError('AdvancedProductList: Invalid event object for search onChange', {
-                      event: e,
-                      component: 'AdvancedProductList',
-                      operation: 'search_input_change',
-                    });
+                  if (e.target.value.length > 100) {
                     return;
                   }
                   onFiltersChange({ ...filters, searchQuery: e.target.value });
@@ -542,22 +116,12 @@ function AdvancedFilterPanel({
           </div>
 
           {/* Category Filter */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-              <span className="w-4 h-4 bg-gradient-to-r from-green-500 to-emerald-500 rounded text-white flex items-center justify-center text-xs">
-                📂
-              </span>
-              Category
-            </label>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
             <select
               value={filters.category}
               onChange={e => {
-                if (!e || !e.target) {
-                  logError('AdvancedProductList: Invalid event object for category onChange', {
-                    event: e,
-                    component: 'AdvancedProductList',
-                    operation: 'category_filter_change',
-                  });
+                if (e.target.value.length > 50) {
                   return;
                 }
                 onFiltersChange({ ...filters, category: e.target.value });
@@ -573,30 +137,30 @@ function AdvancedFilterPanel({
               }}
             >
               <option value="">All Categories</option>
-              <option value="Security">Security</option>
-              <option value="Services">Services</option>
+              <option value="Clothing">Clothing</option>
+              <option value="Accessories">Accessories</option>
+              <option value="Footwear">Footwear</option>
+              <option value="Home & Living">Home & Living</option>
+              <option value="Beauty & Wellness">Beauty & Wellness</option>
+              <option value="Electronics">Electronics</option>
+              <option value="Sports & Outdoors">Sports & Outdoors</option>
+              <option value="Books & Media">Books & Media</option>
+              <option value="Food & Beverages">Food & Beverages</option>
+              <option value="Automotive">Automotive</option>
+              <option value="Health & Medical">Health & Medical</option>
+              <option value="Industrial">Industrial</option>
               <option value="Software">Software</option>
-              <option value="Data">Data</option>
+              <option value="Services">Services</option>
             </select>
           </div>
 
           {/* Status Filter */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-              <span className="w-4 h-4 bg-gradient-to-r from-yellow-500 to-orange-500 rounded text-white flex items-center justify-center text-xs">
-                ⚡
-              </span>
-              Status
-            </label>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
             <select
               value={filters.status}
               onChange={e => {
-                if (!e || !e.target) {
-                  logError('AdvancedProductList: Invalid event object for status onChange', {
-                    event: e,
-                    component: 'AdvancedProductList',
-                    operation: 'status_filter_change',
-                  });
+                if (e.target.value.length > 20) {
                   return;
                 }
                 onFiltersChange({ ...filters, status: e.target.value as any });
@@ -618,23 +182,13 @@ function AdvancedFilterPanel({
             </select>
           </div>
 
-          {/* Data Type Filter */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-              <span className="w-4 h-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded text-white flex items-center justify-center text-xs">
-                🎭
-              </span>
-              Data Type
-            </label>
+          {/* Data Source Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Data Source</label>
             <select
-              value={filters.showMockData ? 'mock' : 'all'}
+              value={filters.showMockData ? 'mock' : 'real'}
               onChange={e => {
-                if (!e || !e.target) {
-                  logError('AdvancedProductList: Invalid event object for showMockData onChange', {
-                    event: e,
-                    component: 'AdvancedProductList',
-                    operation: 'mock_data_toggle_change',
-                  });
+                if (e.target.value.length > 10) {
                   return;
                 }
                 onFiltersChange({ ...filters, showMockData: e.target.value === 'mock' });
@@ -649,29 +203,18 @@ function AdvancedFilterPanel({
                 paddingRight: '2.5rem',
               }}
             >
-              <option value="all">All Products ({productCounts.total})</option>
               <option value="real">Real Data ({productCounts.real})</option>
-              <option value="mock">Demo Data ({productCounts.mock})</option>
+              <option value="mock">Mock Data ({productCounts.mock})</option>
             </select>
           </div>
         </div>
 
-        {/* Enhanced Customization Filter */}
-        <div className="mt-6 pt-6 border-t border-blue-200/50">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-              <span className="text-white text-xs font-bold">⚙️</span>
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900">Customization Options</h4>
-              <p className="text-xs text-gray-600">Filter by product customization availability</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <label className="group flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition-all duration-200 cursor-pointer">
+        {/* Customization Options */}
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <h4 className="text-sm font-medium text-gray-700 mb-3">Customization Options</h4>
+          <div className="flex gap-6">
+            <label className="flex items-center gap-2">
               <Checkbox
-                id="has-customizations-filter"
                 checked={filters.hasCustomizations === true}
                 onChange={checked =>
                   onFiltersChange({
@@ -680,17 +223,10 @@ function AdvancedFilterPanel({
                   })
                 }
               />
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>
-                <span className="text-sm font-medium text-gray-700 group-hover:text-indigo-700 transition-colors duration-200">
-                  Has Customizations
-                </span>
-              </div>
+              <span className="text-sm text-gray-600">Has Customizations</span>
             </label>
-
-            <label className="group flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50/50 transition-all duration-200 cursor-pointer">
+            <label className="flex items-center gap-2">
               <Checkbox
-                id="no-customizations-filter"
                 checked={filters.hasCustomizations === false}
                 onChange={checked =>
                   onFiltersChange({
@@ -699,13 +235,21 @@ function AdvancedFilterPanel({
                   })
                 }
               />
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors duration-200">
-                  No Customizations
-                </span>
-              </div>
+              <span className="text-sm text-gray-600">No Customizations</span>
             </label>
+          </div>
+        </div>
+
+        {/* Results Summary */}
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="flex items-center justify-between text-sm text-gray-600">
+            <span>
+              Showing <strong>{productCounts.total}</strong> products
+            </span>
+            <span>
+              Real: <strong>{productCounts.real}</strong> • Mock:{' '}
+              <strong>{productCounts.mock}</strong>
+            </span>
           </div>
         </div>
       </div>
@@ -716,27 +260,9 @@ function AdvancedFilterPanel({
 // Main component
 export default function AdvancedProductList({
   onAddProduct,
-  hideBreadcrumbs,
+  hideBreadcrumbs = false,
 }: AdvancedProductListProps) {
   const { trackOptimized: analytics } = useOptimizedAnalytics();
-
-  // Use hybrid products hook
-  const {
-    products: allProducts,
-    isLoading,
-    error,
-    hasNextPage,
-    isFetchingNextPage,
-    loadMore,
-    searchProducts,
-    filterProducts,
-    realDataCount,
-    mockDataCount,
-    totalCount,
-  } = useHybridProducts({
-    enableMockData: true,
-    includeAdvancedFeatures: true,
-  });
 
   // Filter state
   const [filters, setFilters] = useState<ProductFilters>({
@@ -748,262 +274,228 @@ export default function AdvancedProductList({
     searchQuery: '',
   });
 
+  // Data fetching
+  const { products, isLoading, error, hasNextPage, isFetchingNextPage, loadMore } =
+    useHybridProducts({
+      enableMockData: true,
+      mockDataCount: 4,
+      includeAdvancedFeatures: true,
+    });
+
   // Filtered products
   const filteredProducts = useMemo(() => {
-    let products = allProducts;
+    if (!products) return [];
 
-    // Apply search
-    if (filters.searchQuery) {
-      products = searchProducts(filters.searchQuery);
-    }
+    return products.filter((product: HybridProduct) => {
+      // Search filter
+      if (filters.searchQuery) {
+        const searchLower = filters.searchQuery.toLowerCase();
+        const matchesSearch =
+          product.name.toLowerCase().includes(searchLower) ||
+          (product.description && product.description.toLowerCase().includes(searchLower)) ||
+          (product.productId && product.productId.toLowerCase().includes(searchLower));
+        if (!matchesSearch) return false;
+      }
 
-    // Apply filters
-    products = filterProducts({
-      category: filters.category || undefined,
-      status: filters.status !== 'All' ? filters.status : undefined,
-      priceRange: filters.priceRange,
-      hasCustomizations: filters.hasCustomizations || undefined,
-      isMockData: filters.showMockData || undefined,
+      // Category filter
+      if (filters.category && !product.category.includes(filters.category)) {
+        return false;
+      }
+
+      // Status filter
+      if (filters.status !== 'All') {
+        const productStatus =
+          product.isMockData && product.visibilitySettings
+            ? product.visibilitySettings.status
+            : product.isActive
+              ? 'Active'
+              : 'Inactive';
+        if (productStatus !== filters.status) return false;
+      }
+
+      // Mock data filter
+      if (filters.showMockData && !product.isMockData) return false;
+      if (!filters.showMockData && product.isMockData) return false;
+
+      // Customization filter
+      if (filters.hasCustomizations !== null) {
+        const hasCustomizations =
+          product.customizationOptions && product.customizationOptions.length > 0;
+        if (hasCustomizations !== filters.hasCustomizations) return false;
+      }
+
+      return true;
     });
+  }, [products, filters]);
 
-    return products;
-  }, [allProducts, filters, searchProducts, filterProducts]);
+  // Product counts
+  const totalCount = products?.length || 0;
+  const realDataCount = products?.filter((p: HybridProduct) => !p.isMockData).length || 0;
+  const mockDataCount = products?.filter((p: HybridProduct) => p.isMockData).length || 0;
 
-  // Handle create product
-  const handleCreateProduct = useCallback(() => {
-    analytics('product_create_initiated', {
-      source: 'advanced_product_list',
-      userStory: 'US-3.2',
-      hypothesis: 'H8',
-    });
-    // Navigate to create page - keeping existing functionality
-    window.location.href = '/products/create';
-  }, [analytics]);
-
-  // Handle bulk operations
-  const handleBulkDelete = useCallback(() => {
-    analytics('bulk_operation_initiated', {
-      operation: 'delete',
-      source: 'advanced_product_list',
-      userStory: 'US-3.2',
-      hypothesis: 'H8',
-    });
-    // TODO: Implement bulk operations
-    alert('Bulk operations coming soon!');
-  }, [analytics]);
-
+  // Error handling
   if (error) {
-    logError('Advanced product list error', {
+    logError('Failed to load products', {
       component: 'AdvancedProductList',
-      error,
+      operation: 'load_products',
+      error: error.message,
       userStory: 'US-3.2',
       hypothesis: 'H8',
     });
   }
 
   return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50/30 to-emerald-50/20 motion-reduce:transition-none motion-reduce:animate-none"
-      aria-busy={isLoading}
-    >
-      <div className="max-w-7xl mx-auto p-8 space-y-8">
-        {/* Breadcrumb Navigation (optional if page already renders breadcrumbs) */}
-        {!hideBreadcrumbs && (
-          <nav
-            className="flex items-center space-x-2 text-sm text-gray-600 mb-4"
-            aria-label="Breadcrumb"
-          >
-            <Link
-              href="/"
-              className="hover:text-emerald-600 transition-colors duration-200 flex items-center gap-1"
-            >
-              <span className="text-emerald-500">🏠</span>
-              Home
-            </Link>
-            <span className="text-gray-400">/</span>
-            <Link
-              href="/products"
-              className="hover:text-emerald-600 transition-colors duration-200 flex items-center gap-1"
-            >
-              <span className="text-emerald-500">🛍️</span>
-              Products
-            </Link>
-            <span className="text-gray-400">/</span>
-            <span className="text-gray-900 font-medium flex items-center gap-1">
-              <span className="text-emerald-500">🌱</span>
-              EcoChic Collection
-            </span>
-          </nav>
-        )}
-
-        {/* Enhanced Header */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-white via-emerald-50/50 to-green-50/50 rounded-2xl shadow-lg border border-emerald-200/50">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-emerald-200/20 to-transparent rounded-full -translate-y-32 translate-x-32"></div>
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-green-200/20 to-transparent rounded-full translate-y-24 -translate-x-24"></div>
-
-          <div className="relative p-8">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-14 h-14 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <span className="text-white text-2xl">🌱</span>
-                  </div>
-                  <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-emerald-900 bg-clip-text text-transparent">
-                      EcoChic Sustainable Collection
-                    </h1>
-                    <p className="text-gray-600 mt-2 text-lg">
-                      Conscious Fashion for a Better Tomorrow • Premium Quality, Ethical Sourcing
-                    </p>
-                  </div>
-                </div>
-
-                {/* Enhanced Stats */}
-                <div className="flex flex-wrap gap-6">
-                  <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl border border-emerald-200/50 shadow-sm">
-                    <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
-                    <div>
-                      <div className="text-2xl font-bold text-emerald-700">{totalCount}</div>
-                      <div className="text-xs text-gray-600 font-medium uppercase tracking-wide">
-                        Sustainable Items
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl border border-green-200/50 shadow-sm">
-                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                    <div>
-                      <div className="text-2xl font-bold text-green-700">{realDataCount}</div>
-                      <div className="text-xs text-gray-600 font-medium uppercase tracking-wide">
-                        Ready to Ship
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl border border-teal-200/50 shadow-sm">
-                    <div className="w-3 h-3 bg-teal-500 rounded-full animate-pulse"></div>
-                    <div>
-                      <div className="text-2xl font-bold text-teal-700">{mockDataCount}</div>
-                      <div className="text-xs text-gray-600 font-medium uppercase tracking-wide">
-                        Eco Preview
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-4 ml-8">
-                <Button
-                  variant="outline"
-                  onClick={handleBulkDelete}
-                  className="px-6 py-3 border-2 border-emerald-300 hover:border-emerald-400 hover:bg-emerald-50 transition-all duration-200 shadow-sm"
-                >
-                  <span className="flex items-center gap-2">
-                    <span>🌱</span>
-                    <span className="font-medium">Sustainability Tools</span>
-                  </span>
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={onAddProduct ? onAddProduct : handleCreateProduct}
-                  className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  <span className="flex items-center gap-2">
-                    <span>🌿</span>
-                    <span className="font-semibold">Add Eco Product</span>
-                  </span>
-                </Button>
-              </div>
-            </div>
+    <div className="space-y-6">
+      {/* Header */}
+      {!hideBreadcrumbs && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Advanced Product Management</h1>
+            <p className="mt-2 text-gray-600">
+              Sustainable fashion catalog with advanced filtering and e-commerce features
+            </p>
           </div>
+          {onAddProduct && (
+            <Button onClick={onAddProduct} className="bg-emerald-600 hover:bg-emerald-700">
+              Add Product
+            </Button>
+          )}
         </div>
+      )}
 
-        {/* Filters */}
-        <AdvancedFilterPanel
-          filters={filters}
-          onFiltersChange={setFilters}
-          productCounts={{ total: totalCount, real: realDataCount, mock: mockDataCount }}
-        />
-
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-12">
-            <LoadingSpinner size="lg" />
-            <span className="ml-3 text-gray-600">Loading advanced products...</span>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="p-6 bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200">
+          <div className="flex items-center">
+            <div className="w-12 h-12 rounded-xl bg-emerald-500 flex items-center justify-center text-white font-bold text-lg">
+              📦
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Total Products</p>
+              <p className="text-2xl font-bold text-gray-900">{totalCount}</p>
+            </div>
           </div>
-        )}
+        </Card>
 
-        {/* Error State */}
-        {error && (
-          <Card className="p-6 border-red-200 bg-red-50">
-            <div className="flex items-center gap-3">
-              <div className="text-red-500 text-xl">⚠️</div>
-              <div>
-                <h3 className="font-semibold text-red-800">Error Loading Products</h3>
-                <p className="text-red-600 text-sm mt-1">
-                  {error.message || 'Failed to load product data'}
-                </p>
-              </div>
+        <Card className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+          <div className="flex items-center">
+            <div className="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold text-lg">
+              🏭
             </div>
-          </Card>
-        )}
-
-        {/* Products Grid */}
-        {!isLoading && !error && (
-          <>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {filteredProducts.map(product => (
-                <AdvancedProductCard key={product.id} product={product} />
-              ))}
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Real Data</p>
+              <p className="text-2xl font-bold text-gray-900">{realDataCount}</p>
             </div>
+          </div>
+        </Card>
 
-            {/* Load More */}
-            {hasNextPage && (
-              <div className="flex justify-center pt-6">
-                <Button variant="outline" onClick={loadMore} disabled={isFetchingNextPage}>
-                  {isFetchingNextPage ? (
-                    <>
-                      <LoadingSpinner size="sm" />
-                      <span className="ml-2">Loading...</span>
-                    </>
-                  ) : (
-                    'Load More Products'
-                  )}
-                </Button>
-              </div>
-            )}
-
-            {/* Empty State */}
-            {filteredProducts.length === 0 && (
-              <Card className="p-12 text-center">
-                <div className="text-gray-400 text-6xl mb-4">📦</div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Products Found</h3>
-                <p className="text-gray-600 mb-4">
-                  {filters.searchQuery || filters.category
-                    ? 'Try adjusting your filters or search terms'
-                    : 'Get started by creating your first product'}
-                </p>
-                <Button variant="primary" onClick={handleCreateProduct}>
-                  Create Your First Product
-                </Button>
-              </Card>
-            )}
-          </>
-        )}
-
-        {/* Demo Notice */}
-        <Card className="p-4 bg-blue-50 border-blue-200">
-          <div className="flex items-start gap-3">
-            <div className="text-blue-500 text-xl">💡</div>
-            <div>
-              <h4 className="font-semibold text-blue-800">Hybrid Demo Mode</h4>
-              <p className="text-blue-700 text-sm mt-1">
-                This view combines your real database products with advanced demo features. Products
-                marked "DEMO" showcase wireframe-compliant advanced functionality. Switch between
-                "All Products", "Real Data", or "Demo Data" to see different views.
-              </p>
+        <Card className="p-6 bg-gradient-to-r from-orange-50 to-yellow-50 border-orange-200">
+          <div className="flex items-center">
+            <div className="w-12 h-12 rounded-xl bg-orange-500 flex items-center justify-center text-white font-bold text-lg">
+              ✨
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Demo Products</p>
+              <p className="text-2xl font-bold text-gray-900">{mockDataCount}</p>
             </div>
           </div>
         </Card>
       </div>
+
+      {/* Filters */}
+      <Suspense fallback={<ProductLoadingFallback />}>
+        <ProductFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          productCounts={{ total: totalCount, real: realDataCount, mock: mockDataCount }}
+        />
+      </Suspense>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <LoadingSpinner size="lg" />
+          <span className="ml-3 text-gray-600">Loading products...</span>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <Card className="p-6 text-center">
+          <div className="text-red-600 mb-4">
+            <svg
+              className="w-12 h-12 mx-auto"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to load products</h3>
+          <p className="text-gray-600 mb-4">{error.message}</p>
+          <Button onClick={() => window.location.reload()} variant="outline">
+            Try Again
+          </Button>
+        </Card>
+      )}
+
+      {/* Products Grid */}
+      {!isLoading && !error && (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {filteredProducts.map((product: HybridProduct) => (
+              <Suspense key={product.id} fallback={<ProductLoadingFallback />}>
+                <AdvancedProductCard product={product} />
+              </Suspense>
+            ))}
+          </div>
+
+          {/* Load More */}
+          {hasNextPage && (
+            <div className="flex justify-center pt-6">
+              <Button variant="outline" onClick={loadMore} disabled={isFetchingNextPage}>
+                {isFetchingNextPage ? 'Loading...' : 'Load More Products'}
+              </Button>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {filteredProducts.length === 0 && !isLoading && (
+            <Card className="p-12 text-center">
+              <div className="text-gray-400 mb-4">
+                <svg
+                  className="w-16 h-16 mx-auto"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
+              <p className="text-gray-600 mb-4">
+                Try adjusting your filters or add some products to get started.
+              </p>
+              {onAddProduct && (
+                <Button onClick={onAddProduct} className="bg-emerald-600 hover:bg-emerald-700">
+                  Add Your First Product
+                </Button>
+              )}
+            </Card>
+          )}
+        </>
+      )}
     </div>
   );
 }

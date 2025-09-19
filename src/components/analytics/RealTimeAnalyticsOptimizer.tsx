@@ -23,12 +23,27 @@ import {
   CpuChipIcon,
   DocumentChartBarIcon,
   EyeIcon,
-  FireIcon,
   LightBulbIcon,
   RocketLaunchIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline';
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+
+// Lazy-loaded tab components for code splitting
+const OverviewTab = lazy(() => import('./tabs/OverviewTab'));
+const HypothesesTab = lazy(() => import('./tabs/HypothesesTab'));
+const PerformanceTab = lazy(() => import('./tabs/PerformanceTab'));
+const PredictionsTab = lazy(() => import('./tabs/PredictionsTab'));
+
+// Loading fallback for analytics tabs
+const AnalyticsTabLoadingFallback = ({ tabName }: { tabName: string }) => (
+  <div className="flex items-center justify-center p-8">
+    <div className="flex flex-col items-center space-y-4">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <p className="text-sm text-gray-600">Loading {tabName}...</p>
+    </div>
+  </div>
+);
 
 // Component Traceability Matrix
 const COMPONENT_MAPPING = {
@@ -570,64 +585,24 @@ export default function RealTimeAnalyticsOptimizer({
       {/* Tab Content */}
       <div className="p-6">
         {selectedView === 'overview' && (
-          <div className="space-y-6">
-            {/* Key Metrics Grid */}
-            <div
-              className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2 lg:grid-cols-4'} gap-4`}
-            >
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Active Hypotheses</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {analyticsData.hypothesesMetrics.length}
-                    </p>
-                  </div>
-                  <LightBulbIcon className="w-8 h-8 text-yellow-500" />
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Avg. Progress</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {analyticsData.hypothesesMetrics.length > 0
-                        ? (
-                            analyticsData.hypothesesMetrics.reduce(
-                              (sum, h) => sum + h.progressPercentage,
-                              0
-                            ) / analyticsData.hypothesesMetrics.length
-                          ).toFixed(1)
-                        : 0}
-                      %
-                    </p>
-                  </div>
-                  <ChartBarIcon className="w-8 h-8 text-blue-500" />
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Optimization Score</p>
-                    <p
-                      className={`text-2xl font-bold ${
-                        optimizationScore >= 90
-                          ? 'text-green-600'
-                          : optimizationScore >= 70
-                            ? 'text-yellow-600'
-                            : 'text-red-600'
-                      }`}
-                    >
-                      {optimizationScore.toFixed(0)}
-                    </p>
-                  </div>
-                  <FireIcon className="w-8 h-8 text-orange-500" />
-                </div>
-              </div>
-            </div>
-          </div>
+          <Suspense fallback={<AnalyticsTabLoadingFallback tabName="Overview" />}>
+            <OverviewTab analyticsData={analyticsData} isMobile={isMobile} />
+          </Suspense>
+        )}
+        {selectedView === 'hypotheses' && (
+          <Suspense fallback={<AnalyticsTabLoadingFallback tabName="Hypotheses" />}>
+            <HypothesesTab analyticsData={analyticsData} isMobile={isMobile} />
+          </Suspense>
+        )}
+        {selectedView === 'performance' && (
+          <Suspense fallback={<AnalyticsTabLoadingFallback tabName="Performance" />}>
+            <PerformanceTab analyticsData={analyticsData} isMobile={isMobile} />
+          </Suspense>
+        )}
+        {selectedView === 'predictions' && (
+          <Suspense fallback={<AnalyticsTabLoadingFallback tabName="Predictions" />}>
+            <PredictionsTab analyticsData={analyticsData} isMobile={isMobile} />
+          </Suspense>
         )}
       </div>
     </div>

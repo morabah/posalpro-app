@@ -113,19 +113,27 @@ const baseConfig = {
     'pdf-lib',
   ],
 
-  // ✅ CRITICAL: Optimize images for performance
+  // ✅ CRITICAL: Enhanced image optimization for performance
   images: {
     domains: ['localhost'],
     formats: ['image/webp', 'image/avif'],
-    // ✅ CRITICAL: Image optimization for LCP
+    // ✅ CRITICAL: Image optimization for LCP with enhanced device sizes
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    minimumCacheTTL: 60,
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384, 512, 768],
+    minimumCacheTTL: 31536000, // 1 year for optimized images
     dangerouslyAllowSVG: true,
+    // Enhanced security policy
     contentSecurityPolicy:
       process.env.NODE_ENV === 'production'
         ? "default-src 'self'; script-src 'self' https://unpkg.com; sandbox;"
         : "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; sandbox;",
+    // Enable remote patterns for external images
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
   },
 
   // Keep strict checks; do not ignore errors during builds

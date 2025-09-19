@@ -1,13 +1,9 @@
 'use client';
 
-import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { formatCurrency, formatDate, truncateText } from '@/utils/formatters';
-import { ArrowPathIcon, EyeIcon } from '@heroicons/react/24/outline';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 
 // ====================
 // Modern React Query Hooks
@@ -34,6 +30,28 @@ import {
   useVersionHistoryInteractionActions,
   useVersionHistoryStore,
 } from '@/lib/store/versionHistoryStore';
+
+// ====================
+// Lazy-loaded Components
+// ====================
+
+const VersionHistoryFilters = lazy(() => import('./components/VersionHistoryFilters'));
+const VersionHistoryStats = lazy(() => import('./components/VersionHistoryStats'));
+const VersionHistoryList = lazy(() => import('./components/VersionHistoryList'));
+const BulkActionsPanel = lazy(() => import('./components/BulkActionsPanel'));
+
+// ====================
+// Loading Fallback Component
+// ====================
+
+const VersionHistoryLoadingFallback = ({ section }: { section: string }) => (
+  <div className="flex items-center justify-center p-8">
+    <div className="flex flex-col items-center space-y-4">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <p className="text-sm text-gray-600">Loading {section}...</p>
+    </div>
+  </div>
+);
 
 // ====================
 // Component Traceability Matrix (CTM) - Enhanced
@@ -483,139 +501,26 @@ export default function ProposalVersionHistoryPage() {
               )}
             </div>
             {/* Controls */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-6">
-              <div className="lg:col-span-3 flex items-center space-x-2">
-                <Input
-                  value={proposalIdQuery}
-                  onChange={e => setProposalIdQuery(e.target.value)}
-                  placeholder="Proposal ID (optional)"
-                  aria-label="Proposal ID filter"
-                />
-                <Button
-                  onClick={handleProposalIdSubmit}
-                  variant="outline"
-                  aria-label="Apply proposal filter"
-                >
-                  Filter
-                </Button>
-              </div>
-
-              <div className="lg:col-span-3">
-                <Input
-                  value={filters.searchText}
-                  onChange={e => handleFilterChange('search', e.target.value)}
-                  placeholder="Search title or description"
-                  aria-label="Search version history"
-                />
-              </div>
-
-              <div className="lg:col-span-2">
-                <Select
-                  value={filters.timeRange}
-                  onChange={value => handleFilterChange('timeRange', value)}
-                  options={[
-                    { value: '7d', label: 'Last 7 days' },
-                    { value: '30d', label: 'Last 30 days' },
-                    { value: '90d', label: 'Last 90 days' },
-                    { value: 'all', label: 'All time' },
-                  ]}
-                  placeholder="Select time range"
-                  aria-label="Time range filter"
-                />
-              </div>
-
-              <div className="lg:col-span-2">
-                <Input
-                  value={filters.userFilter}
-                  onChange={e => handleFilterChange('user', e.target.value)}
-                  placeholder="Filter by user"
-                  aria-label="User filter"
-                />
-              </div>
-
-              <div className="lg:col-span-2 flex items-center space-x-2 justify-end">
-                <Button
-                  variant="outline"
-                  onClick={handleRefresh}
-                  disabled={isRefetching || isRefreshing}
-                  aria-label="Refresh data"
-                >
-                  <ArrowPathIcon className={`w-4 h-4 mr-2 ${isRefetching ? 'animate-spin' : ''}`} />
-                  Refresh
-                </Button>
-                <Button variant="outline" onClick={handleExportCsv} aria-label="Export to CSV">
-                  Export CSV
-                </Button>
-              </div>
-            </div>
-
-            {/* Change Type Filters */}
-            <div
-              className="flex flex-wrap items-center gap-2 mb-4"
-              role="group"
-              aria-label="Change type filters"
-            >
-              {[
-                { key: 'create', label: 'Create', color: 'bg-green-100 text-green-800' },
-                { key: 'update', label: 'Update', color: 'bg-blue-100 text-blue-800' },
-                { key: 'delete', label: 'Delete', color: 'bg-red-100 text-red-800' },
-                {
-                  key: 'batch_import',
-                  label: 'Batch Import',
-                  color: 'bg-purple-100 text-purple-800',
-                },
-                {
-                  key: 'rollback',
-                  label: 'Rollback',
-                  color: 'bg-orange-100 text-orange-800',
-                },
-                {
-                  key: 'status_change',
-                  label: 'Status Change',
-                  color: 'bg-yellow-100 text-yellow-800',
-                },
-                {
-                  key: 'INITIAL',
-                  label: 'Initial',
-                  color: 'bg-indigo-100 text-indigo-800',
-                },
-              ].map(cfg => {
-                const active = filters.changeTypeFilters.includes(cfg.key as any);
-                return (
-                  <button
-                    key={cfg.key}
-                    onClick={() => {
-                      filterActions.toggleChangeTypeFilter(cfg.key as any);
-                    }}
-                    className={`px-2 py-1 text-xs rounded-full border ${
-                      active
-                        ? `${cfg.color} border-transparent`
-                        : 'bg-white text-gray-700 border-gray-200'
-                    }`}
-                    aria-pressed={active}
-                  >
-                    {cfg.label}
-                  </button>
-                );
-              })}
-              {(filters.changeTypeFilters.length > 0 ||
-                filters.searchText ||
-                filters.userFilter) && (
-                <Button variant="secondary" size="sm" onClick={handleClearFilters}>
-                  Clear filters
-                </Button>
-              )}
-            </div>
+            <Suspense fallback={<VersionHistoryLoadingFallback section="Filters" />}>
+              <VersionHistoryFilters
+                proposalIdQuery={proposalIdQuery}
+                setProposalIdQuery={setProposalIdQuery}
+                filters={filters}
+                filterActions={filterActions}
+                handleProposalIdSubmit={handleProposalIdSubmit}
+                handleFilterChange={handleFilterChange}
+                handleRefresh={handleRefresh}
+                handleExportCsv={handleExportCsv}
+                handleClearFilters={handleClearFilters}
+                isRefetching={isRefetching}
+                isRefreshing={isRefreshing}
+              />
+            </Suspense>
 
             {/* Statistics */}
-            <div className="flex flex-wrap items-center gap-3 mb-6" aria-label="Summary stats">
-              <Badge>{stats.total} changes</Badge>
-              <Badge variant="secondary">{stats.uniqueUsers} users</Badge>
-              <Badge variant="outline">{stats.byType.create} creates</Badge>
-              <Badge variant="outline">{stats.byType.update} updates</Badge>
-              <Badge variant="outline">{stats.byType.delete} deletes</Badge>
-              <Badge variant="outline">{stats.byType.batch_import} imports</Badge>
-            </div>
+            <Suspense fallback={<VersionHistoryLoadingFallback section="Statistics" />}>
+              <VersionHistoryStats stats={stats} />
+            </Suspense>
 
             {/* Loading State */}
             {isLoading && (
@@ -668,173 +573,17 @@ export default function ProposalVersionHistoryPage() {
 
             {/* Version History List */}
             {!isLoading && !error && Object.keys(filteredGrouped).length > 0 && (
-              <div className="space-y-4">
-                {Object.entries(filteredGrouped).map(([pid, list]) => {
-                  const title = proposalTitles[pid] || pid;
-                  return (
-                    <div key={pid} className="border border-gray-200 rounded-lg">
-                      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              checked={list.every(entry => selectedEntryIds.includes(entry.id))}
-                              onChange={e => {
-                                const entryIds = list.map(entry => entry.id);
-                                if (e.target.checked) {
-                                  interactionActions.selectAllEntries(entryIds);
-                                } else {
-                                  entryIds.forEach(id => interactionActions.deselectEntry(id));
-                                }
-                              }}
-                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                              aria-label={`Select all versions for ${title}`}
-                            />
-                            <h3 className="font-medium text-gray-900">
-                              {title} • {list.length} version{list.length !== 1 ? 's' : ''}
-                            </h3>
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Latest: {formatDate(list[0]?.createdAt || new Date(), 'medium')}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="divide-y divide-gray-200">
-                        {list.map(entry => (
-                          <div key={entry.id} className="p-4">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-3 mb-2">
-                                  <span className="font-medium text-gray-900">
-                                    Version {entry.version}
-                                  </span>
-                                  <span
-                                    className={`px-2 py-1 text-xs rounded-full ${
-                                      entry.changeType === 'create'
-                                        ? 'bg-green-100 text-green-800'
-                                        : entry.changeType === 'update'
-                                          ? 'bg-blue-100 text-blue-800'
-                                          : entry.changeType === 'delete'
-                                            ? 'bg-red-100 text-red-800'
-                                            : 'bg-purple-100 text-purple-800'
-                                    }`}
-                                  >
-                                    {String(entry.changeType).replace('_', ' ')}
-                                  </span>
-                                  <span className="text-sm text-gray-500">
-                                    {formatDate(entry.createdAt, 'medium')} •{' '}
-                                    {entry.createdAt.toLocaleTimeString()}
-                                  </span>
-                                </div>
-
-                                <p className="text-gray-700 mb-2">
-                                  {truncateText(entry.changesSummary || 'Proposal change', 120)}
-                                </p>
-
-                                <div className="grid grid-cols-3 gap-4 text-sm">
-                                  <div>
-                                    <span className="font-medium">Changed by:</span>{' '}
-                                    {entry.createdByName || entry.createdBy || 'system'}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">Total Value:</span>{' '}
-                                    {typeof entry.totalValue === 'number'
-                                      ? formatCurrency(entry.totalValue)
-                                      : '—'}
-                                  </div>
-                                </div>
-
-                                {/* Expanded Detail View */}
-                                {expandedEntryIds.includes(entry.id) && expandedEntryDetail.data && (
-                                  <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm">
-                                    <div className="font-medium text-gray-900 mb-2">Change Details</div>
-                                    <div className="text-gray-700 mb-2">
-                                      {expandedEntryDetail.data.changesSummary || 'No additional details available'}
-                                    </div>
-
-                                    {expandedEntryDetail.data.changeDetails && (
-                                      <div className="mb-2 text-gray-700">
-                                        <span className="font-medium">Grand total:</span>{' '}
-                                        {typeof (expandedEntryDetail.data.changeDetails as any).totalBefore === 'number' &&
-                                        typeof (expandedEntryDetail.data.changeDetails as any).totalAfter === 'number'
-                                          ? `${formatCurrency((expandedEntryDetail.data.changeDetails as any).totalBefore)} → ${formatCurrency((expandedEntryDetail.data.changeDetails as any).totalAfter)} (${((expandedEntryDetail.data.changeDetails as any).totalDelta >= 0 ? '+' : '')}${formatCurrency((expandedEntryDetail.data.changeDetails as any).totalDelta)})`
-                                          : '—'}
-                                      </div>
-                                    )}
-
-                                    {expandedEntryDetail.data.changes && (
-                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        <div>
-                                          <div className="font-medium text-gray-900">Added</div>
-                                          <ul className="list-disc list-inside text-gray-700">
-                                            {(expandedEntryDetail.data.changes.added || []).map((p: any, idx: number) => (
-                                              <li key={`add-${p.productId}-${idx}`}>
-                                                {p.name || p.productId} × {p.quantity}
-                                              </li>
-                                            ))}
-                                            {expandedEntryDetail.data.changes.added?.length === 0 && (
-                                              <li className="text-gray-400">None</li>
-                                            )}
-                                          </ul>
-                                        </div>
-                                        <div>
-                                          <div className="font-medium text-gray-900">Removed</div>
-                                          <ul className="list-disc list-inside text-gray-700">
-                                            {(expandedEntryDetail.data.changes.removed || []).map((p: any, idx: number) => (
-                                              <li key={`rem-${p.productId}-${idx}`}>
-                                                {p.name || p.productId} × {p.quantity}
-                                              </li>
-                                            ))}
-                                            {expandedEntryDetail.data.changes.removed?.length === 0 && (
-                                              <li className="text-gray-400">None</li>
-                                            )}
-                                          </ul>
-                                        </div>
-                                        <div>
-                                          <div className="font-medium text-gray-900">Updated</div>
-                                          <ul className="list-disc list-inside text-gray-700">
-                                            {(expandedEntryDetail.data.changes.updated || []).map((u: any, idx: number) => (
-                                              <li key={`upd-${u.productId}-${idx}`}>
-                                                {u.name || u.productId}
-                                              </li>
-                                            ))}
-                                            {expandedEntryDetail.data.changes.updated?.length === 0 && (
-                                              <li className="text-gray-400">None</li>
-                                            )}
-                                          </ul>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="flex items-center space-x-2 ml-4">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedEntryIds.includes(entry.id)}
-                                  onChange={() => interactionActions.toggleEntrySelection(entry.id)}
-                                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                                  aria-label={`Select version ${entry.version} for bulk actions`}
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleToggleExpansion(entry.id)}
-                                  aria-label="View details"
-                                >
-                                  <EyeIcon className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <Suspense fallback={<VersionHistoryLoadingFallback section="Version History" />}>
+                <VersionHistoryList
+                  filteredGrouped={filteredGrouped}
+                  proposalTitles={proposalTitles}
+                  selectedEntryIds={selectedEntryIds}
+                  expandedEntryIds={expandedEntryIds}
+                  expandedEntryDetail={expandedEntryDetail}
+                  interactionActions={interactionActions}
+                  handleToggleExpansion={handleToggleExpansion}
+                />
+              </Suspense>
             )}
 
             {/* Load More Button */}
@@ -861,37 +610,14 @@ export default function ProposalVersionHistoryPage() {
 
             {/* Bulk Actions */}
             {selectedEntryIds.length > 0 && (
-              <div className="fixed bottom-4 right-4 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
-                <div className="flex items-center space-x-3">
-                  <span className="text-sm text-gray-600">
-                    {selectedEntryIds.length} item{selectedEntryIds.length !== 1 ? 's' : ''}{' '}
-                    selected
-                  </span>
-                  <Button
-                    onClick={handleBulkDelete}
-                    disabled={bulkDeleteMutation.isPending}
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 border-red-300 hover:bg-red-50"
-                  >
-                    {bulkDeleteMutation.isPending ? (
-                      <>
-                        <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      'Delete Selected'
-                    )}
-                  </Button>
-                  <Button
-                    onClick={() => interactionActions.clearSelection()}
-                    variant="outline"
-                    size="sm"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
+              <Suspense fallback={null}>
+                <BulkActionsPanel
+                  selectedEntryIds={selectedEntryIds}
+                  handleBulkDelete={handleBulkDelete}
+                  bulkDeleteMutation={bulkDeleteMutation}
+                  interactionActions={interactionActions}
+                />
+              </Suspense>
             )}
           </div>
         </Card>

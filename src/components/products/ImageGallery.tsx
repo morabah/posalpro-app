@@ -12,6 +12,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { useDeleteProductImage } from '@/features/products/hooks/useProductImages';
 import React, { useState } from 'react';
 // Removed alert import - using custom error display
@@ -117,21 +118,21 @@ export function ImageGallery({
                       <ImageIcon className="h-8 w-8" aria-hidden="true" />
                     </div>
                   ) : (
-                    <img
+                    <OptimizedImage
                       src={imageUrl}
                       alt={`Product image ${index + 1}`}
-                      className="w-full h-full object-cover cursor-pointer transition-transform group-hover:scale-105"
-                      loading="lazy"
-                      decoding="async"
-                      crossOrigin="anonymous"
+                      fill
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
+                      quality={80}
+                      className="object-cover cursor-pointer transition-transform group-hover:scale-105"
                       onError={() => {
                         setBrokenImages(prev => new Set(prev).add(imageUrl));
                       }}
                       onClick={() => handleImageClick(imageUrl)}
-                      onKeyDown={e => handleKeyDown(e, imageUrl)}
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`View product image ${index + 1}`}
+                      component="ImageGallery"
+                      operation="product_image_display"
+                      userStory="US-4.1"
+                      hypothesis="H8"
                     />
                   )}
 
@@ -223,16 +224,21 @@ export function ImageGallery({
                 <ImageIcon className="h-10 w-10 text-gray-400" aria-hidden="true" />
               </div>
             ) : (
-              <img
+              <OptimizedImage
                 src={selectedImage}
                 alt="Product image"
+                width={800}
+                height={600}
+                quality={90}
+                priority
                 className="max-w-full max-h-full object-contain rounded-lg"
-                loading="eager"
-                decoding="async"
-                crossOrigin="anonymous"
                 onError={() => {
                   setBrokenImages(prev => new Set(prev).add(selectedImage));
                 }}
+                component="ImageGallery"
+                operation="lightbox_display"
+                userStory="US-4.1"
+                hypothesis="H8"
               />
             )}
 

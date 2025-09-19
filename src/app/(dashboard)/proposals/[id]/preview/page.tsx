@@ -13,16 +13,27 @@
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/forms/Button';
+import type { Proposal } from '@/features/proposals/schemas';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useProposal } from '@/hooks/useProposal';
 import { logDebug, logError, logInfo } from '@/lib/logger';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Download, Printer } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import type { Proposal } from '@/features/proposals/schemas';
+
+// Lazy-loaded components for code splitting
+const PDFExportButton = lazy(() => import('./components/PDFExportButton'));
+const PrintStyles = lazy(() => import('./components/PrintStyles'));
+
+// Loading fallback for PDF components
+const PDFLoadingFallback = () => (
+  <div className="flex items-center justify-center p-2">
+    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+  </div>
+);
 
 interface ProposalPreviewPageProps {
   params: Promise<{ id: string }>;
@@ -141,7 +152,11 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
   const analytics = useOptimizedAnalytics();
   const router = useRouter();
   const apiClient = useApiClient();
-  const { data: proposalData, isLoading, error } = useProposal(proposalId, {
+  const {
+    data: proposalData,
+    isLoading,
+    error,
+  } = useProposal(proposalId, {
     staleTime: 0,
     refetchOnMount: true,
   });
@@ -149,7 +164,7 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
   // Cast to the correct type that includes relations
   const proposal = proposalData as ProposalWithRelations | undefined;
 
-  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  // PDF export state moved to lazy component
 
   // Stable effects - only depend on primitive values
   useEffect(() => {
@@ -174,7 +189,8 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
       if (!proposal || !Array.isArray(proposal.products) || proposal.products.length === 0) return;
 
       const needsHydration = proposal.products.filter(
-        (p: ProposalProduct) => !p?.product?.name || p.product?.name?.toLowerCase() === 'unknown product'
+        (p: ProposalProduct) =>
+          !p?.product?.name || p.product?.name?.toLowerCase() === 'unknown product'
       );
 
       if (needsHydration.length === 0) return;
@@ -186,7 +202,10 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
         );
 
         const list = res?.data ?? res?.items ?? [];
-        const byId = new Map<string, { id: string; name: string; sku: string; category?: string }>();
+        const byId = new Map<
+          string,
+          { id: string; name: string; sku: string; category?: string }
+        >();
         for (const item of list || []) byId.set(item.id, item);
 
         const cacheKey = `proposal-preview-${proposalId}`;
@@ -250,87 +269,7 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
     toast.success('Print dialog opened');
   }, [analytics, proposalId]);
 
-  const handleDownloadPDF = useCallback(async () => {
-    if (!proposal) return;
-
-    try {
-      setIsExportingPDF(true);
-
-      analytics.trackOptimized('proposal_pdf_export_started', {
-        proposalId,
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
-      });
-
-      const html2pdf = (await import('html2pdf.js')).default;
-
-      const targetElement = document.getElementById('proposal-content');
-      if (!targetElement) {
-        throw new Error('Proposal content not found');
-      }
-
-      const clone = targetElement.cloneNode(true) as HTMLElement;
-
-      clone.style.backgroundColor = 'white';
-      clone.style.color = 'black';
-      clone.style.fontFamily = 'Arial, sans-serif';
-      clone.style.padding = '20px';
-      clone.style.margin = '0';
-
-      const elementsToHide = clone.querySelectorAll(
-        'button, .no-print, [data-no-print], .sticky, .fixed'
-      );
-      elementsToHide.forEach(el => {
-        (el as HTMLElement).style.display = 'none';
-      });
-
-      const pdfOptions = {
-        margin: [10, 10, 10, 10],
-        filename: `posalpro-proposal-${proposalId}-${new Date().toISOString().split('T')[0]}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#ffffff',
-        },
-        jsPDF: {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait',
-        },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-      };
-
-      await html2pdf().from(clone).set(pdfOptions).save();
-
-      analytics.trackOptimized('proposal_pdf_export_success', {
-        proposalId,
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
-      });
-
-      toast.success('PDF downloaded successfully!');
-    } catch (error) {
-      logError('PDF export failed', {
-        component: 'ProposalPreviewPage',
-        operation: 'download_pdf',
-        proposalId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-
-      analytics.trackOptimized('proposal_pdf_export_error', {
-        proposalId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        userStory: 'US-3.2',
-        hypothesis: 'H4',
-      });
-
-      toast.error('Failed to export PDF. Please try again.');
-    } finally {
-      setIsExportingPDF(false);
-    }
-  }, [proposal, proposalId, analytics]);
+  // PDF export functionality moved to lazy component
 
   const handleBack = useCallback(() => {
     router.push(`/proposals/${proposalId}`);
@@ -395,12 +334,18 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
 
   const calculateTotal = (proposal: ProposalData) => {
     if (proposal?.products && proposal.products.length > 0) {
-      return proposal.products.reduce((sum: number, product: ProposalProduct) => sum + (product.total || 0), 0);
+      return proposal.products.reduce(
+        (sum: number, product: ProposalProduct) => sum + (product.total || 0),
+        0
+      );
     }
 
     const productData = proposal?.metadata ? getProductData(proposal.metadata) : null;
     if (productData?.products && productData.products.length > 0) {
-      return productData.products.reduce((sum: number, product: { total?: number }) => sum + (product.total || 0), 0);
+      return productData.products.reduce(
+        (sum: number, product: { total?: number }) => sum + (product.total || 0),
+        0
+      );
     }
 
     return 0;
@@ -417,14 +362,22 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
 
   const products = getProducts(proposal as ProposalData);
   const totalValue = calculateTotal(proposal as ProposalData);
-  const teamData = (proposal as ProposalData)?.metadata ? getTeamData((proposal as ProposalData).metadata!) : null;
-  const sectionData = (proposal as ProposalData)?.metadata ? getSectionData((proposal as ProposalData).metadata!) : null;
+  const teamData = (proposal as ProposalData)?.metadata
+    ? getTeamData((proposal as ProposalData).metadata!)
+    : null;
+  const sectionData = (proposal as ProposalData)?.metadata
+    ? getSectionData((proposal as ProposalData).metadata!)
+    : null;
 
   // Summary calculation - pure functions only
   const productsSummary = {
     totalItems: products?.reduce((sum: number, p: any) => sum + (p.quantity || 1), 0) || 0,
-    categories: new Set(products?.map((p: any) => p.product?.category || 'General').filter(Boolean) || []),
-    avgPrice: products?.length ? totalValue / (products.reduce((sum: number, p: any) => sum + (p.quantity || 1), 0) || 1) : 0,
+    categories: new Set(
+      products?.map((p: any) => p.product?.category || 'General').filter(Boolean) || []
+    ),
+    avgPrice: products?.length
+      ? totalValue / (products.reduce((sum: number, p: any) => sum + (p.quantity || 1), 0) || 1)
+      : 0,
   };
 
   return (
@@ -445,15 +398,9 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
               <Printer className="h-4 w-4 mr-2" />
               Print
             </Button>
-            <Button
-              onClick={handleDownloadPDF}
-              variant="primary"
-              size="sm"
-              disabled={isExportingPDF}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              {isExportingPDF ? 'Exporting...' : 'Save as PDF'}
-            </Button>
+            <Suspense fallback={<PDFLoadingFallback />}>
+              <PDFExportButton proposalId={proposalId} proposal={proposal} />
+            </Suspense>
           </div>
         </div>
       </div>
@@ -543,7 +490,8 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
                   <div className="space-y-1 text-sm">
                     <div>{(proposal.customer as CustomerData)?.address || 'N/A'}</div>
                     <div>
-                      {(proposal.customer as CustomerData)?.city && (proposal.customer as CustomerData)?.state
+                      {(proposal.customer as CustomerData)?.city &&
+                      (proposal.customer as CustomerData)?.state
                         ? `${(proposal.customer as CustomerData)?.city}, ${(proposal.customer as CustomerData)?.state}`
                         : 'N/A'}
                     </div>
@@ -567,16 +515,10 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
                     <th className="px-4 py-3 text-left font-semibold text-gray-700 rounded-tl-lg">
                       #
                     </th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                      Part Number
-                    </th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                      Description
-                    </th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Part Number</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Description</th>
                     <th className="px-4 py-3 text-center font-semibold text-gray-700">Qty</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                      Unit Price
-                    </th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-700">Unit Price</th>
                     <th className="px-4 py-3 text-right font-semibold text-gray-700 rounded-tr-lg">
                       Total
                     </th>
@@ -649,9 +591,7 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
           {/* Additional metrics */}
           <div className="grid grid-cols-3 gap-4 pt-4 border-t border-green-200">
             <div className="text-center">
-              <div className="text-lg font-semibold text-gray-900">
-                {products.length}
-              </div>
+              <div className="text-lg font-semibold text-gray-900">{products.length}</div>
               <div className="text-sm text-gray-600">Products</div>
             </div>
             <div className="text-center">
@@ -709,18 +649,23 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Additional Sections</h2>
             <div className="space-y-6">
-              {sectionData.sections.map((section: { id: string; title: string; content: string; type: string }, index: number) => (
-                <Card key={index} className="p-6">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                    {section.title || `Section ${index + 1}`}
-                  </h3>
-                  {section.content && (
-                    <div className="prose prose-sm max-w-none">
-                      <div dangerouslySetInnerHTML={{ __html: section.content }} />
-                    </div>
-                  )}
-                </Card>
-              ))}
+              {sectionData.sections.map(
+                (
+                  section: { id: string; title: string; content: string; type: string },
+                  index: number
+                ) => (
+                  <Card key={index} className="p-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-4">
+                      {section.title || `Section ${index + 1}`}
+                    </h3>
+                    {section.content && (
+                      <div className="prose prose-sm max-w-none">
+                        <div dangerouslySetInnerHTML={{ __html: section.content }} />
+                      </div>
+                    )}
+                  </Card>
+                )
+              )}
             </div>
           </div>
         )}
@@ -740,93 +685,10 @@ function ProposalPreviewContent({ proposalId }: { proposalId: string }) {
         </div>
       </div>
 
-      {/* Enhanced Print Styles - Leveraging existing patterns */}
-      <style jsx global>{`
-        @media print {
-          @page {
-            margin: 0.75in;
-            size: A4;
-          }
-
-          .no-print {
-            display: none !important;
-          }
-
-          .print\\:hidden {
-            display: none !important;
-          }
-
-          .print\\:bg-white {
-            background: white !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-
-          .print\\:shadow-none {
-            box-shadow: none !important;
-          }
-
-          body {
-            font-size: 12pt;
-            line-height: 1.4;
-            color: black;
-          }
-
-          h1 { font-size: 24pt; margin-bottom: 12pt; }
-          h2 { font-size: 18pt; margin-bottom: 10pt; }
-          h3 { font-size: 16pt; margin-bottom: 8pt; }
-
-          table {
-            border-collapse: collapse;
-            width: 100%;
-            margin-bottom: 20pt;
-          }
-
-          th, td {
-            border: 1pt solid #ddd;
-            padding: 6pt;
-            text-align: left;
-          }
-
-          th {
-            background-color: #f5f5f5 !important;
-            font-weight: bold;
-          }
-
-          .break-inside-avoid {
-            page-break-inside: avoid;
-            break-inside: avoid;
-          }
-
-          .total-section {
-            border: 2pt solid #28a745;
-            padding: 12pt;
-            margin: 20pt 0;
-            background-color: #f8f9fa !important;
-          }
-
-          .terms-section {
-            margin-top: 30pt;
-            page-break-before: avoid;
-          }
-
-          .section-spacing {
-            margin-bottom: 20pt;
-          }
-
-          .print-header {
-            border-bottom: 2pt solid #333;
-            padding-bottom: 10pt;
-            margin-bottom: 20pt;
-          }
-
-          .proposal-content {
-            max-width: none !important;
-            margin: 0 !important;
-            padding: 20pt !important;
-          }
-        }
-      `}</style>
+      {/* Enhanced Print Styles - Lazy loaded for code splitting */}
+      <Suspense fallback={null}>
+        <PrintStyles />
+      </Suspense>
     </div>
   );
 }

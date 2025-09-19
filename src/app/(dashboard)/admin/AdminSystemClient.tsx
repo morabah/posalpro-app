@@ -113,7 +113,15 @@ export function AdminSystemClient() {
 
   // Preload next tab for better UX
   const preloadNextTab = (currentTab: AdminTabType) => {
-    const tabOrder: AdminTabType[] = ['overview', 'users', 'roles', 'permissions', 'integration', 'config', 'backup'];
+    const tabOrder: AdminTabType[] = [
+      'overview',
+      'users',
+      'roles',
+      'permissions',
+      'integration',
+      'config',
+      'backup',
+    ];
     const currentIndex = tabOrder.indexOf(currentTab);
     const nextTab = tabOrder[currentIndex + 1];
 
