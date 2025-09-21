@@ -16,6 +16,8 @@ import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import { prisma } from '@/lib/prisma';
 import { logError, logInfo } from '@/lib/logger';
+import { createProposalVersionIfChanged } from '@/lib/versioning/proposalVersionUtils';
+import { clearCache, deleteCache } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,28 +70,25 @@ export const POST = createRoute(
           },
         });
 
-        // Create workflow audit log
-        await tx.proposalVersion.create({
-          data: {
-            proposalId: body!.proposalId,
-            version: proposal.version + 1,
-            createdBy: user.id,
-            changeType: 'STATUS_UPDATE',
-            changesSummary: `Status changed to ${body!.status}`,
-            snapshot: {
-              status: body!.status,
-              updatedAt: new Date().toISOString(),
-              updatedBy: user.id,
-              comment: body!.comment,
-            },
+        const versionResult = await createProposalVersionIfChanged(tx, {
+          proposalId: body!.proposalId,
+          changeType: 'STATUS_UPDATE',
+          createdBy: user.id,
+          changesSummary: `Status changed to ${body!.status}`,
+          snapshot: {
+            status: body!.status,
+            updatedAt: new Date().toISOString(),
+            updatedBy: user.id,
+            comment: body!.comment,
           },
         });
 
-        // Update proposal version
-        await tx.proposal.update({
-          where: { id: body!.proposalId },
-          data: { version: proposal.version + 1 },
-        });
+        if (versionResult.created) {
+          await tx.proposal.update({
+            where: { id: body!.proposalId },
+            data: { version: versionResult.version },
+          });
+        }
 
         return proposal;
       });
@@ -154,24 +153,27 @@ export const PUT = createRoute(
           },
         });
 
-        // Create workflow audit logs for each proposal
-        const auditLogs = body!.proposalIds.map(proposalId => ({
-          proposalId,
-          version: 1, // This would need to be fetched from current proposal
-          createdBy: user.id,
-          changeType: 'BULK_STATUS_UPDATE',
-          changesSummary: `Bulk status update to ${body!.status}`,
-          snapshot: {
-            status: body!.status,
-            updatedAt: new Date().toISOString(),
-            updatedBy: user.id,
-            comment: body!.comment,
-          },
-        }));
+        for (const proposalId of body!.proposalIds) {
+          const versionResult = await createProposalVersionIfChanged(tx, {
+            proposalId,
+            changeType: 'BULK_STATUS_UPDATE',
+            createdBy: user.id,
+            changesSummary: `Bulk status update to ${body!.status}`,
+            snapshot: {
+              status: body!.status,
+              updatedAt: new Date().toISOString(),
+              updatedBy: user.id,
+              comment: body!.comment,
+            },
+          });
 
-        await tx.proposalVersion.createMany({
-          data: auditLogs,
-        });
+          if (versionResult.created) {
+            await tx.proposal.update({
+              where: { id: proposalId },
+              data: { version: versionResult.version },
+            });
+          }
+        }
 
         return updatedProposals;
       });
@@ -183,6 +185,13 @@ export const PUT = createRoute(
         updatedCount: result.count,
         requestedCount: body!.proposalIds.length,
       });
+
+      // Invalidate related caches (list + stats)
+      try {
+        await Promise.all([clearCache('proposals:*'), deleteCache('proposal_stats')]);
+      } catch {
+        // Cache clearing failed, but workflow update succeeded - continue
+      }
 
       return Response.json(
         ok({

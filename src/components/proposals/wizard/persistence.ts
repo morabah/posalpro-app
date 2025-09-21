@@ -60,8 +60,9 @@ export function buildWizardPayloadFromStore(
     projectType: basicInfo.projectType || '',
     tags: basicInfo.tags || [],
     teamData: {
-      teamLead: teamData.teamLead || '',
-      salesRepresentative: teamData.salesRepresentative || '',
+      // Omit empty strings so optional validators pass
+      teamLead: teamData.teamLead || undefined,
+      salesRepresentative: teamData.salesRepresentative || undefined,
       subjectMatterExperts: teamData.subjectMatterExperts || {},
       executiveReviewers: teamData.executiveReviewers || [],
     },
@@ -159,7 +160,17 @@ export function buildCreateBodyFromStore(): any {
   const productData = stepData[4] || {};
   const sectionData = stepData[5] || {};
 
-  return {
+  const computedTotalValue = Number(
+    (productData?.totalValue ?? 0) ||
+      (Array.isArray(productData?.products)
+        ? productData!.products.reduce(
+            (s: number, p: any) => s + Number(p.total ?? (p.unitPrice || 0) * (p.quantity || 0)),
+            0
+          )
+        : 0)
+  );
+
+  const payload: any = {
     basicInfo: {
       title: basicInfo.title || '',
       description: basicInfo.description || '',
@@ -172,32 +183,74 @@ export function buildCreateBodyFromStore(): any {
             industry: basicInfo.customer.industry || undefined,
           }
         : undefined,
-      dueDate: basicInfo.dueDate || '',
+      dueDate: basicInfo.dueDate ? String(basicInfo.dueDate) : undefined,
       priority: basicInfo.priority || 'MEDIUM',
-      value: basicInfo.value || 0,
+      value: Number(basicInfo.value ?? computedTotalValue ?? 0),
       currency: basicInfo.currency || 'USD',
       projectType: basicInfo.projectType || '',
       tags: basicInfo.tags || [],
     },
-    teamData: {
-      teamLead: teamData.teamLead || '',
-      salesRepresentative: teamData.salesRepresentative || '',
+    planType,
+  };
+
+  // Only include teamData when any meaningful data is present
+  if (
+    teamData?.teamLead ||
+    teamData?.salesRepresentative ||
+    (teamData?.executiveReviewers && teamData.executiveReviewers.length > 0) ||
+    (teamData?.subjectMatterExperts &&
+      typeof teamData.subjectMatterExperts === 'object' &&
+      Object.keys(teamData.subjectMatterExperts).length > 0)
+  ) {
+    payload.teamData = {
+      teamLead: teamData.teamLead || undefined,
+      salesRepresentative: teamData.salesRepresentative || undefined,
       subjectMatterExperts: teamData.subjectMatterExperts || {},
       executiveReviewers: teamData.executiveReviewers || [],
-    },
-    contentData: {
+    };
+  }
+
+  // Only include contentData when any content-related data exists
+  if (
+    (contentData?.selectedTemplates && contentData.selectedTemplates.length > 0) ||
+    (contentData?.customContent && contentData.customContent.length > 0) ||
+    (contentData?.contentLibrary && contentData.contentLibrary.length > 0)
+  ) {
+    payload.contentData = {
       selectedTemplates: contentData.selectedTemplates || [],
       customContent: contentData.customContent || [],
       contentLibrary: contentData.contentLibrary || [],
-    },
-    productData: {
-      products: productData.products || [],
-      totalValue: productData.totalValue || 0,
-    },
-    sectionData: {
+    };
+  }
+
+  // Only include productData when products were selected
+  if (productData?.products && productData.products.length > 0) {
+    payload.productData = {
+      products: productData.products.map((p: any) => ({
+        id: String(p.id ?? ''),
+        productId: String(p.productId),
+        name: String(p.name || ''),
+        quantity: Number(p.quantity ?? 1),
+        unitPrice: Number(p.unitPrice ?? 0),
+        total: Number(p.total ?? (p.unitPrice || 0) * (p.quantity || 0)),
+        discount: Number(p.discount ?? 0),
+        category: String(p.category || 'General'),
+        configuration: p.configuration && typeof p.configuration === 'object' ? p.configuration : {},
+      })),
+      totalValue: computedTotalValue,
+    };
+  }
+
+  // Only include sectionData when sections exist
+  if (
+    (sectionData?.sections && sectionData.sections.length > 0) ||
+    (sectionData?.sectionTemplates && sectionData.sectionTemplates.length > 0)
+  ) {
+    payload.sectionData = {
       sections: sectionData.sections || [],
       sectionTemplates: sectionData.sectionTemplates || [],
-    },
-    planType,
-  };
+    };
+  }
+
+  return payload;
 }

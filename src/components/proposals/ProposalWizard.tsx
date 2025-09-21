@@ -18,7 +18,6 @@ import { Button } from '@/components/ui/forms/Button';
 import { useCreateProposal, useProposal, useUpdateProposal } from '@/features/proposals/hooks';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { http } from '@/lib/http';
-import type { ProposalWithRelations } from '@/types/proposal';
 import { logDebug, logError, logWarn } from '@/lib/logger';
 import {
   useProposalCanGoBack,
@@ -32,6 +31,7 @@ import {
   useProposalResetWizard,
   useProposalSetCurrentStep,
   useProposalSetPlanType,
+  useProposalSetStepData,
   useProposalStepData,
   useProposalStore,
   useProposalSubmitProposal,
@@ -41,8 +41,9 @@ import {
   type ProposalSectionData,
   type ProposalTeamData,
 } from '@/lib/store/proposalStore';
+import type { ProposalWithRelations } from '@/types/proposal';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   buildCreateBodyFromStore,
   buildWizardPayloadFromStore,
@@ -196,10 +197,11 @@ export function ProposalWizard({
   const toast = useToast();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
 
   // Use individual selectors to prevent object creation and infinite re-renders
   const currentStep = useProposalCurrentStep();
-  const totalSteps = useProposalTotalSteps();
+  const totalSteps = useProposalTotalSteps(); // Used for future step validation
   const planType = useProposalPlanType();
   const canProceed = useProposalCanProceed();
   const canGoBack = useProposalCanGoBack();
@@ -213,6 +215,7 @@ export function ProposalWizard({
   const updateProposalMutation = useUpdateProposal();
   const resetWizard = useProposalResetWizard();
   const initializeFromData = useProposalInitializeFromData();
+  const setStepData = useProposalSetStepData();
 
   // Hook must be called at component level, not inside callbacks
   const createProposal = useCreateProposal();
@@ -275,22 +278,41 @@ export function ProposalWizard({
 
       try {
         // ✅ FIXED: Pass raw proposal data to store (store handles transformation internally)
+        // ✅ ENHANCED: Standardize data type handling for consistent processing
         initializeFromData({
           ...proposalData,
           description: proposalData.description || undefined,
+          // ✅ STANDARDIZED: Normalize to date-only string for HTML date input (YYYY-MM-DD)
           dueDate: proposalData.dueDate
-            ? typeof proposalData.dueDate === 'string'
-              ? proposalData.dueDate
-              : (proposalData.dueDate as Date).toISOString()
+            ? (() => {
+                const iso =
+                  typeof proposalData.dueDate === 'string'
+                    ? proposalData.dueDate
+                    : (proposalData.dueDate as Date).toISOString();
+                return iso.includes('T') ? iso.split('T')[0] : iso;
+              })()
             : undefined,
+          // ✅ STANDARDIZED: Ensure assignedTo is always an array
           assignedTo: (proposalData as any).assignedTo
-            ? [(proposalData as any).assignedTo]
+            ? Array.isArray((proposalData as any).assignedTo)
+              ? (proposalData as any).assignedTo
+              : [(proposalData as any).assignedTo]
             : undefined,
+          // ✅ STANDARDIZED: Ensure submittedAt is always a string
           submittedAt: proposalData.submittedAt
             ? typeof proposalData.submittedAt === 'string'
               ? proposalData.submittedAt
               : (proposalData.submittedAt as Date).toISOString()
             : undefined,
+          // ✅ STANDARDIZED: Ensure value is always a number
+          value:
+            typeof proposalData.value === 'number'
+              ? proposalData.value
+              : Number(proposalData.value || 0),
+          // ✅ STANDARDIZED: Ensure currency is always a string
+          currency: proposalData.currency || 'USD',
+          // ✅ STANDARDIZED: Ensure tags is always an array
+          tags: Array.isArray(proposalData.tags) ? proposalData.tags : [],
         });
         // Ensure edit opens on step 4 directly
         setCurrentStep(4);
@@ -300,11 +322,20 @@ export function ProposalWizard({
           editMode,
         });
       } catch (error) {
+        // ✅ ENHANCED: Better error logging for debugging
         logError('Failed to initialize wizard with existing data', {
           component: 'ProposalWizard',
           operation: 'initializeFromData',
           proposalId,
           error: error instanceof Error ? error.message : 'Unknown error',
+          errorStack: error instanceof Error ? error.stack : undefined,
+          errorName: error instanceof Error ? error.constructor.name : typeof error,
+          // ✅ ADDED: Log the proposal data structure for debugging
+          proposalDataKeys: proposalData ? Object.keys(proposalData) : [],
+          hasSubmittedAt: !!proposalData?.submittedAt,
+          submittedAtType: proposalData?.submittedAt
+            ? typeof proposalData.submittedAt
+            : 'undefined',
         });
       }
     }
@@ -317,6 +348,55 @@ export function ProposalWizard({
     setCurrentStep,
     analytics,
   ]);
+
+  // Prefill from customerId in query (?customer=<id>) when creating from a customer profile
+  useEffect(() => {
+    if (editMode) return; // Only for create mode
+    const customerIdFromQuery = searchParams?.get('customer');
+    if (!customerIdFromQuery || hasInitializedRef.current) return;
+
+    // Fetch minimal customer info via API and seed step 1
+    (async () => {
+      try {
+        const customer = await http.get<any>(`/api/customers/${customerIdFromQuery}`);
+        const c = customer?.ok ? customer.data : customer; // support envelope or raw
+        if (!c || !c.id) return;
+
+        // Seed step 1 data with customer info; leave required fields for user to fill
+        setStepData(1, {
+          title: '',
+          description: '',
+          customerId: c.id,
+          customer: {
+            id: c.id,
+            name: c.name,
+            email: c.email || undefined,
+            industry: c.industry || undefined,
+          },
+          dueDate: '',
+          priority: 'MEDIUM',
+          value: 0,
+          currency: 'USD',
+          projectType: '',
+          tags: [],
+        } as any);
+        setCurrentStep(1);
+        hasInitializedRef.current = true;
+        logDebug('ProposalWizard: Prefilled from customer query', {
+          component: 'ProposalWizard',
+          operation: 'prefill_from_customer',
+          customerId: c.id,
+        });
+      } catch (e) {
+        // Non-fatal: creation still works without prefill
+        logWarn('Failed to prefill from customer query', {
+          component: 'ProposalWizard',
+          operation: 'prefill_from_customer',
+          error: e instanceof Error ? e.message : 'Unknown error',
+        });
+      }
+    })();
+  }, [editMode, searchParams, setStepData, setCurrentStep]);
 
   // Visible steps based on plan type
   const visibleStepIds = useMemo(() => {
@@ -536,9 +616,9 @@ export function ProposalWizard({
       const s2: ProposalStepData = stepData[2] || {};
 
       const hasBasic = Boolean(s1?.title && s1?.customerId);
-      const hasTeam = Boolean(s2?.teamLead && s2?.salesRepresentative);
 
-      if (hasBasic && hasTeam) {
+      // Allow minimal server draft with just basic info
+      if (hasBasic) {
         const proposalBody = buildCreateBodyFromStore();
 
         try {

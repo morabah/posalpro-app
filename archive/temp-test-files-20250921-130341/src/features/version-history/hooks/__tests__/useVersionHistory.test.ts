@@ -16,9 +16,16 @@
  * - Analytics integration
  */
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import React, { ReactNode } from 'react';
+
+// Import test utilities
+import {
+  createTestWrapper,
+  mockAnalytics,
+  mockLogger,
+  cleanupTestMocks,
+} from '@/test/test-utils/react-query';
 
 // Import hooks to test
 import {
@@ -103,23 +110,8 @@ const mockApiResponse = {
   data: mockVersionHistoryList,
 };
 
-// Setup test utilities
-const createWrapper = () => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-        staleTime: 0,
-      },
-      mutations: {
-        retry: false,
-      },
-    },
-  });
-
-  return ({ children }: { children: ReactNode }) =>
-    React.createElement(QueryClientProvider, { client: queryClient }, children);
-};
+// ✅ UPDATED: Use standardized test utilities
+const createWrapper = createTestWrapper();
 
 describe('useInfiniteVersionHistory', () => {
   beforeEach(() => {

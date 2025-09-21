@@ -688,12 +688,18 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
     try {
       // ✅ FIXED: Extract complex data from metadata field
       const metadata = proposalData.metadata || {};
+      const ust = (proposalData as any).userStoryTracking || {};
       const teamData = metadata.teamData || {};
       const contentData = metadata.contentData || {};
       const productData = metadata.productData || {};
       const sectionData = metadata.sectionData || {};
       const reviewData = metadata.reviewData || {};
       const planTypeFromMetadata = (metadata as any).planType as
+        | 'BASIC'
+        | 'PROFESSIONAL'
+        | 'ENTERPRISE'
+        | undefined;
+      const planTypeFromUst = (ust as any).planType as
         | 'BASIC'
         | 'PROFESSIONAL'
         | 'ENTERPRISE'
@@ -757,8 +763,8 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
       };
 
       const updates: Record<string, unknown> = { stepData };
-      if (planTypeFromMetadata) {
-        updates.planType = planTypeFromMetadata;
+      if (planTypeFromMetadata || planTypeFromUst) {
+        updates.planType = (planTypeFromMetadata || planTypeFromUst)!;
       }
       set(updates);
 

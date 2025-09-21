@@ -28,6 +28,7 @@ type ProductForDeletion = {
 
 type BulkDeleteResult = {
   deleted: number;
+  archived: number;
   products: ProductForDeletion[];
 };
 
@@ -61,7 +62,7 @@ export const POST = createRoute(
     const result = await withAsyncErrorHandler(
       () =>
         prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-          // First, get the products to be deleted (for logging)
+          // First, get the products with their usage counts
           const productsToDelete = await tx.product.findMany({
             where: {
               id: {
@@ -72,20 +73,62 @@ export const POST = createRoute(
               id: true,
               name: true,
               sku: true,
-            },
-          });
-
-          // Delete the products
-          const deleteResult = await tx.product.deleteMany({
-            where: {
-              id: {
-                in: ids,
+              _count: {
+                select: {
+                  proposalProducts: true,
+                  relationships: true,
+                  relatedFrom: true,
+                },
               },
             },
           });
 
+          // Separate products that can be deleted vs archived
+          const productsToActuallyDelete = productsToDelete.filter(
+            p => p._count.proposalProducts === 0 && p._count.relationships === 0 && p._count.relatedFrom === 0
+          );
+          const productsToArchive = productsToDelete.filter(
+            p => p._count.proposalProducts > 0 || p._count.relationships > 0 || p._count.relatedFrom > 0
+          );
+
+          let deletedCount = 0;
+          let archivedCount = 0;
+
+          // Delete products that are not in use
+          if (productsToActuallyDelete.length > 0) {
+            const deleteResult = await tx.product.deleteMany({
+              where: {
+                id: {
+                  in: productsToActuallyDelete.map(p => p.id),
+                },
+              },
+            });
+            deletedCount = deleteResult.count;
+          }
+
+          // Archive products that are in use
+          if (productsToArchive.length > 0) {
+            const archiveResult = await tx.product.updateMany({
+              where: {
+                id: {
+                  in: productsToArchive.map(p => p.id),
+                },
+              },
+              data: {
+                isActive: false,
+                usageAnalytics: {
+                  archivedBy: user.id,
+                  archivedAt: new Date().toISOString(),
+                  archivedReason: 'Product archived due to being in use during bulk deletion',
+                },
+              },
+            });
+            archivedCount = archiveResult.count;
+          }
+
           return {
-            deleted: deleteResult.count,
+            deleted: deletedCount,
+            archived: archivedCount,
             products: productsToDelete,
           };
         }),
@@ -93,11 +136,13 @@ export const POST = createRoute(
       { component: 'ProductBulkDeleteAPI', operation: 'POST' }
     );
 
-    // Log successful deletion
-    logInfo('Products bulk deleted successfully', {
+    // Log successful deletion/archival
+    logInfo('Products bulk deleted/archived successfully', {
       component: 'ProductBulkDeleteRoute',
       operation: 'POST',
       deletedCount: result.deleted,
+      archivedCount: result.archived,
+      totalProcessed: result.deleted + result.archived,
       deletedProducts: result.products.map((p: ProductForDeletion) => ({
         id: p.id,
         name: p.name,
@@ -109,6 +154,8 @@ export const POST = createRoute(
 
     const responseData = {
       deleted: result.deleted,
+      archived: result.archived,
+      totalProcessed: result.deleted + result.archived,
       products: result.products.map((p: ProductForDeletion) => ({
         id: p.id,
         name: p.name,
@@ -116,9 +163,13 @@ export const POST = createRoute(
       })),
     };
 
+    const message = result.archived > 0
+      ? `${result.deleted} products deleted, ${result.archived} products archived (in use)`
+      : `${result.deleted} products deleted successfully`;
+
     return errorHandler.createSuccessResponse(
       responseData,
-      'Products bulk deleted successfully'
+      message
     );
   }
 );

@@ -8,7 +8,7 @@ import { Select } from '@/components/ui/Select';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
 import type { Customer } from '@/features/customers';
-import { useDeleteCustomersBulk, useInfiniteCustomers } from '@/features/customers/hooks';
+import { useDeleteCustomer, useDeleteCustomersBulk, useInfiniteCustomers } from '@/features/customers/hooks';
 import { useUnifiedCustomerData } from '@/features/customers/hooks/useCustomers';
 import { analytics } from '@/lib/analytics';
 import { logError } from '@/lib/logger';
@@ -232,6 +232,23 @@ function CustomerTable() {
     [router]
   );
 
+  const deleteCustomer = useDeleteCustomer();
+  const handleDeleteCustomer = useCallback(
+    async (customerId: string, customerName: string) => {
+      const confirmDelete = window.confirm(
+        `Delete customer "${customerName}"? This action cannot be undone.`
+      );
+      if (!confirmDelete) return;
+      try {
+        await deleteCustomer.mutateAsync(customerId);
+        toast.success('Customer deleted');
+      } catch (err) {
+        toast.error('Failed to delete customer');
+      }
+    },
+    [deleteCustomer]
+  );
+
   if (isLoading) {
     return (
       <Card className="p-8">
@@ -376,6 +393,14 @@ function CustomerTable() {
                       onClick={() => handleViewCustomer(customer.id)}
                     >
                       View
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={deleteCustomer.isPending}
+                      onClick={() => handleDeleteCustomer(customer.id, customer.name)}
+                    >
+                      {deleteCustomer.isPending ? 'Deleting…' : 'Delete'}
                     </Button>
                   </div>
                 </td>
@@ -599,6 +624,7 @@ function CustomerTableOptimized({
   customersResult: ReturnType<typeof useInfiniteCustomers>;
 }) {
   const router = useRouter();
+  const deleteCustomer = useDeleteCustomer();
   const { data, error, fetchNextPage, hasNextPage, isFetchingNextPage } = customersResult;
 
   const customers = useMemo(() => {
@@ -610,6 +636,20 @@ function CustomerTableOptimized({
       router.push(`/customers/${id}`);
     },
     [router]
+  );
+
+  const handleDelete = useCallback(
+    async (id: string, name: string) => {
+      const ok = window.confirm(`Delete customer "${name}"? This action cannot be undone.`);
+      if (!ok) return;
+      try {
+        await deleteCustomer.mutateAsync(id);
+        toast.success('Customer deleted');
+      } catch (e) {
+        toast.error('Failed to delete customer');
+      }
+    },
+    [deleteCustomer]
   );
 
   if (error) {
@@ -682,6 +722,14 @@ function CustomerTableOptimized({
                       onClick={() => handleCustomerClick(customer.id)}
                     >
                       View
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={deleteCustomer.isPending}
+                      onClick={() => handleDelete(customer.id, customer.name)}
+                    >
+                      {deleteCustomer.isPending ? 'Deleting…' : 'Delete'}
                     </Button>
                   </div>
                 </td>

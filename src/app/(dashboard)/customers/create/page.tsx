@@ -15,6 +15,7 @@
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { FormActions, FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
+import { Select, type SelectOption } from '@/components/ui/forms/Select';
 import { SearchableCountrySelect } from '@/components/ui/SearchableCountrySelect';
 import { useApiClient } from '@/hooks/useApiClient';
 import { useEmailValidation } from '@/hooks/useEmailValidation';
@@ -34,14 +35,8 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
-
-interface CustomerResponse {
-  id: string;
-  name: string;
-  email: string;
-}
 
 // Type alias for form data
 type CustomerFormData = CreateCustomerData;
@@ -52,9 +47,15 @@ const customerCreationSchema = z.object({
     .string()
     .min(1, 'Company name is required')
     .max(200, 'Company name must be less than 200 characters'),
-  email: z.string().email('Please enter a valid email address').optional(),
-  phone: z.string().min(1, 'Phone number is required'),
-  website: z.string().url('Please enter a valid website URL').optional().or(z.literal('')),
+  // Email is required to align with API POST /api/customers
+  email: z.string().email('Please enter a valid email address'),
+  // Phone is optional in API; allow empty string in form
+  phone: z.string().refine((val) => val === '' || val.length >= 1, {
+    message: 'Phone number is required'
+  }).optional(),
+  website: z.string().refine((val) => val === '' || z.string().url().safeParse(val).success, {
+    message: 'Please enter a valid website URL'
+  }).optional(),
   address: z.string().max(200, 'Address must be less than 200 characters').optional(),
   country: z.string().max(100, 'Country must be less than 100 characters').optional(),
   industry: z
@@ -80,11 +81,49 @@ const customerCreationSchema = z.object({
       'other',
     ])
     .default('technology'),
-  revenue: z.number().min(0, 'Revenue must be a positive number').optional(),
+  // Treat empty string as undefined so untouched field doesn't fail validation
+  revenue: z
+    .preprocess(
+      val => (val === '' || val === null ? undefined : val),
+      z.number().min(0, 'Revenue must be a positive number').optional()
+    ),
   companySize: z.enum(['startup', 'small', 'medium', 'large', 'enterprise']).default('small'),
   tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).default('STANDARD'),
   tags: z.array(z.string()).default([]),
 });
+
+const DEFAULT_INDUSTRY = 'technology';
+const DEFAULT_COMPANY_SIZE = 'small';
+
+const INDUSTRY_OPTIONS: SelectOption[] = [
+  { value: 'technology', label: 'Technology' },
+  { value: 'healthcare', label: 'Healthcare' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'manufacturing', label: 'Manufacturing' },
+  { value: 'retail', label: 'Retail' },
+  { value: 'education', label: 'Education' },
+  { value: 'government', label: 'Government' },
+  { value: 'nonprofit', label: 'Non-profit' },
+  { value: 'real_estate', label: 'Real Estate' },
+  { value: 'transportation', label: 'Transportation' },
+  { value: 'energy', label: 'Energy' },
+  { value: 'telecommunications', label: 'Telecommunications' },
+  { value: 'media', label: 'Media' },
+  { value: 'consulting', label: 'Consulting' },
+  { value: 'agriculture', label: 'Agriculture' },
+  { value: 'automotive', label: 'Automotive' },
+  { value: 'aerospace', label: 'Aerospace' },
+  { value: 'construction', label: 'Construction' },
+  { value: 'other', label: 'Other' },
+];
+
+const COMPANY_SIZE_OPTIONS: SelectOption[] = [
+  { value: 'startup', label: 'Startup (1-10 employees)' },
+  { value: 'small', label: 'Small (11-50 employees)' },
+  { value: 'medium', label: 'Medium (51-250 employees)' },
+  { value: 'large', label: 'Large (251-1000 employees)' },
+  { value: 'enterprise', label: 'Enterprise (1000+ employees)' },
+];
 
 // ✅ SEO METADATA: Page metadata component
 function CustomerCreationMetadata() {
@@ -147,7 +186,7 @@ function AuthenticationGuard({ children }: { children: React.ReactNode }) {
 
 // ✅ BRIDGE COMPLIANCE: Add error boundary wrapper
 function CustomerCreationErrorFallback({
-  error,
+  error: _error,
   resetErrorBoundary,
 }: {
   error: Error;
@@ -185,6 +224,7 @@ function CustomerCreationPageComponent() {
     handleSubmit,
     formState: { errors, isValid, touchedFields },
     watch,
+    getValues,
     setValue,
     trigger,
   } = useForm<z.infer<typeof customerCreationSchema>>({
@@ -197,9 +237,9 @@ function CustomerCreationPageComponent() {
       website: '',
       address: '',
       country: '',
-      industry: 'technology',
+      industry: DEFAULT_INDUSTRY,
       revenue: undefined,
-      companySize: 'small',
+      companySize: DEFAULT_COMPANY_SIZE,
       tier: 'STANDARD',
       tags: [],
     },
@@ -244,37 +284,25 @@ function CustomerCreationPageComponent() {
     });
   }, [analytics]);
 
+  // ✅ Robust validity computation (guards against custom input integration quirks)
+  const watchedValues = watch();
+  const canSubmit = customerCreationSchema.safeParse(watchedValues).success;
+
+  // ✅ DEBUG: Log form validation state
+  useEffect(() => {
+    const formValues = watch();
+    logDebug('Form validation state:', {
+      isValid,
+      errors: Object.keys(errors).length > 0 ? errors : 'no errors',
+      touchedFields: Object.keys(touchedFields),
+      formValues,
+      component: 'CustomerCreationPage',
+      operation: 'form_validation_debug',
+    });
+  }, [isValid, errors, touchedFields, watch]);
+
   // ✅ Handle form submission with React Hook Form
   const onSubmit = async (data: z.infer<typeof customerCreationSchema>) => {
-    // Check email validation status only if an email was provided
-    if (data.email && emailValidation.isValidating) {
-      handleAsyncError(
-        new StandardError({
-          message: 'Please wait for email validation to complete',
-          code: ErrorCodes.VALIDATION.OPERATION_FAILED,
-          metadata: {
-            component: 'CustomerCreationPage',
-            operation: 'email_validation_in_progress',
-          },
-        })
-      );
-      return;
-    }
-
-    if (data.email && (!emailValidation.isValid || emailValidation.exists)) {
-      handleAsyncError(
-        new StandardError({
-          message: emailValidation.error || 'Email validation failed',
-          code: ErrorCodes.VALIDATION.INVALID_INPUT,
-          metadata: {
-            component: 'CustomerCreationPage',
-            operation: 'email_validation_failed',
-            emailExists: emailValidation.exists,
-          },
-        })
-      );
-      return;
-    }
 
     setLoading(true);
 
@@ -455,20 +483,12 @@ function CustomerCreationPageComponent() {
                         />
 
                         <FormField
-                          {...register('email', {
-                            onChange: e => {
-                              emailValidation.handleEmailChange(e.target.value);
-                            },
-                          })}
+                          {...register('email')}
                           name="email"
                           label="Email Address"
                           type="email"
-                          error={
-                            errors.email?.message ||
-                            emailValidation.error ||
-                            (emailValidation.exists ? 'Email already exists' : undefined)
-                          }
-                          touched={!!touchedFields.email || emailValidation.exists}
+                          error={errors.email?.message}
+                          touched={!!touchedFields.email}
                           required
                           placeholder="customer@example.com"
                           className="min-h-[44px]"
@@ -488,14 +508,32 @@ function CustomerCreationPageComponent() {
 
                       {/* Company Information */}
                       <div className="space-y-4">
-                        <FormField
-                          {...register('industry')}
+                        <Controller
                           name="industry"
-                          label="Industry"
-                          error={errors.industry?.message}
-                          touched={!!touchedFields.industry}
-                          placeholder="Technology, Healthcare, Finance, etc."
-                          className="min-h-[44px]"
+                          control={control}
+                          defaultValue={DEFAULT_INDUSTRY}
+                          render={({ field, fieldState }) => {
+                            const shouldShowError =
+                              (fieldState.isTouched || fieldState.isDirty) && !!fieldState.error;
+                            const currentValue =
+                              (field.value as string | undefined) ?? DEFAULT_INDUSTRY;
+
+                            return (
+                              <Select
+                                label="Industry *"
+                                placeholder="Select industry"
+                                options={INDUSTRY_OPTIONS}
+                                value={currentValue}
+                                onChange={value => {
+                                  const normalizedValue = Array.isArray(value) ? value[0] : value;
+                                  field.onChange(normalizedValue || undefined);
+                                  field.onBlur();
+                                }}
+                                disabled={loading}
+                                error={shouldShowError ? fieldState.error?.message : undefined}
+                              />
+                            );
+                          }}
                         />
 
                         <FormField
@@ -547,14 +585,32 @@ function CustomerCreationPageComponent() {
                         className="min-h-[44px]"
                       />
 
-                      <FormField
-                        {...register('companySize')}
+                      <Controller
                         name="companySize"
-                        label="Company Size"
-                        error={errors.companySize?.message}
-                        touched={!!touchedFields.companySize}
-                        placeholder="Select company size"
-                        className="min-h-[44px]"
+                        control={control}
+                        defaultValue={DEFAULT_COMPANY_SIZE}
+                        render={({ field, fieldState }) => {
+                          const shouldShowError =
+                            (fieldState.isTouched || fieldState.isDirty) && !!fieldState.error;
+                          const currentValue =
+                            (field.value as string | undefined) ?? DEFAULT_COMPANY_SIZE;
+
+                          return (
+                            <Select
+                              label="Company Size *"
+                              placeholder="Select company size"
+                              options={COMPANY_SIZE_OPTIONS}
+                              value={currentValue}
+                              onChange={value => {
+                                const normalizedValue = Array.isArray(value) ? value[0] : value;
+                                field.onChange(normalizedValue || undefined);
+                                field.onBlur();
+                              }}
+                              disabled={loading}
+                              error={shouldShowError ? fieldState.error?.message : undefined}
+                            />
+                          );
+                        }}
                       />
                     </div>
 
@@ -568,7 +624,7 @@ function CustomerCreationPageComponent() {
                       </Link>
                       <Button
                         type="submit"
-                        disabled={loading || !isValid}
+                        disabled={loading || !(canSubmit || isValid)}
                         className="inline-flex items-center min-h-[44px] px-4 py-2"
                         aria-label={loading ? 'Creating customer...' : 'Create customer'}
                         data-testid="create-customer-submit"

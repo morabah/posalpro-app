@@ -133,11 +133,9 @@ function ProposalListHeader({
             </Button>
           </div>
         )}
-        <Link href="/proposals/wizard">
-          <Button onClick={handleCreateProposal} aria-label="Create proposal">
-            Create Proposal
-          </Button>
-        </Link>
+        <Button onClick={handleCreateProposal} aria-label="Create proposal">
+          <Link href="/proposals/wizard">Create Proposal</Link>
+        </Button>
       </div>
     </div>
   );
@@ -711,9 +709,9 @@ function ProposalTableOptimized({
                       Get started by creating your first proposal.
                     </p>
                     <div className="mt-4">
-                      <Link href="/proposals/wizard">
-                        <Button>Create Proposal</Button>
-                      </Link>
+                      <Button>
+                        <Link href="/proposals/wizard">Create Proposal</Link>
+                      </Button>
                     </div>
                   </div>
                 </td>
@@ -751,7 +749,22 @@ function ProposalTableOptimized({
                       <PriorityBadge priority={proposal.priority} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(proposal.value || 0, 'USD')}
+                      {formatCurrency(
+                        (() => {
+                          // Calculate total from products if available, otherwise use stored value
+                          if (proposal.products && proposal.products.length > 0) {
+                            return proposal.products.reduce((sum: number, product: any) => {
+                              const productTotal =
+                                typeof product.total === 'string'
+                                  ? parseFloat(product.total) || 0
+                                  : product.total || 0;
+                              return sum + productTotal;
+                            }, 0);
+                          }
+                          return proposal.value || 0;
+                        })(),
+                        'USD'
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
@@ -1010,6 +1023,21 @@ function EnhancedFilters({
 // ====================
 
 function ProposalCard({ proposal }: { proposal: any }) {
+  const deleteProposal = useDeleteProposal();
+  const onDelete = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const ok = window.confirm('Delete this proposal? This action cannot be undone.');
+      if (!ok) return;
+      try {
+        await deleteProposal.mutateAsync(proposal.id);
+        toast.success('Proposal deleted successfully');
+      } catch (err) {
+        toast.error('Failed to delete proposal');
+      }
+    },
+    [deleteProposal, proposal?.id]
+  );
   // Calculate if proposal is overdue
   const isOverdue =
     proposal.dueDate &&
@@ -1101,23 +1129,36 @@ function ProposalCard({ proposal }: { proposal: any }) {
 
           <div className="flex flex-col items-end space-y-2 ml-6">
             <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
-              >
-                <Link href={`/proposals/${proposal.id}`}>
+              <Link href={`/proposals/${proposal.id}`} onClick={e => e.stopPropagation()}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
+                >
                   <EyeIcon className="w-4 h-4 text-blue-600" />
-                </Link>
-              </Button>
+                </Button>
+              </Link>
+              <Link href={`/proposals/${proposal.id}/edit`} onClick={e => e.stopPropagation()}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:bg-green-50 hover:border-green-300 hover:text-green-700"
+                >
+                  <EditIcon className="w-4 h-4 text-green-600" />
+                </Button>
+              </Link>
               <Button
                 variant="outline"
                 size="sm"
-                className="hover:bg-green-50 hover:border-green-300 hover:text-green-700"
+                onClick={e => {
+                  e.stopPropagation();
+                  onDelete(e);
+                }}
+                disabled={deleteProposal.isPending}
+                className="hover:bg-red-50 hover:border-red-300 hover:text-red-700"
+                aria-label="Delete proposal"
               >
-                <Link href={`/proposals/${proposal.id}/edit`}>
-                  <EditIcon className="w-4 h-4 text-green-600" />
-                </Link>
+                <TrashIcon className="w-4 h-4 text-red-600" />
               </Button>
             </div>
             <span className="text-xs text-gray-400 font-mono bg-gray-100 px-2 py-1 rounded">
@@ -1166,7 +1207,24 @@ function ProposalCard({ proposal }: { proposal: any }) {
             </div>
             <div>
               <div className="text-xs font-medium opacity-75">Value</div>
-              <div className="font-bold text-lg">{formatCurrency(proposal.value || 0, 'USD')}</div>
+              <div className="font-bold text-lg">
+                {formatCurrency(
+                  (() => {
+                    // Calculate total from products if available, otherwise use stored value
+                    if (proposal.products && proposal.products.length > 0) {
+                      return proposal.products.reduce((sum: number, product: any) => {
+                        const productTotal =
+                          typeof product.total === 'string'
+                            ? parseFloat(product.total) || 0
+                            : product.total || 0;
+                        return sum + productTotal;
+                      }, 0);
+                    }
+                    return proposal.value || 0;
+                  })(),
+                  'USD'
+                )}
+              </div>
             </div>
           </div>
 
@@ -1508,12 +1566,12 @@ export default function ProposalList() {
                   Delete Selected ({selectedIds.length})
                 </Button>
               )}
-              <Link href="/proposals/wizard">
-                <Button>
+              <Button>
+                <Link href="/proposals/wizard">
                   <PlusIcon className="w-4 h-4 mr-2" />
                   New Proposal
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           </div>
         </div>
@@ -1564,25 +1622,25 @@ export default function ProposalList() {
                     ? 'Try adjusting your filters to see more results.'
                     : 'Get started by creating your first proposal.'}
                 </p>
-                <Link href="/proposals/wizard">
-                  <Button
-                    onClick={() => {
-                      if (
-                        localFilters.search ||
-                        localFilters.status !== 'all' ||
-                        localFilters.priority !== 'all'
-                      ) {
-                        handleClearFilters();
-                      }
-                    }}
-                  >
+                <Button
+                  onClick={() => {
+                    if (
+                      localFilters.search ||
+                      localFilters.status !== 'all' ||
+                      localFilters.priority !== 'all'
+                    ) {
+                      handleClearFilters();
+                    }
+                  }}
+                >
+                  <Link href="/proposals/wizard">
                     {localFilters.search ||
                     localFilters.status !== 'all' ||
                     localFilters.priority !== 'all'
                       ? 'Clear Filters'
                       : 'Create First Proposal'}
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
             </Card>
           ) : (

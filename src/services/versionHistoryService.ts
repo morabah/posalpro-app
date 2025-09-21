@@ -10,9 +10,9 @@
  */
 
 import { ApiResponse } from '@/lib/api/response';
-import { prisma } from '@/lib/prisma';
 import { ErrorCodes, ErrorHandlingService } from '@/lib/errors';
 import { logDebug, logError, logInfo } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 
 import { http } from '@/lib/http';
 import { Prisma } from '@prisma/client';
@@ -109,14 +109,7 @@ export class VersionHistoryService {
       | 'rollback'
       | 'status_change'
       | 'INITIAL'
-  ):
-    | 'create'
-    | 'update'
-    | 'delete'
-    | 'batch_import'
-    | 'rollback'
-    | 'status_change'
-    | 'INITIAL' {
+  ): 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL' {
     const allowed = new Set([
       'create',
       'update',
@@ -296,6 +289,7 @@ export class VersionHistoryService {
           createdByName: snapshot?.createdByName || undefined,
           totalValue: snapshot?.totalValue || snapshot?.value || undefined,
           changeDetails: snapshot?.changeDetails || undefined,
+          snapshot: snapshot || undefined,
         };
       });
 
@@ -663,11 +657,36 @@ export class VersionHistoryService {
 
       const currSnapshot = (versionEntry.snapshot || {}) as any;
       const prevSnapshot = (previousEntry?.snapshot || {}) as any;
-      const currProducts: Array<any> = Array.isArray(currSnapshot.products) ? currSnapshot.products : [];
-      const prevProducts: Array<any> = Array.isArray(prevSnapshot.products) ? prevSnapshot.products : [];
+      const currProducts: Array<any> = Array.isArray(currSnapshot.products)
+        ? currSnapshot.products
+        : [];
+      const prevProducts: Array<any> = Array.isArray(prevSnapshot.products)
+        ? prevSnapshot.products
+        : [];
 
-      const currIds = new Set<string>(((versionEntry.productIds || []) as string[]) ?? []);
-      const prevIds = new Set<string>(((previousEntry?.productIds || []) as string[]) ?? []);
+      const extractIdsFromProducts = (products: Array<any>) =>
+        products
+          .map(product => {
+            const raw = product?.productId ?? product?.id;
+            return typeof raw === 'string' ? raw : raw ? String(raw) : '';
+          })
+          .filter((id): id is string => Boolean(id));
+
+      const normalizeIds = (ids: unknown): string[] =>
+        Array.isArray(ids)
+          ? (ids as Array<unknown>)
+              .map(id => (typeof id === 'string' ? id : id ? String(id) : ''))
+              .filter((id): id is string => Boolean(id))
+          : [];
+
+      const currIds = new Set<string>([
+        ...normalizeIds(versionEntry.productIds),
+        ...extractIdsFromProducts(currProducts),
+      ]);
+      const prevIds = new Set<string>([
+        ...normalizeIds(previousEntry?.productIds),
+        ...extractIdsFromProducts(prevProducts),
+      ]);
       const addedIds = [...currIds].filter(id => !prevIds.has(id));
       const removedIds = [...prevIds].filter(id => !currIds.has(id));
       const commonIds = [...currIds].filter(id => prevIds.has(id));
@@ -685,38 +704,97 @@ export class VersionHistoryService {
 
       const changedIds = Array.from(new Set([...addedIds, ...removedIds, ...commonIds]));
       const productsInfo = changedIds.length
-        ? await prisma.product.findMany({ where: { id: { in: changedIds } }, select: { id: true, name: true, price: true } })
+        ? await prisma.product.findMany({
+            where: { id: { in: changedIds } },
+            select: { id: true, name: true, price: true },
+          })
         : [];
       const nameOf = (id: string) => productsInfo.find(p => p.id === id)?.name || id;
       const num = (v: any): number => (typeof v === 'number' ? v : v ? Number(v) : 0);
 
       const added = addedIds.map(id => {
         const p = currMap.get(id) || {};
-        return { productId: id, name: nameOf(id), quantity: num(p.quantity), unitPrice: num(p.unitPrice ?? productsInfo.find(x => x.id === id)?.price ?? 0) };
+        return {
+          productId: id,
+          name: nameOf(id),
+          quantity: num(p.quantity),
+          unitPrice: num(p.unitPrice ?? productsInfo.find(x => x.id === id)?.price ?? 0),
+        };
       });
       const removed = removedIds.map(id => {
         const p = prevMap.get(id) || {};
-        return { productId: id, name: nameOf(id), quantity: num(p.quantity), unitPrice: num(p.unitPrice ?? productsInfo.find(x => x.id === id)?.price ?? 0) };
+        return {
+          productId: id,
+          name: nameOf(id),
+          quantity: num(p.quantity),
+          unitPrice: num(p.unitPrice ?? productsInfo.find(x => x.id === id)?.price ?? 0),
+        };
       });
       const updated = commonIds
         .map(id => {
           const c = currMap.get(id) || {};
           const p = prevMap.get(id) || {};
           const changes: Record<string, unknown> = {};
-          if (num(c.quantity) !== num(p.quantity)) changes.quantity = { from: num(p.quantity), to: num(c.quantity) };
-          if (num(c.unitPrice) !== num(p.unitPrice)) changes.unitPrice = { from: num(p.unitPrice), to: num(c.unitPrice) };
-          if (num(c.discount) !== num(p.discount)) changes.discount = { from: num(p.discount), to: num(c.discount) };
-          return Object.keys(changes).length > 0 ? { productId: id, name: nameOf(id), changes } : null;
+          if (num(c.quantity) !== num(p.quantity))
+            changes.quantity = { from: num(p.quantity), to: num(c.quantity) };
+          if (num(c.unitPrice) !== num(p.unitPrice))
+            changes.unitPrice = { from: num(p.unitPrice), to: num(c.unitPrice) };
+          if (num(c.discount) !== num(p.discount))
+            changes.discount = { from: num(p.discount), to: num(c.discount) };
+          return Object.keys(changes).length > 0
+            ? { productId: id, name: nameOf(id), changes }
+            : null;
         })
-        .filter(Boolean) as Array<{ productId: string; name: string; changes: Record<string, unknown> }>;
+        .filter(Boolean) as Array<{
+        productId: string;
+        name: string;
+        changes: Record<string, unknown>;
+      }>;
 
       const sumProducts = (arr: Array<any>) =>
         arr.reduce((sum, x) => sum + (num(x.total) || num(x.quantity) * num(x.unitPrice)), 0);
-      const totalBefore = num(prevSnapshot?.totalValue ?? prevSnapshot?.value) || sumProducts(prevProducts);
-      const totalAfter = num(currSnapshot?.totalValue ?? currSnapshot?.value) || sumProducts(currProducts);
+      const totalBefore =
+        num(prevSnapshot?.totalValue ?? prevSnapshot?.value) || sumProducts(prevProducts);
+      const totalAfter =
+        num(currSnapshot?.totalValue ?? currSnapshot?.value) || sumProducts(currProducts);
       const delta = totalAfter - totalBefore;
 
-      const autoSummary = versionEntry.changesSummary || `${added.length} added, ${removed.length} removed, ${updated.length} updated; total ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`;
+      // Calculate proposal field changes
+      const proposalChanges: string[] = [];
+      if (prevSnapshot) {
+        if (prevSnapshot.title !== currSnapshot.title) {
+          proposalChanges.push(`title: "${prevSnapshot.title}" → "${currSnapshot.title}"`);
+        }
+        if (prevSnapshot.status !== currSnapshot.status) {
+          proposalChanges.push(`status: ${prevSnapshot.status} → ${currSnapshot.status}`);
+        }
+        if (prevSnapshot.priority !== currSnapshot.priority) {
+          proposalChanges.push(`priority: ${prevSnapshot.priority} → ${currSnapshot.priority}`);
+        }
+        if (prevSnapshot.value !== currSnapshot.value) {
+          proposalChanges.push(`value: ${prevSnapshot.value} → ${currSnapshot.value}`);
+        }
+        if (prevSnapshot.customerId !== currSnapshot.customerId) {
+          proposalChanges.push(`customer updated`);
+        }
+      }
+
+      // Create comprehensive summary
+      const productChanges = [];
+      if (added.length > 0)
+        productChanges.push(`${added.length} product${added.length > 1 ? 's' : ''} added`);
+      if (removed.length > 0)
+        productChanges.push(`${removed.length} product${removed.length > 1 ? 's' : ''} removed`);
+      if (updated.length > 0)
+        productChanges.push(`${updated.length} product${updated.length > 1 ? 's' : ''} updated`);
+
+      const allChanges = [...proposalChanges, ...productChanges];
+      const autoSummary =
+        versionEntry.changesSummary ||
+        (allChanges.length > 0
+          ? allChanges.join(', ') +
+            (delta !== 0 ? `; total ${delta >= 0 ? '+' : ''}$${delta.toFixed(2)}` : '')
+          : 'No changes detected');
 
       const data: VersionHistoryDetail = {
         id: versionEntry.id,
@@ -726,7 +804,9 @@ export class VersionHistoryService {
         changesSummary: autoSummary,
         createdAt: versionEntry.createdAt,
         createdBy: versionEntry.createdBy || undefined,
-        proposal: versionEntry.proposal ? { id: versionEntry.proposal.id, title: versionEntry.proposal.title } : undefined,
+        proposal: versionEntry.proposal
+          ? { id: versionEntry.proposal.id, title: versionEntry.proposal.title }
+          : undefined,
         snapshot: currSnapshot as Record<string, unknown> | undefined,
         productIds: versionEntry.productIds,
         changes: { added, removed, updated },
@@ -1134,7 +1214,14 @@ export class VersionHistoryService {
           id: version.id,
           proposalId: version.proposalId,
           version: version.version,
-          changeType: version.changeType as 'create' | 'update' | 'delete' | 'batch_import' | 'rollback' | 'status_change' | 'INITIAL',
+          changeType: version.changeType as
+            | 'create'
+            | 'update'
+            | 'delete'
+            | 'batch_import'
+            | 'rollback'
+            | 'status_change'
+            | 'INITIAL',
           changesSummary: version.changesSummary || undefined,
           createdAt: version.createdAt,
           createdBy: version.createdBy || undefined,

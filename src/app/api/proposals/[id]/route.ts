@@ -7,14 +7,16 @@
 // Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = 'nodejs';
 
-
 import { ProposalSchema, WizardProposalUpdateSchema } from '@/features/proposals/schemas';
 import { fail } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
-import { prisma } from '@/lib/prisma';
 import { ErrorCodes, errorHandlingService } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+import { clearCache, deleteCache } from '@/lib/redis';
 import { ProposalService } from '@/lib/services/proposalService';
+import { getCurrentTenant } from '@/lib/tenant';
+import { createProposalVersionIfChanged } from '@/lib/versioning/proposalVersionUtils';
 import { Prisma, SectionType } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
@@ -102,6 +104,7 @@ export const GET = createRoute(
           value: true,
           currency: true,
           dueDate: true,
+          projectType: true,
           createdAt: true,
           updatedAt: true,
           customerId: true,
@@ -364,6 +367,17 @@ export const PUT = createRoute(
             status: typeof updateData.status === 'string' ? updateData.status : undefined,
             value: typeof updateData.value === 'number' ? updateData.value : undefined,
             dueDate: updateData.dueDate instanceof Date ? updateData.dueDate : undefined,
+            projectType:
+              typeof (updateData as any).projectType === 'string'
+                ? ((updateData as any).projectType as string)
+                : undefined,
+            currency:
+              typeof (updateData as any).currency === 'string'
+                ? ((updateData as any).currency as string)
+                : undefined,
+            tags: Array.isArray((updateData as any).tags)
+              ? ((updateData as any).tags as string[])
+              : undefined,
           };
 
           // Remove undefined fields but keep id
@@ -399,6 +413,7 @@ export const PUT = createRoute(
               value: true,
               currency: true,
               dueDate: true,
+              projectType: true,
               createdAt: true,
               updatedAt: true,
               customerId: true,
@@ -551,6 +566,13 @@ export const PUT = createRoute(
         });
       }
 
+      // Invalidate related caches (list + stats)
+      try {
+        await Promise.all([clearCache('proposals:*'), deleteCache('proposal_stats')]);
+      } catch {
+        // Cache clearing failed, but proposal update succeeded - continue
+      }
+
       const responsePayload = { ok: true, data: transformedProposal };
       return new Response(JSON.stringify(responsePayload), {
         status: 200,
@@ -627,97 +649,105 @@ export const PATCH = createRoute(
         processedUpdateData.dueDate = new Date(processedUpdateData.dueDate);
       }
 
-      // Perform the update
-      await prisma.proposal.update({
-        where: { id },
-        data: processedUpdateData,
-      });
+      const { updatedProposal, createdVersionNumber } = await prisma.$transaction(async tx => {
+        await tx.proposal.update({
+          where: { id },
+          data: processedUpdateData,
+        });
 
-      // Fetch the complete proposal with all relations for the response
-      const updatedProposal = await prisma.proposal.findUnique({
-        where: { id },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              industry: true,
+        const updated = await tx.proposal.findUnique({
+          where: { id },
+          include: {
+            customer: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                industry: true,
+              },
             },
-          },
-          products: {
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  category: true,
-                  description: true,
+            products: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    category: true,
+                    description: true,
+                  },
                 },
               },
             },
-          },
-          sections: {
-            select: {
-              id: true,
-              title: true,
-              content: true,
-              order: true,
+            sections: {
+              select: {
+                id: true,
+                title: true,
+                content: true,
+                order: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      // Create version snapshot
-      const lastVersion =
-        (
-          await prisma.proposalVersion.findFirst({
-            where: { proposalId: id },
-            orderBy: { version: 'desc' },
-          })
-        )?.version || 0;
+        if (!updated) {
+          throw new Error('Failed to retrieve updated proposal');
+        }
 
-      const nextVersion = lastVersion + 1;
+        // Recalculate proposal total value from products
+        if (updated.products && updated.products.length > 0) {
+          const newTotalValue = updated.products.reduce((sum: number, product: any) => {
+            return sum + (Number(product.total) || 0);
+          }, 0);
 
-      if (!updatedProposal) {
-        throw new Error('Failed to retrieve updated proposal');
-      }
+          await tx.proposal.update({
+            where: { id },
+            data: { value: new Prisma.Decimal(newTotalValue) },
+          });
 
-      const snapshot = {
-        title: updatedProposal.title,
-        status: updatedProposal.status,
-        priority: updatedProposal.priority,
-        value: updatedProposal.value,
-        dueDate: updatedProposal.dueDate,
-        updatedAt: updatedProposal.updatedAt,
-        customerId: updatedProposal.customerId,
-        products: updatedProposal.products?.map(p => ({
-          productId: p.productId,
-          quantity: p.quantity,
-          unitPrice: p.unitPrice,
-          total: p.total,
-        })),
-      };
+          // Update the updated object with the new value
+          updated.value = new Prisma.Decimal(newTotalValue);
+        }
 
-      await prisma.proposalVersion.create({
-        data: {
+        const snapshot = {
+          title: updated.title,
+          status: updated.status,
+          priority: updated.priority,
+          value: updated.value,
+          dueDate: updated.dueDate,
+          updatedAt: updated.updatedAt,
+          customerId: updated.customerId,
+          products: updated.products?.map(p => ({
+            productId: p.productId,
+            quantity: p.quantity,
+            unitPrice: p.unitPrice,
+            total: p.total,
+            discount: (p as any).discount ?? null,
+          })),
+        };
+
+        const summaryFromUpdateData = Object.keys(updateData).length
+          ? `Proposal updated: ${Object.keys(updateData).join(', ')}`
+          : 'Proposal updated';
+
+        const versionResult = await createProposalVersionIfChanged(tx, {
           proposalId: id,
-          version: nextVersion,
           changeType: 'UPDATE',
           changesSummary:
-            changesSummary || `Proposal updated: ${Object.keys(updateData).join(', ')}`,
-          snapshot: snapshot as Prisma.InputJsonValue,
-        },
+            changesSummary && changesSummary.trim().length > 0
+              ? changesSummary
+              : summaryFromUpdateData,
+          snapshot: snapshot as any,
+          createdBy: user.id,
+        });
+
+        return {
+          updatedProposal: updated,
+          createdVersionNumber: versionResult.created ? versionResult.version : null,
+        };
       });
 
-      if (!updatedProposal) {
-        throw new Error('Failed to retrieve updated proposal');
-      }
-
-      // Transform response data
       const transformedProposal = {
         ...updatedProposal,
-        // ✅ FIX: Convert value from string to number
         value:
           updatedProposal.value !== null && updatedProposal.value !== undefined
             ? Number(updatedProposal.value)
@@ -733,30 +763,43 @@ export const PATCH = createRoute(
               .filter(pp => pp.product)
               .map(pp => ({
                 ...pp,
-                // ✅ FIX: Convert numeric fields from strings to numbers
                 unitPrice:
                   pp.unitPrice !== null && pp.unitPrice !== undefined ? Number(pp.unitPrice) : 0,
                 discount:
                   pp.discount !== null && pp.discount !== undefined ? Number(pp.discount) : 0,
                 total: pp.total !== null && pp.total !== undefined ? Number(pp.total) : 0,
                 name: pp.product?.name || `Product ${pp.productId}`,
-                // ✅ FIX: Convert category array to string (take first element)
                 category: Array.isArray(pp.product?.category)
                   ? pp.product.category[0] || 'General'
                   : pp.product?.category || 'General',
-                // ✅ FIX: Convert null configuration to empty object
                 configuration: pp.configuration || {},
               }))
           : [],
       };
 
-      logInfo('Proposal partially updated with version creation', {
-        proposalId: id,
-        component: 'IndividualProposalEndpoint',
-        operation: 'PATCH',
-        version: nextVersion,
-        userId: user.id,
-      });
+      if (createdVersionNumber !== null) {
+        logInfo('Proposal partially updated with version creation', {
+          proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'PATCH',
+          version: createdVersionNumber,
+          userId: user.id,
+        });
+      } else {
+        logInfo('Proposal updated without version creation (no meaningful changes)', {
+          proposalId: id,
+          component: 'IndividualProposalEndpoint',
+          operation: 'PATCH',
+          userId: user.id,
+        });
+      }
+
+      // Invalidate related caches (list + stats)
+      try {
+        await Promise.all([clearCache('proposals:*'), deleteCache('proposal_stats')]);
+      } catch {
+        // Cache clearing failed, but proposal update succeeded - continue
+      }
 
       const responsePayload = { ok: true, data: transformedProposal };
       return new Response(JSON.stringify(responsePayload), {
@@ -805,6 +848,17 @@ export const DELETE = createRoute(
         userId: user.id,
       });
 
+      // Tenant scoping and idempotency: if not found for this tenant, treat as success
+      const tenant = getCurrentTenant();
+      const exists = await prisma.proposal.findFirst({ where: { id, tenantId: tenant.tenantId } });
+      if (!exists) {
+        const responsePayload = { ok: true, data: { success: true } };
+        return new Response(JSON.stringify(responsePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
       // Use transaction to ensure all related data is cleaned up
       await prisma.$transaction(async tx => {
         // Delete related records first due to foreign key constraints
@@ -820,9 +874,9 @@ export const DELETE = createRoute(
           where: { proposalId: id },
         });
 
-        // Finally delete the proposal
-        await tx.proposal.delete({
-          where: { id },
+        // Finally delete the proposal (tenant-scoped + idempotent)
+        await tx.proposal.deleteMany({
+          where: { id, tenantId: tenant.tenantId },
         });
       });
 
@@ -832,6 +886,13 @@ export const DELETE = createRoute(
         operation: 'DELETE',
         userId: user.id,
       });
+
+      // Invalidate related caches (list + stats)
+      try {
+        await Promise.all([clearCache('proposals:*'), deleteCache('proposal_stats')]);
+      } catch {
+        // Cache clearing failed, but proposal update succeeded - continue
+      }
 
       const responsePayload = { ok: true, data: { success: true } };
       return new Response(JSON.stringify(responsePayload), {

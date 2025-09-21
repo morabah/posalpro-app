@@ -245,7 +245,7 @@ export class HttpClient {
           errorMessage = 'Network connection failed';
           isRetryable = true;
         } else if (error.message.includes('Load failed')) {
-          errorMessage = 'Resource load failed - possible CORS or network issue';
+          errorMessage = 'Load failed';
           isRetryable = true;
         } else {
           errorMessage = `Type error: ${error.message}`;

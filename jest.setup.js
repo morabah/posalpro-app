@@ -188,69 +188,89 @@ jest.mock('next-auth/react', () => ({
 }));
 
 // Mock React Query with more realistic implementations
-jest.mock('@tanstack/react-query', () => ({
-  useQuery: jest.fn(() => ({
-    data: undefined,
-    error: null,
-    isLoading: false,
-    isError: false,
-    isSuccess: false,
-    refetch: jest.fn(),
-    fetchStatus: 'idle',
-    status: 'success',
-  })),
-  useInfiniteQuery: jest.fn(() => ({
-    data: {
-      pages: [
-        {
-          items: [],
-          pagination: {
-            limit: 20,
-            hasNextPage: false,
-            nextCursor: null,
+jest.mock('@tanstack/react-query', () => {
+  // ✅ FIXED: Create a proper QueryClient constructor function that can be called with 'new'
+  function QueryClient(options = {}) {
+    this.options = options;
+    this.invalidateQueries = jest.fn();
+    this.setQueryData = jest.fn();
+    this.getQueryData = jest.fn();
+    this.removeQueries = jest.fn();
+    this.clear = jest.fn();
+    this.mount = jest.fn();
+    this.unmount = jest.fn();
+
+    // Make it chainable
+    return this;
+  }
+
+  // Add prototype methods for proper inheritance
+  QueryClient.prototype.invalidateQueries = jest.fn();
+  QueryClient.prototype.setQueryData = jest.fn();
+  QueryClient.prototype.getQueryData = jest.fn();
+  QueryClient.prototype.removeQueries = jest.fn();
+  QueryClient.prototype.clear = jest.fn();
+  QueryClient.prototype.mount = jest.fn();
+  QueryClient.prototype.unmount = jest.fn();
+
+  return {
+    useQuery: jest.fn(() => ({
+      data: undefined,
+      error: null,
+      isLoading: false,
+      isError: false,
+      isSuccess: false,
+      refetch: jest.fn(),
+      fetchStatus: 'idle',
+      status: 'success',
+    })),
+    useInfiniteQuery: jest.fn(() => ({
+      data: {
+        pages: [
+          {
+            items: [],
+            pagination: {
+              limit: 20,
+              hasNextPage: false,
+              nextCursor: null,
+            },
           },
-        },
-      ],
-    },
-    isLoading: false,
-    isError: false,
-    error: null,
-    fetchNextPage: jest.fn(),
-    hasNextPage: false,
-    isFetchingNextPage: false,
-    refetch: jest.fn(),
-    isRefetching: false,
-  })),
-  useMutation: jest.fn(() => ({
-    mutate: jest.fn(),
-    mutateAsync: jest.fn(() => Promise.resolve()),
-    isLoading: false,
-    isPending: false,
-    isError: false,
-    isSuccess: false,
-    error: null,
-    data: undefined,
-    reset: jest.fn(),
-  })),
-  useQueryClient: jest.fn(() => ({
-    invalidateQueries: jest.fn(),
-    setQueryData: jest.fn(),
-    getQueryData: jest.fn(),
-    removeQueries: jest.fn(),
-    clear: jest.fn(),
-  })),
-  QueryClient: jest.fn().mockImplementation((options) => ({
-    invalidateQueries: jest.fn(),
-    setQueryData: jest.fn(),
-    getQueryData: jest.fn(),
-    removeQueries: jest.fn(),
-    clear: jest.fn(),
-    mount: jest.fn(),
-    unmount: jest.fn(),
-    options,
-  })),
-  QueryClientProvider: jest.fn(({ children }) => children),
-}));
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      fetchNextPage: jest.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      refetch: jest.fn(),
+      isRefetching: false,
+    })),
+    useMutation: jest.fn(() => ({
+      mutate: jest.fn(),
+      mutateAsync: jest.fn(() => Promise.resolve()),
+      isLoading: false,
+      isPending: false,
+      isError: false,
+      isSuccess: false,
+      error: null,
+      data: undefined,
+      reset: jest.fn(),
+    })),
+    useQueryClient: jest.fn(() => ({
+      invalidateQueries: jest.fn(),
+      setQueryData: jest.fn(),
+      getQueryData: jest.fn(),
+      removeQueries: jest.fn(),
+      clear: jest.fn(),
+    })),
+    // ✅ FIXED: Proper QueryClient constructor that can be instantiated with 'new'
+    QueryClient,
+    QueryClientProvider: jest.fn(({ children }) => children),
+    // ✅ FIXED: Add missing useQueries hook
+    useQueries: jest.fn(() => []),
+  };
+});
 
 // Mock React Hot Toast
 jest.mock('react-hot-toast', () => ({

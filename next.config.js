@@ -72,7 +72,11 @@ function buildCsp() {
   return [
     `default-src 'self'`,
     `script-src ${scriptSrc.join(' ')}`,
+    `script-src-elem ${scriptSrc.join(' ')}`,
+    `script-src-attr 'none'`,
     `style-src ${styleSrc.join(' ')}`,
+    `style-src-elem ${styleSrc.join(' ')}`,
+    `style-src-attr 'none'`,
     `font-src ${fontSrc.join(' ')}`,
     `img-src ${imgSrc.join(' ')}`,
     `connect-src ${connectSrc.join(' ')}`,
@@ -125,8 +129,8 @@ const baseConfig = {
     // Enhanced security policy
     contentSecurityPolicy:
       process.env.NODE_ENV === 'production'
-        ? "default-src 'self'; script-src 'self' https://unpkg.com; sandbox;"
-        : "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; sandbox;",
+        ? "default-src 'self'; script-src 'self' https://unpkg.com; script-src-elem 'self' https://unpkg.com; script-src-attr 'none'; sandbox;"
+        : "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; script-src-elem 'self' 'unsafe-inline' https://unpkg.com; script-src-attr 'none'; sandbox;",
     // Enable remote patterns for external images
     remotePatterns: [
       {

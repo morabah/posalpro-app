@@ -57,8 +57,9 @@ export const BasicInformationSchema = z.object({
 });
 
 export const TeamAssignmentSchema = z.object({
-  teamLead: z.string().min(1, 'Team lead is required'),
-  salesRepresentative: z.string().min(1, 'Sales representative is required'),
+  // Make teamLead/salesRepresentative optional to allow minimal creates
+  teamLead: z.string().min(1, 'Team lead is required').optional(),
+  salesRepresentative: z.string().min(1, 'Sales representative is required').optional(),
   subjectMatterExperts: z.record(z.string()).default({}),
   executiveReviewers: z.array(z.string()).default([]),
   teamMembers: z
@@ -234,10 +235,11 @@ export const ProposalQuerySchema = z.object({
 
 export const ProposalCreateSchema = z.object({
   basicInfo: BasicInformationSchema,
-  teamData: TeamAssignmentSchema,
-  contentData: ContentSelectionSchema,
-  productData: ProductSelectionSchema,
-  sectionData: SectionAssignmentSchema,
+  // Make ancillary blocks optional to allow minimal create payloads
+  teamData: TeamAssignmentSchema.optional(),
+  contentData: ContentSelectionSchema.optional(),
+  productData: ProductSelectionSchema.optional(),
+  sectionData: SectionAssignmentSchema.optional(),
   planType: ProposalPlanTypeSchema.optional(),
 });
 
@@ -361,12 +363,12 @@ export const ProposalSchema = z.object({
       z.object({
         id: z.string(),
         productId: z.string(),
-        name: z.string().min(1), // ✅ FIXED: Ensure name is not empty, but allow fallback handling
+        name: z.string().min(1), // Required since list API now includes product details
         quantity: z.number().int().positive(),
         unitPrice: z.number().positive(),
         discount: z.number().min(0).max(100),
         total: z.number().positive(),
-        category: z.string().min(1), // ✅ FIXED: Ensure category is not empty
+        category: z.string().min(1), // Required since list API now includes product details
         configuration: z.record(z.unknown()).optional(),
       })
     )

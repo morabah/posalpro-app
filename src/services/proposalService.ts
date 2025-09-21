@@ -21,6 +21,11 @@ import {
   type ProposalSearchCriteria,
   type UpdateProposalData,
 } from '@/lib/validation/schemas/proposal';
+// API route schema (nested basicInfo/teamData/...)
+import {
+  ProposalCreateSchema as ApiProposalCreateSchema,
+  type ProposalCreateData as ApiProposalCreateData,
+} from '@/features/proposals/schemas';
 import { ProposalStatus as ProposalStatusEnum } from '@/types/entities/proposal';
 
 // ====================
@@ -213,16 +218,61 @@ export class ProposalService {
     logDebug('Creating proposal', {
       component: 'ProposalService',
       operation: 'createProposal',
-      proposal: { title: proposal.metadata.title, customerId: proposal.metadata.customerId },
+      // Handle both legacy (metadata) and modern (basicInfo) shapes safely
+      proposal:
+        'basicInfo' in (proposal as any)
+          ? { title: (proposal as any).basicInfo?.title, customerId: (proposal as any).basicInfo?.customerId }
+          : { title: (proposal as any)?.metadata?.title, customerId: (proposal as any)?.metadata?.customerId },
       userStory: 'US-3.1',
       hypothesis: 'H4',
     });
 
     try {
-      // Validate proposal data using aligned schema
-      const validatedData = createProposalSchema.parse(proposal);
+      let bodyForApi: ApiProposalCreateData;
 
-      const data = await http.post<Proposal>('/api/proposals', validatedData);
+      if ('basicInfo' in (proposal as any)) {
+        // Modern wizard path already builds API route shape
+        bodyForApi = ApiProposalCreateSchema.parse(proposal as any);
+      } else {
+        // Legacy path: transform metadata-only payload to API route shape
+        const legacy = createProposalSchema.parse(proposal);
+        const m = legacy.metadata as any;
+        bodyForApi = ApiProposalCreateSchema.parse({
+          basicInfo: {
+            title: m?.title || 'Untitled Proposal',
+            description: m?.description || '',
+            customerId: m?.customerId || '',
+            customer: m?.customerName
+              ? {
+                  id: m?.customerId || undefined,
+                  name: m?.customerName,
+                  email: m?.customerContact?.email || undefined,
+                  industry: m?.customerIndustry || undefined,
+                }
+              : undefined,
+            dueDate: m?.deadline || undefined,
+            priority: m?.priority || 'MEDIUM',
+            value: m?.estimatedValue || 0,
+            currency: m?.currency || 'USD',
+            projectType: m?.projectType || undefined,
+            tags: Array.isArray(m?.tags) ? m.tags : [],
+          },
+          // No team/content/products/sections provided in legacy shape
+          teamData: {},
+          contentData: { selectedTemplates: [], customContent: [], contentLibrary: [] },
+          productData: { products: [], totalValue: m?.estimatedValue || 0 },
+          sectionData: { sections: [], sectionTemplates: [] },
+          planType: undefined,
+        });
+      }
+
+      // Provide Idempotency-Key header to satisfy server idempotency guard
+      const idempotencyKey = `pp_${Date.now().toString(36)}_${Math.random()
+        .toString(36)
+        .slice(2, 12)}`;
+      const data = await http.post<Proposal>('/api/proposals', bodyForApi, {
+        headers: { 'Idempotency-Key': idempotencyKey },
+      });
 
       logInfo('Proposal created successfully', {
         component: 'ProposalService',
@@ -395,7 +445,7 @@ export class ProposalService {
         winRate: number;
         recentActivity: number;
         averageValue: number;
-      }>('/api/proposals/stats');
+      }>('/api/proposals/stats', { retries: 2, retryDelay: 500 });
 
       logInfo('Proposal stats fetched successfully', {
         component: 'ProposalService',

@@ -88,15 +88,35 @@ class ApiClientSingleton {
 
     const defaultOptions: RequestInit = {
       credentials: 'include', // Include cookies for authentication
+      cache: 'no-store', // Avoid SW/browser cache interference with API
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
         ...options.headers,
       },
       ...options,
     };
 
     try {
-      const response = await fetch(url, defaultOptions);
+      let response: Response;
+      try {
+        response = await fetch(url, defaultOptions);
+      } catch (err) {
+        // Normalize common browser fetch errors (e.g., 'Load failed')
+        const message = err instanceof Error ? err.message : String(err);
+        const isLoadFailed = typeof message === 'string' && message.includes('Load failed');
+        const std = new StandardError({
+          message: isLoadFailed
+            ? 'Service temporarily unavailable - please try again'
+            : message || 'Network error',
+          code: isLoadFailed ? ErrorCodes.API.SERVICE_UNAVAILABLE : ErrorCodes.API.NETWORK_ERROR,
+          cause: err as unknown,
+          metadata: { component: 'useApiClient', operation: 'fetch', endpoint, url },
+        });
+        this.errorHandlingService.processError(std);
+        throw std;
+      }
 
       if (!response.ok) {
         // Build actionable, user-friendly error for common auth cases

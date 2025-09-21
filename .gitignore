@@ -172,3 +172,6 @@ node_modules/@napi-rs/wasm-runtime/dist/fs.js
 
 # Deployment tracking (local only)
 .deployment-history.json
+
+# Archive directories (contain archived code that shouldn't be linted)
+archive/

@@ -1,7 +1,7 @@
 'use client';
 
+import { logDebug, logError } from '@/lib/logger';
 import { cn } from '@/lib/utils';
-import { logError, logDebug } from '@/lib/logger';
 import React, { forwardRef } from 'react';
 
 // Type definitions for form field values
@@ -78,23 +78,50 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
     // Extract register-specific props
     const registerProps = restProps as RegisterProps;
 
-    // Determine if we should use custom handlers or register handlers
-    const hasRegisterHandlers = registerProps.onChange || registerProps.onBlur;
-    const hasValue = value !== undefined;
-    const hasCustomHandlers = onChange || onBlur;
+    // Combine RHF register ref with forwarded ref
+    const setRef = (element: HTMLInputElement | HTMLTextAreaElement | null) => {
+      const registerRef = (registerProps as RegisterProps)?.ref as
+        | ((instance: any) => void)
+        | React.MutableRefObject<any>
+        | undefined;
 
-    // Use register handlers if available, otherwise use custom handlers if we have a value
-    const shouldUseRegisterHandlers = hasRegisterHandlers;
-    const shouldUseCustomHandlers = !hasRegisterHandlers && hasValue;
+      if (typeof registerRef === 'function') {
+        registerRef(element);
+      } else if (registerRef && 'current' in registerRef) {
+        (registerRef as React.MutableRefObject<any>).current = element;
+      }
+
+      if (typeof ref === 'function') {
+        ref(element as any);
+      } else if (ref && 'current' in (ref as any)) {
+        (ref as React.MutableRefObject<any>).current = element as any;
+      }
+    };
+
+    // Resolve effective handlers
+    const rhfOnChange = (registerProps as RegisterProps).onChange;
+    const rhfOnBlur = (registerProps as RegisterProps).onBlur;
+    const effectiveOnChange = onChange ?? rhfOnChange;
+    const effectiveOnBlur = onBlur ?? rhfOnBlur;
+    const isControlled = value !== undefined;
+
+    // Debug: Log handler detection
+    logDebug('FormField handler detection:', {
+      fieldName: name || registerProps.name,
+      hasRHFHandlers: Boolean(rhfOnChange || rhfOnBlur),
+      isControlled,
+      hasCustomHandlers: Boolean(onChange || onBlur),
+      registerPropsKeys: Object.keys(registerProps),
+      component: 'FormField',
+      operation: 'handler_detection',
+    });
 
     // Debug logging for component initialization
     logDebug('FormField initialized:', {
       fieldName: name || registerProps.name,
-      hasValue,
-      hasCustomHandlers,
-      hasRegisterHandlers,
-      shouldUseRegisterHandlers,
-      shouldUseCustomHandlers,
+      isControlled,
+      hasCustomHandlers: Boolean(onChange || onBlur),
+      hasRHFHandlers: Boolean(rhfOnChange || rhfOnBlur),
       component: 'FormField',
       operation: 'component_init',
       timestamp: new Date().toISOString(),
@@ -147,7 +174,7 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
 
       // If no value prop is provided and no custom onChange, assume React Hook Form/uncontrolled usage.
       // Pass through the raw event so libraries expecting e.target.name/value work.
-      if (shouldUseCustomHandlers) {
+      if (!isControlled) {
         try {
           // Use the onChange from registerProps (from register) if available
           const changeHandler = registerProps.onChange || onChange;
@@ -249,25 +276,13 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
           {type === 'textarea' ? (
             <textarea
               {...restProps}
-              ref={ref as React.RefObject<HTMLTextAreaElement>}
+              ref={setRef as unknown as React.RefObject<HTMLTextAreaElement>}
               id={fieldId}
               name={name || registerProps.name}
               // Avoid forcing controlled mode when value is undefined (RHF compatibility)
               value={value !== undefined ? value : undefined}
-              onChange={
-                shouldUseRegisterHandlers
-                  ? registerProps.onChange
-                  : shouldUseCustomHandlers
-                    ? handleChange
-                    : undefined
-              }
-              onBlur={
-                shouldUseRegisterHandlers
-                  ? registerProps.onBlur
-                  : shouldUseCustomHandlers
-                    ? handleBlur
-                    : undefined
-              }
+              onChange={isControlled ? handleChange : (effectiveOnChange as any)}
+              onBlur={isControlled ? handleBlur : (effectiveOnBlur as any)}
               placeholder={placeholder}
               disabled={disabled}
               className={cn(baseInputClasses, 'resize-none min-h-[80px]', { 'pl-8': icon })}
@@ -276,26 +291,14 @@ export const FormField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Form
           ) : (
             <input
               {...restProps}
-              ref={ref as React.RefObject<HTMLInputElement>}
+              ref={setRef as unknown as React.RefObject<HTMLInputElement>}
               id={fieldId}
               name={name || registerProps.name}
               type={type}
               // Avoid forcing controlled mode when value is undefined (RHF compatibility)
               value={value !== undefined ? value : undefined}
-              onChange={
-                shouldUseRegisterHandlers
-                  ? registerProps.onChange
-                  : shouldUseCustomHandlers
-                    ? handleChange
-                    : undefined
-              }
-              onBlur={
-                shouldUseRegisterHandlers
-                  ? registerProps.onBlur
-                  : shouldUseCustomHandlers
-                    ? handleBlur
-                    : undefined
-              }
+              onChange={isControlled ? handleChange : (effectiveOnChange as any)}
+              onBlur={isControlled ? handleBlur : (effectiveOnBlur as any)}
               placeholder={placeholder}
               disabled={disabled}
               className={cn(baseInputClasses, { 'pl-8': icon })}

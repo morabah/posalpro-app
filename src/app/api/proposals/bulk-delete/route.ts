@@ -12,6 +12,7 @@ export const runtime = 'nodejs';
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
 import { prisma } from '@/lib/prisma';
+import { clearCache, deleteCache } from '@/lib/redis';
 import { logError, logInfo } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
 import { ProposalBulkDeleteSchema } from '@/features/proposals/schemas';
@@ -82,6 +83,13 @@ export const POST = createRoute(
         deletedCount: result.count,
         requestedCount: body!.ids.length,
       });
+
+      // Invalidate related caches (list + stats)
+      try {
+        await Promise.all([clearCache('proposals:*'), deleteCache('proposal_stats')]);
+      } catch {
+        // Cache clearing failed, but bulk delete succeeded - continue
+      }
 
       return Response.json(
         ok({

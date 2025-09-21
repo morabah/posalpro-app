@@ -8,10 +8,14 @@
  * ✅ PROVIDES: Server-side image optimization with WebP/AVIF support
  */
 
+// Force Node.js runtime to avoid Edge Function conflicts with Prisma
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 import { createRoute } from '@/lib/api/route';
+import { logError, logInfo } from '@/lib/logger';
 import { imageOptimizationService } from '@/lib/services/imageOptimizationService';
 import { z } from 'zod';
-import { logInfo, logError } from '@/lib/logger';
 
 const ImageOptimizationQuerySchema = z.object({
   url: z.string().url('Invalid image URL'),

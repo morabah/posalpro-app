@@ -106,10 +106,20 @@ export function useCreateProposal() {
       }
     },
     onSuccess: data => {
-      // Invalidate and refetch proposals list
+      // ✅ FIXED: Invalidate all proposal-related queries to ensure infinite queries refresh
       queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.lists() });
+
       // Set the new proposal data in cache
       queryClient.setQueryData(proposalKeys.proposals.byId(data.id), data);
+
+      logDebug('Proposal cache invalidated after creation', {
+        component: 'useCreateProposal',
+        operation: 'cacheInvalidation',
+        proposalId: data.id,
+        userStory: 'US-3.1',
+        hypothesis: 'H4',
+      });
     },
     onError: error => {
       logError('Proposal creation failed', {

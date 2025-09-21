@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_product_status ON products (status);
 
 -- Session table indexes for RBAC optimization
 CREATE INDEX IF NOT EXISTS idx_session_user_id ON user_sessions ("userId");
-CREATE INDEX IF NOT EXISTS idx_session_expires ON user_sessions (expires);
+CREATE INDEX IF NOT EXISTS idx_session_expires ON user_sessions ("expiresAt");
 
 -- Composite indexes for complex queries
 CREATE INDEX IF NOT EXISTS idx_user_status_dept_created ON users (status, department, "createdAt" DESC);
@@ -49,6 +49,21 @@ CREATE INDEX IF NOT EXISTS idx_content_created_at ON content ("createdAt" DESC);
 -- Performance monitoring indexes
 CREATE INDEX IF NOT EXISTS idx_proposal_value ON proposals (value) WHERE value IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_proposal_total ON proposals (total);
+
+-- Additional indexes for optimized proposal queries
+CREATE INDEX IF NOT EXISTS idx_proposal_tenant_status ON proposals ("tenantId", status);
+CREATE INDEX IF NOT EXISTS idx_proposal_tenant_priority ON proposals ("tenantId", priority);
+CREATE INDEX IF NOT EXISTS idx_proposal_tenant_customer ON proposals ("tenantId", "customerId", status);
+
+-- Composite indexes for proposal product queries
+CREATE INDEX IF NOT EXISTS idx_proposal_products_tenant ON proposal_products ("proposalId", "productId");
+CREATE INDEX IF NOT EXISTS idx_proposal_products_tenant_proposal ON proposal_products ("proposalId");
+
+-- Optimized indexes for search queries
+CREATE INDEX IF NOT EXISTS idx_proposal_tenant_status_updated ON proposals ("tenantId", status, "updatedAt" DESC);
+
+-- Performance monitoring indexes for recent activity
+CREATE INDEX IF NOT EXISTS idx_proposal_tenant_recent ON proposals ("tenantId", "updatedAt" DESC);
 
 -- Cleanup old indexes if they exist (to avoid conflicts)
 DROP INDEX IF EXISTS idx_users_status;

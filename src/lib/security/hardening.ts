@@ -194,8 +194,16 @@ export class SecurityHeaders {
           ? "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com 'report-sample'"
           : "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com 'report-sample'",
         isProd
+          ? "script-src-elem 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com 'report-sample'"
+          : "script-src-elem 'self' 'unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com 'report-sample'",
+        "script-src-attr 'none'",
+        isProd
           ? "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com"
           : "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        isProd
+          ? "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com"
+          : "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "style-src-attr 'none'",
         "font-src 'self' https://fonts.gstatic.com data:",
         "img-src 'self' data: https:",
         // Allow API connections and CDN used by PDF.js worker

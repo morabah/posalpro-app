@@ -18,6 +18,8 @@ import { logError, logInfo } from '@/lib/logger';
 import useProductStore from '@/lib/store/productStore';
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useBulkDeleteProducts, useDeleteProduct } from '@/features/products/hooks';
+import { toast } from 'sonner';
 
 // Product List Header Component
 function ProductListHeader() {
@@ -25,6 +27,7 @@ function ProductListHeader() {
   const selectedProducts = useProductStore(state => state.selectedProducts);
   const clearSelection = useProductStore(state => state.clearSelection);
   const { trackOptimized: analytics } = useOptimizedAnalytics();
+  const bulkDeleteMutation = useBulkDeleteProducts();
 
   const selectedCount = selectedProducts.length;
   const hasSelection = selectedCount > 0;
@@ -44,7 +47,6 @@ function ProductListHeader() {
     if (!confirmDelete) return;
 
     try {
-      // TODO: Integrate useDeleteProductsBulk hook
       analytics(
         'product_bulk_delete_initiated',
         {
@@ -54,7 +56,10 @@ function ProductListHeader() {
         'high'
       );
 
-      // For now, just clear selection
+      // Actually delete the products using the bulk delete hook
+      await bulkDeleteMutation.mutateAsync(selectedProducts);
+
+      // Clear selection after successful deletion
       clearSelection();
 
       // Show success message
@@ -76,7 +81,7 @@ function ProductListHeader() {
         hypothesis: 'H5',
       });
     }
-  }, [selectedProducts, analytics, clearSelection]);
+  }, [selectedProducts, analytics, clearSelection, bulkDeleteMutation]);
 
   return (
     <div className="flex items-center justify-between p-6 border-b">
@@ -95,8 +100,9 @@ function ProductListHeader() {
               variant="danger"
               size="sm"
               aria-label="Delete selected products"
+              disabled={bulkDeleteMutation.isPending}
             >
-              Delete Selected
+              {bulkDeleteMutation.isPending ? 'Deleting...' : 'Delete Selected'}
             </Button>
             <Button
               onClick={clearSelection}
@@ -492,6 +498,7 @@ function ProductTableOptimized({
   const selectAllProducts = useProductStore(state => state.selectAllProducts);
   const clearSelection = useProductStore(state => state.clearSelection);
   const toggleProductSelection = useProductStore(state => state.toggleProductSelection);
+  const deleteProduct = useDeleteProduct();
 
   const { data, error, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage } =
     productsResult;
@@ -525,6 +532,22 @@ function ProductTableOptimized({
       router.push(`/products/${id}`);
     },
     [router]
+  );
+
+  const handleDeleteProduct = useCallback(
+    async (productId: string, productName: string) => {
+      const confirmDelete = window.confirm(
+        `Delete product "${productName}"? This action cannot be undone.`
+      );
+      if (!confirmDelete) return;
+      try {
+        await deleteProduct.mutateAsync(productId);
+        toast.success('Product deleted');
+      } catch (_err) {
+        toast.error('Failed to delete product');
+      }
+    },
+    [deleteProduct]
   );
 
   if (isFetching && !data) {
@@ -612,12 +635,15 @@ function ProductTableOptimized({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Created
               </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200" aria-live="polite">
             {products.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-12">
+                <td colSpan={8} className="px-6 py-12">
                   <div className="text-center">
                     <div className="text-4xl mb-2">📦</div>
                     <h3 className="text-lg font-medium text-gray-900">No products found</h3>
@@ -695,6 +721,17 @@ function ProductTableOptimized({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(product.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right" onClick={e => e.stopPropagation()}>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={deleteProduct.isPending}
+                      aria-label={`Delete product ${product.name}`}
+                      onClick={() => handleDeleteProduct(product.id, product.name)}
+                    >
+                      {deleteProduct.isPending ? 'Deleting…' : 'Delete'}
+                    </Button>
                   </td>
                 </tr>
               );

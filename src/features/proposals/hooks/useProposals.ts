@@ -270,6 +270,7 @@ export function useCreateProposal() {
       // ✅ IMMEDIATE CACHE UPDATES - Following MIGRATION_LESSONS.md
       queryClient.setQueryData(proposalKeys.proposals.byId(data.id), data);
       queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.all });
+      queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.lists() });
       queryClient.invalidateQueries({ queryKey: proposalKeys.proposals.stats() });
 
       // Track analytics

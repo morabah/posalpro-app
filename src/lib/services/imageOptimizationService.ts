@@ -84,7 +84,6 @@ class ImageOptimizationService {
       const sharp = await this.getSharpInstance();
 
       const originalSize = imageBuffer.length;
-      const optimizedBuffer: Buffer;
       const optimizedFormat = format;
 
       // Apply optimizations
@@ -122,7 +121,7 @@ class ImageOptimizationService {
         sharpInstance = sharpInstance.blur(blur);
       }
 
-      optimizedBuffer = await sharpInstance.toBuffer();
+      const optimizedBuffer = await sharpInstance.toBuffer();
 
       const optimizedSize = optimizedBuffer.length;
       const compressionRatio = optimizedSize / originalSize;

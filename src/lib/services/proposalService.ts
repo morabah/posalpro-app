@@ -64,6 +64,7 @@ interface UserStoryTracking {
   userStory: string;
   hypothesis: string;
   testCase: string;
+  planType?: string;
 }
 
 // Helper function to check if error is a Prisma error
@@ -137,6 +138,16 @@ export interface ProposalWithCustomer extends Proposal {
     name: string;
     email: string;
   };
+  products?: Array<{
+    id: string;
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    discount: number;
+    name: string;
+    category: string;
+  }>;
 }
 
 export interface ProposalAnalytics {
@@ -242,6 +253,91 @@ export class ProposalService {
           PrismaLocal.sql`SELECT COALESCE(MAX(version), 0) as v FROM proposal_versions WHERE "proposalId" = ${proposalId}`
         );
         const nextVersion = (last[0]?.v ?? 0) + 1;
+
+        // Log version creation for debugging
+        console.log('Creating version snapshot', {
+          component: 'ProposalService',
+          operation: 'scheduleVersionSnapshot',
+          proposalId,
+          version: nextVersion,
+          changeType,
+          changesSummary,
+        });
+
+        // For update operations, check if there are actual changes to prevent duplicate versions
+        if (changeType === 'update') {
+          const lastVersion = await prisma.proposalVersion.findFirst({
+            where: { proposalId },
+            orderBy: { version: 'desc' },
+            select: { version: true, snapshot: true, changesSummary: true },
+          });
+
+          if (lastVersion) {
+            const lastSnapshot = lastVersion.snapshot as any;
+
+            // Create current snapshot for comparison (same structure as what will be saved)
+            const currentSnapshot = {
+              id: proposal.id,
+              title: proposal.title,
+              value: proposal.value,
+              status: proposal.status,
+              currency: proposal.currency,
+              priority: proposal.priority,
+              customerId: proposal.customerId,
+              metadata: proposal.metadata,
+              products:
+                proposal.products?.map((p: any) => ({
+                  productId: p.productId,
+                  quantity: p.quantity,
+                  unitPrice: p.unitPrice,
+                  total: p.total,
+                  updatedAt: p.updatedAt,
+                })) || [],
+              sections:
+                proposal.sections?.map((s: any) => ({
+                  id: s.id,
+                  title: s.title,
+                  order: s.order,
+                  updatedAt: s.updatedAt,
+                })) || [],
+              updatedAt: proposal.updatedAt,
+            };
+
+            // Deep comparison of snapshots to detect any changes
+            const hasChanges = JSON.stringify(lastSnapshot) !== JSON.stringify(currentSnapshot);
+
+            // If no changes detected and summary is generic, skip version creation
+            if (
+              !hasChanges &&
+              (changesSummary === 'Proposal updated' ||
+                changesSummary === lastVersion.changesSummary)
+            ) {
+              console.log('Skipping duplicate version creation - no actual changes detected', {
+                component: 'ProposalService',
+                operation: 'scheduleVersionSnapshot',
+                proposalId,
+                changeType,
+                changesSummary,
+                lastVersion: lastVersion.version,
+                hasChanges: false,
+              });
+              return;
+            }
+
+            // Log when changes are detected for debugging
+            if (hasChanges) {
+              console.log('Changes detected, creating new version', {
+                component: 'ProposalService',
+                operation: 'scheduleVersionSnapshot',
+                proposalId,
+                changeType,
+                changesSummary,
+                lastVersion: lastVersion.version,
+                hasChanges: true,
+              });
+            }
+          }
+        }
 
         // Compute current total value from linked products (independent of denormalized field)
         const computedTotal = Array.isArray(proposal.products)
@@ -1637,14 +1733,22 @@ export class ProposalService {
       const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
 
       // Build where clause following service layer patterns
-      const where: Prisma.ProposalWhereInput = this.buildWhereClause(filters);
+      const tenant = getCurrentTenant();
+      const where: Prisma.ProposalWhereInput = {
+        ...this.buildWhereClause(filters),
+        tenantId: tenant.tenantId,
+      };
 
       // Build order by with cursor pagination support
       const orderBy: Array<Record<string, Prisma.SortOrder>> = this.buildOrderByClause(filters);
 
-      // Execute query with cursor pagination
+      // Execute optimized query using Prisma's built-in capabilities
+      // Use proper Prisma query with optimized select and include for better performance
       const rows = await prisma.proposal.findMany({
-        where,
+        where: {
+          ...this.buildWhereClause(filters),
+          tenantId: tenant.tenantId,
+        },
         select: {
           id: true,
           title: true,
@@ -1678,6 +1782,13 @@ export class ProposalService {
               email: true,
             },
           },
+          // Use a more efficient approach - get products separately if needed
+          // For now, use a simplified version without products to avoid N+1
+          _count: {
+            select: {
+              products: true,
+            },
+          },
         },
         orderBy,
         take: limit + 1, // Take one extra to check if there are more
@@ -1690,7 +1801,8 @@ export class ProposalService {
       const nextCursor = hasNextPage ? rows[limit - 1].id : null;
 
       // Normalize data following service layer patterns
-      const normalizedItems = items.map(item => this.normalizeProposalData(item));
+      // For optimized queries, products are just a count, so we need to handle this
+      const normalizedItems = items.map(item => this.normalizeProposalDataForOptimizedQuery(item));
 
       return {
         items: normalizedItems as ProposalWithCustomer[],
@@ -1709,6 +1821,73 @@ export class ProposalService {
         },
       });
     }
+  }
+
+  /**
+   * Build raw SQL WHERE clause for optimized queries
+   */
+  private buildRawWhereClause(filters: ProposalFilters): string {
+    const conditions: string[] = [];
+
+    if (filters.search) {
+      conditions.push(
+        `(p.title ILIKE '%${filters.search}%' OR p.description ILIKE '%${filters.search}%')`
+      );
+    }
+
+    if (filters.status && filters.status.length > 0) {
+      const statusValues = filters.status.map(s => `'${s}'`).join(',');
+      conditions.push(`p.status IN (${statusValues})`);
+    }
+
+    if (filters.priority && filters.priority.length > 0) {
+      const priorityValues = filters.priority.map(p => `'${p}'`).join(',');
+      conditions.push(`p.priority IN (${priorityValues})`);
+    }
+
+    if (filters.customerId) {
+      conditions.push(`p."customerId" = '${filters.customerId}'`);
+    }
+
+    if (filters.assignedTo) {
+      conditions.push(`p."assignedTo" = '${filters.assignedTo}'`);
+    }
+
+    if (filters.dueBefore) {
+      conditions.push(`p."dueDate" < '${filters.dueBefore.toISOString()}'`);
+    }
+
+    if (filters.dueAfter) {
+      conditions.push(`p."dueDate" > '${filters.dueAfter.toISOString()}'`);
+    }
+
+    if (filters.openOnly) {
+      conditions.push(`p.status NOT IN ('APPROVED', 'REJECTED', 'ACCEPTED', 'DECLINED')`);
+    }
+
+    return conditions.length > 0 ? conditions.join(' AND ') : '1=1';
+  }
+
+  /**
+   * Build raw SQL ORDER BY clause for optimized queries
+   */
+  private buildRawOrderByClause(filters: ProposalFilters): string {
+    const sortBy = filters.sortBy || 'createdAt';
+    const sortOrder = filters.sortOrder || 'desc';
+
+    // Map field names to database column names
+    const fieldMapping: Record<string, string> = {
+      title: 'p.title',
+      status: 'p.status',
+      priority: 'p.priority',
+      dueDate: 'p."dueDate"',
+      createdAt: 'p."createdAt"',
+      updatedAt: 'p."updatedAt"',
+      value: 'p.value',
+    };
+
+    const column = fieldMapping[sortBy] || `p."${sortBy}"`;
+    return `${column} ${sortOrder.toUpperCase()}`;
   }
 
   /**
@@ -1766,6 +1945,7 @@ export class ProposalService {
             title: true,
             description: true,
             customerId: true,
+            createdBy: true, // ✅ FIXED: Include createdBy field for response validation
             dueDate: true,
             priority: true,
             value: true,
@@ -1811,6 +1991,7 @@ export class ProposalService {
             title: true,
             description: true,
             customerId: true,
+            createdBy: true, // ✅ FIXED: Include createdBy field for response validation
             dueDate: true,
             priority: true,
             value: true,
@@ -1968,28 +2149,76 @@ export class ProposalService {
       submittedAt: proposal.submittedAt || null,
       approvedAt: proposal.approvedAt || null,
       validUntil: proposal.validUntil || null,
+      // Normalize products for consistent value calculation
+      products: proposal.products
+        ? proposal.products.map((product: any) => ({
+            id: product.id,
+            productId: product.productId,
+            quantity: product.quantity,
+            unitPrice: Number(product.unitPrice || 0),
+            total: Number(product.total || 0),
+            discount: Number(product.discount || 0),
+            name: product.product?.name || `Product ${product.productId}`,
+            category: product.product?.category?.[0] || 'General',
+          }))
+        : undefined,
+    };
+  }
+
+  /**
+   * Normalize proposal data for optimized queries (where products is just a count)
+   */
+  private normalizeProposalDataForOptimizedQuery(proposal: any): Proposal {
+    return {
+      ...proposal,
+      tenantId: proposal.tenantId || '',
+      value: proposal.value ? Number(proposal.value) : undefined,
+      description: proposal.description || '',
+      userStoryTracking: proposal.userStoryTracking || {},
+      version: proposal.version || 1,
+      customer: proposal.customer
+        ? {
+            ...proposal.customer,
+            email: proposal.customer.email || '',
+            industry: proposal.customer.industry || '',
+          }
+        : undefined,
+      title: proposal.title || 'Untitled Proposal',
+      dueDate: proposal.dueDate || null,
+      submittedAt: proposal.submittedAt || null,
+      approvedAt: proposal.approvedAt || null,
+      validUntil: proposal.validUntil || null,
+      // For optimized queries, products is just a count, so we set it to undefined
+      // The products count is available in _count.products if needed
+      products: undefined,
     };
   }
 
   /**
    * Helper: Calculate proposal value from products
    */
-  private calculateProposalValue(data: ProposalProductData): number {
-    if (data.products?.length > 0) {
-      return data.products.reduce((sum: number, product) => sum + (product.total || 0), 0);
+  private calculateProposalValue(data: any): number {
+    // ✅ FIXED: Handle both direct products and productData.products structure
+    const products = data.products || data.productData?.products || [];
+    if (products.length > 0) {
+      return products.reduce((sum: number, product: any) => sum + (product.total || 0), 0);
     }
-    return 0;
+    // ✅ FIXED: Also check for direct value if no products
+    return data.value || 0;
   }
 
   /**
    * Helper: Build user story tracking object
    */
   private buildUserStoryTracking(data: Record<string, unknown>): UserStoryTracking {
+    // ✅ FIXED: Handle both direct properties and nested structure
+    const basicInfo = (data.basicInfo as Record<string, unknown>) || {};
     return {
-      projectType: (data.projectType as string) || '',
-      userStory: (data.userStory as string) || '',
-      hypothesis: (data.hypothesis as string) || '',
-      testCase: (data.testCase as string) || '',
+      projectType: (data.projectType as string) || (basicInfo.projectType as string) || '',
+      userStory: (data.userStory as string) || (basicInfo.userStory as string) || '',
+      hypothesis: (data.hypothesis as string) || (basicInfo.hypothesis as string) || '',
+      testCase: (data.testCase as string) || (basicInfo.testCase as string) || '',
+      planType: (data.planType as string) || (basicInfo.planType as string) || undefined,
     };
   }
 

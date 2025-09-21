@@ -115,15 +115,18 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElemen
   // ... rest of handler
 };
 
-// ✅ 2. Handler priority system for RHF compatibility
-const hasRegisterHandlers = registerProps.onChange || registerProps.onBlur;
-const hasValue = value !== undefined;
-const shouldUseRegisterHandlers = hasRegisterHandlers;
-const shouldUseCustomHandlers = !hasRegisterHandlers && hasValue;
+// ✅ 2. Robust RHF handler resolution (post-destructuring)
+const rhfOnChange = (registerProps as RegisterProps).onChange;
+const rhfOnBlur = (registerProps as RegisterProps).onBlur;
+const effectiveOnChange = onChange ?? rhfOnChange;
+const effectiveOnBlur = onBlur ?? rhfOnBlur;
+const isControlled = value !== undefined;
 
-// ✅ 3. Correct onChange assignment
-onChange={shouldUseRegisterHandlers ? registerProps.onChange :
-          shouldUseCustomHandlers ? handleChange : undefined}
+// ✅ 3. Correct onChange/onBlur assignment
+// - Uncontrolled (RHF-driven): pass RHF handlers so it can register and validate
+// - Controlled: use local handlers and normalize values
+onChange={isControlled ? handleChange : (effectiveOnChange as any)}
+onBlur={isControlled ? handleBlur : (effectiveOnBlur as any)}
 
 // ✅ 4. Safe access in all components
 if (!e || !e.target) return; // ✅ Check before e.target.value access
@@ -164,6 +167,106 @@ before access, use proper handler priority system for RHF compatibility.
 
 **Enhancement**: Added forwardRef for complete RHF compatibility - enables focus
 management, validation, and native element parity.
+
+### Addendum (2025‑09‑20): RHF + Custom Input Wrapper Regression
+
+During the migration, handler props from `register(...)` were destructured into
+top‑level `onChange`/`onBlur` and removed from `restProps`. Our wrapper looked
+only at `restProps` to find handlers, resulting in inputs mounting without
+handlers and never registering with RHF. Symptom: `formState.isValid` stayed
+false and submit buttons were always disabled, despite visible input changes.
+
+Generalized fix applied to `src/components/ui/FormField.tsx`:
+
+1) Merge refs (RHF + forwarded ref):
+
+```ts
+const setRef = (el: HTMLInputElement | HTMLTextAreaElement | null) => {
+  const registerRef = (registerProps as RegisterProps)?.ref;
+  if (typeof registerRef === 'function') registerRef(el);
+  else if (registerRef && 'current' in registerRef) registerRef.current = el;
+
+  if (typeof ref === 'function') ref(el as any);
+  else if (ref && 'current' in (ref as any)) (ref as any).current = el as any;
+};
+```
+
+2) Resolve effective handlers from either top‑level props or `registerProps`:
+
+```ts
+const rhfOnChange = (registerProps as RegisterProps).onChange;
+const rhfOnBlur = (registerProps as RegisterProps).onBlur;
+const effectiveOnChange = onChange ?? rhfOnChange;
+const effectiveOnBlur = onBlur ?? rhfOnBlur;
+const isControlled = value !== undefined;
+
+// Uncontrolled → use RHF handlers; Controlled → use local handlers
+<input
+  ref={setRef as any}
+  onChange={isControlled ? handleChange : (effectiveOnChange as any)}
+  onBlur={isControlled ? handleBlur : (effectiveOnBlur as any)}
+  value={value !== undefined ? value : undefined}
+  ...
+/>
+```
+
+3) Guard number inputs and empty strings, globally:
+
+```ts
+// In Zod schemas for numeric fields used with RHF
+const numberOptional = z.preprocess(
+  v => (v === '' || v === null ? undefined : v),
+  z.number().min(0).optional()
+);
+
+// Or at register site
+register('amount', { setValueAs: v => (v === '' ? undefined : Number(v)) });
+```
+
+4) Submit enablement pattern for complex composites:
+
+```ts
+const watched = watch();
+const canSubmit = schema.safeParse(watched).success;
+// Prefer RHF isValid; fallback to schema check when wrappers delay registration
+<Button disabled={loading || !(isValid || canSubmit)} />
+```
+
+Checklist to prevent recurrence across the app:
+
+- Custom inputs must merge RHF ref with forwarded ref.
+- Use effectiveOnChange/effectiveOnBlur to support both RHF and custom handlers.
+- Avoid forcing controlled mode unless necessary; when controlled, normalize
+  events and values (number, empty string).
+
+---
+
+## 🔧 Proposal Operations Stabilization (Creation + Deletion)
+
+Problem set (generalized):
+
+- New proposals “saved” but not visible; edits opened wrong wizard flow.
+- Deletions succeeded (200) yet items reappeared due to caching; occasional 404/record‑not‑found on repeated deletes.
+- Intermittent “Load failed” fetch errors during stats/list reloads.
+
+Resolutions (apply broadly):
+
+- Payload alignment: Standardize wizard payloads to nested `ProposalCreateSchema`; transform legacy shapes; omit empty strings for optional fields.
+- Idempotency: Send `Idempotency-Key` on POST; routes assert idempotency to prevent duplicates.
+- Tenant scoping: Scope list and delete by `tenantId`; make DELETE idempotent (not‑found → 200 for current tenant).
+- Cache coherence: Invalidate proposal list caches and stats on create/update/delete to avoid stale UI after mutations.
+- HTTP resilience: Disable caching for API calls; normalize “Load failed” as retriable; add light retries for stats.
+- Plan continuity: Persist `planType` with `userStoryTracking`; on edit, initialize wizard plan from `metadata.planType` or tracking to keep BASIC/PROFESSIONAL/ENTERPRISE steps.
+
+Operational guidance:
+
+- Prefer server‑side computation fallbacks (e.g., totals) when client values are missing.
+- Treat destructive endpoints as idempotent and cache‑clearing.
+- For numeric fields, normalize '' → undefined via Zod preprocess or
+  `setValueAs`.
+- Prefer `mode: 'onChange'` and ensure inputs actually call RHF handlers.
+- Optionally gate submit with `isValid || schema.safeParse(watch()).success` for
+  forms with complex wrappers.
 
 **Database Enum Fix**: Updated form tier values to match Prisma CustomerTier
 enum (STANDARD, PREMIUM, ENTERPRISE, VIP) instead of incorrect lowercase values.
