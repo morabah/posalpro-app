@@ -898,10 +898,33 @@ const params = {
   `XxxUpdateSchema`, `BulkDeleteSchema`, `VersionsQuerySchema`.
 - Coerce/transform at the edges (string→number, dates→ISO strings) inside
   schemas.
+- **Update Schema Consistency**: Ensure `XxxUpdateSchema` matches the
+  nullable/optional patterns of the main `XxxSchema`. If database fields can be
+  `null`, both schemas must use `.nullable()`, not just `.optional()`.
+
+```typescript
+// ✅ CORRECT: Consistent nullable patterns
+export const CustomerSchema = z.object({
+  phone: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+});
+
+export const CustomerUpdateSchema = z.object({
+  phone: z.string().nullable().optional(), // ✅ Matches main schema
+  address: z.string().nullable().optional(), // ✅ Matches main schema
+});
+
+// ❌ FORBIDDEN: Inconsistent nullable/optional patterns
+export const CustomerUpdateSchema = z.object({
+  phone: z.string().optional(), // ❌ Missing .nullable()
+  address: z.string().optional(), // ❌ Missing .nullable()
+});
+```
 
 > Rationale: Centralizing schemas eliminates drift, improves type safety, and
 > keeps UI and API contracts in lockstep. Proper query parameter alignment
-> prevents 400 Bad Request validation errors.
+> prevents 400 Bad Request validation errors. Update schema consistency prevents
+> validation failures when database contains null values.
 
 ## 🎯 **FEATURE ORGANIZATION** {#feature-organization}
 
@@ -991,6 +1014,35 @@ export interface ProposalData {
 - [ ] Use database enum values exactly
 - [ ] Align Zod schemas with database constraints
 - [ ] Test with real database data, not mocks
+- [ ] **Schema Synchronization**: Ensure all Prisma schema files are
+      synchronized (main `schema.prisma` vs `schema.production.prisma`)
+- [ ] **Field Selection Verification**: Verify API route field selections match
+      actual database schema before implementing
+
+**Schema Synchronization Requirements (MANDATORY)**
+
+```typescript
+// ✅ CORRECT: Verify schema synchronization before development
+// 1. Check multiple schema files are in sync
+// 2. Ensure Prisma client generation uses correct schema
+// 3. Verify field selections in API routes match actual schema
+
+// Example: Customer model field verification
+// Before implementing: Check both schemas have same fields
+const customerSelect = {
+  id: true,
+  name: true,
+  phone: true, // ✅ Verify this field exists
+  address: true, // ✅ Verify this field exists
+  // customerType: true, // ❌ Don't select if field missing from schema
+};
+```
+
+**❌ FORBIDDEN: Schema synchronization issues**
+
+- Different field definitions between schema files
+- API routes selecting non-existent fields
+- Prisma client generated from wrong schema file
 
 ## 🔧 **SERVICE LAYER PATTERNS** {#service-layer-patterns}
 
@@ -1453,6 +1505,12 @@ Acceptance
 - Manual JSON serialization in HTTP client calls
 - Using console.log/console.error instead of structured logging
 - Response format mismatches between layers
+- **Schema validation inconsistencies**: Update schemas missing `.nullable()`
+  when main schemas have it
+- **Prisma schema drift**: Multiple schema files out of sync causing field
+  selection errors
+- **Field selection without verification**: Selecting database fields that don't
+  exist
 
 ### **Data Flow Consistency**
 

@@ -5,8 +5,8 @@ DashboardManagementBridge and StateBridge) in this document reflect historical
 context. The dashboard has been migrated to the modern feature-based
 architecture with UI state in Zustand and server state in React Query. See
 docs/DASHBOARD_MIGRATION_ASSESSMENT.md for the current approach and
-docs/archive/dashboard-bridge-20250830/ARCHIVE_INDEX.md for archived
-bridge-era components.
+docs/archive/dashboard-bridge-20250830/ARCHIVE_INDEX.md for archived bridge-era
+components.
 
 This document captures key insights, patterns, and solutions discovered during
 development.
@@ -1282,6 +1282,10 @@ resolved only on server.
 
 - 500s from schema mismatches, invalid field mappings, and incorrect relation
   assumptions
+- **Schema File Synchronization**: Multiple Prisma schema files (`schema.prisma`
+  vs `schema.production.prisma`) with different field definitions
+- **Field Selection Errors**: API routes attempting to select fields that don't
+  exist in the actual database schema
 
 ### Solutions
 
@@ -1289,13 +1293,22 @@ resolved only on server.
   tables)
 - Verified actual Prisma schema before implementing validation
 - Defensive conversions for dynamic access (`String()` where needed)
+- **Schema Synchronization**: Ensured all schema files have consistent field
+  definitions and enum values
+- **Field Verification**: Verified API route `select` statements against actual
+  database schema before implementation
 
 ### Standard
 
-- “Schema-first”: validate with `npx prisma migrate status` and check
+- "Schema-first": validate with `npx prisma migrate status` and check
   `schema.prisma` before coding
 - Use separate reads for user and roles in auth; avoid deep nested relations in
   auth-critical paths
+- **Multi-Schema Verification**: When multiple schema files exist, ensure
+  they're synchronized before development (`npx prisma generate` with correct
+  schema)
+- **Field Selection Validation**: Always verify field names exist in schema
+  before using in API route `select` statements
 
 ---
 
@@ -2967,17 +2980,23 @@ transformation patterns.
    than strict `parse()` that crashes
 4. **Nullable vs Optional**: Distinguish between database null values and
    missing optional fields
-5. **Enum Case Sensitivity**: Database enum values may differ in case from
+5. **Update Schema Consistency**: Ensure all related schemas (main, create,
+   update) have consistent nullable patterns. If `CustomerSchema` has
+   `.nullable().optional()`, then `CustomerUpdateSchema` must match, not use
+   only `.optional()`
+6. **Enum Case Sensitivity**: Database enum values may differ in case from
    schema expectations
-6. **Date Object Handling**: Database returns Date objects, APIs expect ISO
+7. **Date Object Handling**: Database returns Date objects, APIs expect ISO
    strings - transform accordingly
-7. **Error Context**: Comprehensive error metadata enables faster debugging of
+8. **Error Context**: Comprehensive error metadata enables faster debugging of
    complex validation issues
 
 ### Prevention Standards
 
 - **✅ Schema Reality-Check**: Design schemas based on actual database queries,
   not ideal structures
+- **✅ Update Schema Synchronization**: Ensure create/update schemas match main
+  schema nullable patterns (`CustomerUpdateSchema` must mirror `CustomerSchema`)
 - **✅ Data Transformation Layer**: Always transform database data to match API
   expectations
 - **✅ Safe Validation**: Use `safeParse()` with proper error handling for
