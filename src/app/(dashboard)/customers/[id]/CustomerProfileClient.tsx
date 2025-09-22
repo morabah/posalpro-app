@@ -17,7 +17,7 @@ import { FormErrorSummary, FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/forms/Button';
 import { SearchableCountrySelect } from '@/components/ui/SearchableCountrySelect';
 import { useCustomer } from '@/features/customers/hooks';
-import type { Customer } from '@/features/customers/schemas';
+import type { Customer, CustomerType } from '@/features/customers/schemas';
 import { CustomerUpdateSchema } from '@/features/customers/schemas';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { useResponsive } from '@/hooks/useResponsive';
@@ -77,9 +77,11 @@ interface CustomerApiResponse {
   email?: string | null;
   revenue?: number | null;
   companySize?: string | null;
-  status?: 'ACTIVE' | 'INACTIVE' | 'PROSPECT';
-  tier?: 'STANDARD' | 'PREMIUM' | 'ENTERPRISE';
+  status?: 'ACTIVE' | 'INACTIVE' | 'PROSPECT' | 'CHURNED';
+  tier?: 'STANDARD' | 'PREMIUM' | 'ENTERPRISE' | 'VIP';
+  customerType?: CustomerType;
   tags?: string[];
+  tenantId?: string;
   metadata?: Record<string, unknown> | null;
   segmentation?: Record<string, unknown> | null;
   riskScore?: number | null;
@@ -156,7 +158,9 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       revenue: typeof raw.revenue === 'number' ? raw.revenue : (previous?.revenue ?? null),
       status: raw.status ?? previous?.status ?? 'ACTIVE',
       tier: raw.tier ?? previous?.tier ?? undefined,
+      customerType: (raw.customerType as CustomerType) ?? previous?.customerType ?? 'ENDUSER',
       tags: Array.isArray(raw.tags) ? raw.tags : (previous?.tags ?? []),
+      tenantId: String(raw.tenantId ?? previous?.tenantId ?? 'tenant_default'),
       metadata: raw.metadata ?? previous?.metadata ?? null,
       segmentation: raw.segmentation ?? previous?.segmentation ?? null,
       riskScore: raw.riskScore ?? previous?.riskScore ?? null,
@@ -196,6 +200,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         revenue: customer.revenue ?? undefined,
         companySize: customer.companySize ?? '',
         tier: customer.tier ?? 'STANDARD',
+        customerType: customer.customerType ?? 'ENDUSER',
         tags: customer.tags ?? [],
       });
     }
@@ -213,6 +218,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         website: customer.website ?? undefined,
         email: customer.email as string,
         tier: customer.tier as any,
+        customerType: customer.customerType ?? 'ENDUSER',
         revenue: customer.revenue ?? undefined,
         companySize: customer.companySize ?? '',
         tags: customer.tags ? [...customer.tags] : [],
@@ -232,6 +238,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         revenue: undefined,
         companySize: '',
         tier: 'STANDARD',
+        customerType: 'ENDUSER',
         tags: [],
       });
     }
@@ -258,6 +265,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         address: data.address,
         country: data.country,
         industry: data.industry,
+        customerType: data.customerType,
         tags: data.tags,
         metadata: {
           uiTier: data.tier,
@@ -417,6 +425,22 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
     return displays[tier] || displays[CustomerTier.STANDARD]; // Fallback to STANDARD if tier not found
   };
 
+  const getCustomerTypeDisplay = (customerType: string) => {
+    const displays: Record<string, { label: string; color: string; bg: string }> = {
+      MIDDLEMAN: { label: 'Middle Man', color: 'text-orange-600', bg: 'bg-orange-100' },
+      ENDUSER: { label: 'End User', color: 'text-green-600', bg: 'bg-green-100' },
+      DISTRIBUTOR: { label: 'Distributor', color: 'text-blue-600', bg: 'bg-blue-100' },
+      VENDOR: { label: 'Vendor', color: 'text-purple-600', bg: 'bg-purple-100' },
+      CONTRACTOR: { label: 'Contractor', color: 'text-indigo-600', bg: 'bg-indigo-100' },
+      GOVERNMENTAL: { label: 'Governmental', color: 'text-red-600', bg: 'bg-red-100' },
+      NGO: { label: 'NGO', color: 'text-pink-600', bg: 'bg-pink-100' },
+      SYSTEM_INTEGRATOR: { label: 'System Integrator', color: 'text-teal-600', bg: 'bg-teal-100' },
+    };
+    return (
+      displays[customerType] || { label: 'Unknown', color: 'text-gray-600', bg: 'bg-gray-100' }
+    );
+  };
+
   const getHealthColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
     if (score >= 60) return 'text-yellow-600';
@@ -469,6 +493,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
   }
 
   const tierDisplay = getTierDisplay((customer.tier as CustomerTier) || CustomerTier.STANDARD);
+  const customerTypeDisplay = getCustomerTypeDisplay(customer.customerType || 'ENDUSER');
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -505,6 +530,23 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                       inputClassName="border-b bg-transparent focus:outline-none"
                       placeholder="Industry"
                     />
+                  </div>
+                  <span>•</span>
+                  <div className="space-y-1">
+                    <select
+                      {...register('customerType')}
+                      className="border-b bg-transparent focus:outline-none text-sm text-gray-600"
+                      style={{ border: 'none', background: 'transparent' }}
+                    >
+                      <option value="MIDDLEMAN">Middle Man</option>
+                      <option value="ENDUSER">End User</option>
+                      <option value="DISTRIBUTOR">Distributor</option>
+                      <option value="VENDOR">Vendor</option>
+                      <option value="CONTRACTOR">Contractor</option>
+                      <option value="GOVERNMENTAL">Governmental</option>
+                      <option value="NGO">NGO</option>
+                      <option value="SYSTEM_INTEGRATOR">System Integrator</option>
+                    </select>
                   </div>
                   <span>•</span>
                   <div className="space-y-1">
@@ -752,11 +794,18 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                     )}
                   </div>
                   <div className="flex items-center justify-between mt-4">
-                    <span
-                      className={`px-3 py-1 text-sm rounded-full ${tierDisplay?.bg || 'bg-gray-100'} ${tierDisplay?.color || 'text-gray-600'}`}
-                    >
-                      {tierDisplay?.label || 'Unknown Tier'}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span
+                        className={`px-3 py-1 text-sm rounded-full ${tierDisplay?.bg || 'bg-gray-100'} ${tierDisplay?.color || 'text-gray-600'}`}
+                      >
+                        {tierDisplay?.label || 'Unknown Tier'}
+                      </span>
+                      <span
+                        className={`px-3 py-1 text-sm rounded-full ${customerTypeDisplay?.bg || 'bg-gray-100'} ${customerTypeDisplay?.color || 'text-gray-600'}`}
+                      >
+                        {customerTypeDisplay?.label || 'Unknown Type'}
+                      </span>
+                    </div>
                     <span className="text-sm text-gray-600">{customer.industry}</span>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-4">

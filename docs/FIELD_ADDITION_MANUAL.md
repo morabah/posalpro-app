@@ -68,6 +68,13 @@ Before adding any field, complete this checklist:
 - [ ] Identify affected components
 - [ ] Plan testing approach
 - [ ] Consider rollback strategy
+- [ ] Ensure field exists in all pages (view, edit, create)
+- [ ] Ensure field included in create/edit payloads
+
+## Data Safety
+
+- [ ] Backup database before schema changes
+- [ ] Verify backup integrity
 ```
 
 ---
@@ -99,7 +106,17 @@ model EntityName {
 - `DateTime` - Timestamps
 - `Json` - Complex structured data
 
-### **Step 1.2: Generate Migration**
+### **Step 1.2: Backup Database**
+
+```bash
+# CRITICAL: Backup database before schema changes
+npm run db:backup
+
+# Verify backup
+npm run db:backup:verify
+```
+
+### **Step 1.3: Generate Migration**
 
 ```bash
 # Generate migration
@@ -112,7 +129,7 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-### **Step 1.3: Verify Schema**
+### **Step 1.4: Verify Schema**
 
 ```bash
 # Check generated types
@@ -185,6 +202,15 @@ export const EntityCreateSchema = EntitySchema.extend({
 export const EntityUpdateSchema = z.object({
   // Existing updatable fields...
   newField: NewFieldSchema.optional(), // Optional for updates
+});
+
+// CRITICAL: Ensure field in all CRUD schemas
+export const EntityCreateSchema = EntitySchema.extend({
+  newField: NewFieldSchema, // Required for creation
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 // ====================
@@ -598,7 +624,7 @@ export class EntityService {
         select: {
           id: true,
           // Existing fields...
-          newField: true,
+          newField: true, // Include new field in response
           createdAt: true,
           updatedAt: true,
         },
@@ -1193,7 +1219,7 @@ export function EntityEditForm({ entityId, onSuccess, onCancel }: EntityEditForm
     defaultValues: {
       name: '',
       // Existing fields...
-      newField: '',
+      newField: '', // Include new field in defaults
     },
   });
 
@@ -1207,7 +1233,7 @@ export function EntityEditForm({ entityId, onSuccess, onCancel }: EntityEditForm
       reset({
         name: entity.name || '',
         // Existing fields...
-        newField: entity.newField || '',
+        newField: entity.newField || '', // Include new field in reset
       });
     }
   }, [entity, reset]);
@@ -1222,9 +1248,10 @@ export function EntityEditForm({ entityId, onSuccess, onCancel }: EntityEditForm
         updatedFields: Object.keys(data),
       });
 
+      // CRITICAL: Ensure data object includes all fields (newField is included via form)
       await updateEntity.mutateAsync({
         id: entityId,
-        data,
+        data, // Contains all form fields including newField
       });
 
       logInfo('Form: Entity update successful', {
@@ -1626,7 +1653,7 @@ export default function CreateEntityPage() {
     defaultValues: {
       name: '',
       // Existing fields...
-      newField: '',
+      newField: '', // Include new field in create form
     },
   });
 
@@ -1639,7 +1666,8 @@ export default function CreateEntityPage() {
         entityData: { ...data, newField: data.newField ? '[REDACTED]' : undefined },
       });
 
-      const entity = await createEntity.mutateAsync(data);
+      // CRITICAL: Ensure data object includes all fields (newField is included via form)
+      const entity = await createEntity.mutateAsync(data); // Contains all form fields including newField
 
       logInfo('Page: Entity created successfully', {
         component: 'CreateEntityPage',
@@ -2096,10 +2124,11 @@ test.describe('[Entity] CRUD Operations', () => {
 ```markdown
 ## Database Migration
 
+- [ ] Database backup completed before changes
 - [ ] Migration file created and tested locally
 - [ ] Rollback strategy documented
 - [ ] Data migration script prepared (if needed)
-- [ ] Backup strategy in place
+- [ ] Backup integrity verified
 
 ## Code Quality
 
@@ -2135,19 +2164,22 @@ test.describe('[Entity] CRUD Operations', () => {
 ### **Deployment Steps**
 
 ```bash
-# 1. Backup database
+# 1. Backup database (CRITICAL)
 npm run db:backup
 
-# 2. Run database migration
+# 2. Verify backup
+npm run db:backup:verify
+
+# 3. Run database migration
 npm run db:migrate
 
-# 3. Deploy application
+# 4. Deploy application
 npm run deploy
 
-# 4. Verify deployment
+# 5. Verify deployment
 npm run health-check
 
-# 5. Monitor application
+# 6. Monitor application
 npm run monitor
 ```
 
@@ -2155,7 +2187,7 @@ npm run monitor
 
 ```bash
 # If deployment fails:
-npm run db:rollback
+npm run db:restore
 npm run deploy:rollback
 npm run health-check
 ```
@@ -2228,6 +2260,33 @@ console.log(result.error);
 const fieldResult = NewFieldSchema.safeParse(value);
 console.log(fieldResult.error);
 ```
+
+#### **6. Field Mapping Issues**
+
+```bash
+# Check API response contains field
+curl http://localhost:3000/api/[entity]/[id] | grep newField
+
+# Verify mapper includes field
+console.log(mapApiToCustomer(apiResponse));
+
+# Check component displays field
+console.log(customer.newField);
+```
+
+#### **7. CustomerType Mapping Error (Resolved)**
+
+**Issue**: CustomerType not displaying in profile view due to missing field in
+`mapApiToCustomer`.
+
+**Solution**: Add `customerType` field to mapper function:
+
+```typescript
+customerType: (raw.customerType as CustomerType) ?? previous?.customerType ?? 'ENDUSER',
+```
+
+**Import required**:
+`import type { CustomerType } from '@/features/customers/schemas';`
 
 ### **Debug Commands**
 

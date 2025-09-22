@@ -50,12 +50,18 @@ const customerCreationSchema = z.object({
   // Email is required to align with API POST /api/customers
   email: z.string().email('Please enter a valid email address'),
   // Phone is optional in API; allow empty string in form
-  phone: z.string().refine((val) => val === '' || val.length >= 1, {
-    message: 'Phone number is required'
-  }).optional(),
-  website: z.string().refine((val) => val === '' || z.string().url().safeParse(val).success, {
-    message: 'Please enter a valid website URL'
-  }).optional(),
+  phone: z
+    .string()
+    .refine(val => val === '' || val.length >= 1, {
+      message: 'Phone number is required',
+    })
+    .optional(),
+  website: z
+    .string()
+    .refine(val => val === '' || z.string().url().safeParse(val).success, {
+      message: 'Please enter a valid website URL',
+    })
+    .optional(),
   address: z.string().max(200, 'Address must be less than 200 characters').optional(),
   country: z.string().max(100, 'Country must be less than 100 characters').optional(),
   industry: z
@@ -82,18 +88,30 @@ const customerCreationSchema = z.object({
     ])
     .default('technology'),
   // Treat empty string as undefined so untouched field doesn't fail validation
-  revenue: z
-    .preprocess(
-      val => (val === '' || val === null ? undefined : val),
-      z.number().min(0, 'Revenue must be a positive number').optional()
-    ),
+  revenue: z.preprocess(
+    val => (val === '' || val === null ? undefined : val),
+    z.number().min(0, 'Revenue must be a positive number').optional()
+  ),
   companySize: z.enum(['startup', 'small', 'medium', 'large', 'enterprise']).default('small'),
   tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).default('STANDARD'),
+  customerType: z
+    .enum([
+      'MIDDLEMAN',
+      'ENDUSER',
+      'DISTRIBUTOR',
+      'VENDOR',
+      'CONTRACTOR',
+      'GOVERNMENTAL',
+      'NGO',
+      'SYSTEM_INTEGRATOR',
+    ])
+    .default('ENDUSER'),
   tags: z.array(z.string()).default([]),
 });
 
 const DEFAULT_INDUSTRY = 'technology';
 const DEFAULT_COMPANY_SIZE = 'small';
+const DEFAULT_CUSTOMER_TYPE = 'ENDUSER';
 
 const INDUSTRY_OPTIONS: SelectOption[] = [
   { value: 'technology', label: 'Technology' },
@@ -123,6 +141,17 @@ const COMPANY_SIZE_OPTIONS: SelectOption[] = [
   { value: 'medium', label: 'Medium (51-250 employees)' },
   { value: 'large', label: 'Large (251-1000 employees)' },
   { value: 'enterprise', label: 'Enterprise (1000+ employees)' },
+];
+
+const CUSTOMER_TYPE_OPTIONS: SelectOption[] = [
+  { value: 'MIDDLEMAN', label: 'Middle Man' },
+  { value: 'ENDUSER', label: 'End User' },
+  { value: 'DISTRIBUTOR', label: 'Distributor' },
+  { value: 'VENDOR', label: 'Vendor' },
+  { value: 'CONTRACTOR', label: 'Contractor' },
+  { value: 'GOVERNMENTAL', label: 'Governmental' },
+  { value: 'NGO', label: 'NGO' },
+  { value: 'SYSTEM_INTEGRATOR', label: 'System Integrator' },
 ];
 
 // ✅ SEO METADATA: Page metadata component
@@ -241,6 +270,7 @@ function CustomerCreationPageComponent() {
       revenue: undefined,
       companySize: DEFAULT_COMPANY_SIZE,
       tier: 'STANDARD',
+      customerType: DEFAULT_CUSTOMER_TYPE,
       tags: [],
     },
   });
@@ -303,7 +333,6 @@ function CustomerCreationPageComponent() {
 
   // ✅ Handle form submission with React Hook Form
   const onSubmit = async (data: z.infer<typeof customerCreationSchema>) => {
-
     setLoading(true);
 
     try {
@@ -600,6 +629,34 @@ function CustomerCreationPageComponent() {
                               label="Company Size *"
                               placeholder="Select company size"
                               options={COMPANY_SIZE_OPTIONS}
+                              value={currentValue}
+                              onChange={value => {
+                                const normalizedValue = Array.isArray(value) ? value[0] : value;
+                                field.onChange(normalizedValue || undefined);
+                                field.onBlur();
+                              }}
+                              disabled={loading}
+                              error={shouldShowError ? fieldState.error?.message : undefined}
+                            />
+                          );
+                        }}
+                      />
+
+                      <Controller
+                        name="customerType"
+                        control={control}
+                        defaultValue={DEFAULT_CUSTOMER_TYPE}
+                        render={({ field, fieldState }) => {
+                          const shouldShowError =
+                            (fieldState.isTouched || fieldState.isDirty) && !!fieldState.error;
+                          const currentValue =
+                            (field.value as string | undefined) ?? DEFAULT_CUSTOMER_TYPE;
+
+                          return (
+                            <Select
+                              label="Customer Type *"
+                              placeholder="Select customer type"
+                              options={CUSTOMER_TYPE_OPTIONS}
                               value={currentValue}
                               onChange={value => {
                                 const normalizedValue = Array.isArray(value) ? value[0] : value;

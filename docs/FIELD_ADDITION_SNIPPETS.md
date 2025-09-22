@@ -3,8 +3,9 @@
 ## 📋 **Quick Checklist**
 
 ```markdown
-✅ Identify entity & field type ✅ Check existing patterns ✅ Plan database
-migration ✅ Update schemas, API, UI ✅ Test thoroughly
+✅ Identify entity & field type ✅ Check existing patterns ✅ Backup database ✅
+Plan migration ✅ Update schemas, API, UI ✅ Include field in all pages ✅ Test
+thoroughly
 ```
 
 ---
@@ -29,6 +30,14 @@ model EntityName {
 ```bash
 npx prisma migrate dev --name add_new_field
 npx prisma generate
+```
+
+### **Database Backup (Critical)**
+
+```bash
+# CRITICAL: Always backup before schema changes
+npm run db:backup
+npm run db:backup:verify
 ```
 
 ---
@@ -436,6 +445,28 @@ export default function CreateEntityPage() {
 }
 ```
 
+### **Form Components - Include Field**
+
+```typescript
+// In form defaults
+defaultValues: {
+  name: '',
+  newField: '', // Include in defaults
+}
+
+// In form reset
+reset({
+  name: entity.name || '',
+  newField: entity.newField || '', // Include in reset
+})
+
+// In form submission
+await updateEntity.mutateAsync({
+  id: entityId,
+  data, // Contains all fields including newField
+})
+```
+
 ---
 
 ## 🧪 **7. Testing Snippets**
@@ -555,6 +586,7 @@ newField: z.string().url().optional();
 
 ```bash
 # Database
+npm run db:backup  # CRITICAL: Backup first
 npx prisma migrate dev --name add_field
 npx prisma generate
 
@@ -573,22 +605,25 @@ npm run build
 
 ## 🎯 **Implementation Flow**
 
-1. **Database**: Add field to Prisma schema → Generate migration
-2. **Schemas**: Create Zod schemas → Update types
-3. **API**: Update routes → Add validation
-4. **Service**: Update database operations → Add business logic
-5. **Hooks**: Create React Query hooks → Add query keys
-6. **UI**: Update forms & lists → Add components
-7. **Test**: Write unit & integration tests
-8. **Deploy**: Run migration → Deploy app
+1. **Backup**: Database backup → Verify backup
+2. **Database**: Add field to Prisma schema → Generate migration
+3. **Schemas**: Create Zod schemas → Update types
+4. **API**: Update routes → Add validation
+5. **Service**: Update database operations → Add business logic
+6. **Hooks**: Create React Query hooks → Add query keys
+7. **UI**: Update forms & lists → Add components → Include in all pages
+8. **Test**: Write unit & integration tests
+9. **Deploy**: Run migration → Deploy app
 
 ---
 
 ## 🚨 **Key Reminders**
 
+- ✅ Always backup database before schema changes
 - ✅ Always start with database schema
 - ✅ Use feature-based organization
 - ✅ Include new fields in ALL layers (DB → API → UI)
+- ✅ Include new fields in ALL pages (view, edit, create)
 - ✅ Add proper validation and error handling
 - ✅ Test thoroughly before deployment
 - ✅ Update documentation
@@ -615,4 +650,9 @@ curl -X GET http://localhost:3000/api/[entity]
 
 # 6. Test database queries
 npx prisma studio
+
+# 7. Check field mapping (CustomerType Error - Resolved)
+# API returns field but UI doesn't show? Add to mapApiToCustomer:
+# customerType: (raw.customerType as CustomerType) ?? previous?.customerType ?? 'ENDUSER'
+# Import: import type { CustomerType } from '@/features/[entity]/schemas';
 ```

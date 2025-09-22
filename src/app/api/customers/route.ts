@@ -20,7 +20,12 @@ import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandle
 
 // Import consolidated schemas from feature folder
 import { CustomerListSchema, CustomerQuerySchema, CustomerSchema } from '@/features/customers';
-import { CustomerFilters, CustomerStatus, CustomerTier } from '@/types/entities/customer';
+import {
+  CustomerFilters,
+  CustomerStatus,
+  CustomerTier,
+  CustomerType,
+} from '@/types/entities/customer';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +40,7 @@ export const POST = createRoute(
       industry: z.string().optional(),
       status: z.nativeEnum(CustomerStatus).optional().default(CustomerStatus.ACTIVE),
       tier: z.nativeEnum(CustomerTier).optional().default(CustomerTier.STANDARD),
+      customerType: z.nativeEnum(CustomerType).optional().default(CustomerType.ENDUSER),
       tags: z.array(z.string()).optional(),
       revenue: z.number().optional(),
       website: z.string().optional(),
@@ -126,6 +132,7 @@ export const GET = createRoute(
         search: query!.search,
         status: query!.status ? [query!.status as CustomerStatus] : undefined,
         tier: query!.tier ? [query!.tier as CustomerTier] : undefined,
+        customerType: query!.customerType ? [query!.customerType as CustomerType] : undefined,
         industry: query!.industry ? [query!.industry] : undefined,
         sortBy: query!.sortBy,
         sortOrder: query!.sortOrder,

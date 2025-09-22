@@ -11,21 +11,21 @@ datasource db {
 }
 
 model Tenant {
-  id               String   @id @default(cuid())
+  id               String         @id @default(cuid())
   name             String
-  domain           String   @unique
-  subdomain        String?  @unique
-  stripeCustomerId String?  @unique
-  status           String   @default("ACTIVE")
+  domain           String         @unique
+  subdomain        String?        @unique
+  status           String         @default("ACTIVE")
   settings         Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  customers Customer[]
-  products  Product[]
-  proposals Proposal[]
-  users     User[]
-  entitlements Entitlement[]
-  subscriptions Subscription[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  stripeCustomerId String?        @unique
+  entitlements     Entitlement[]
+  subscriptions    Subscription[]
+  customers        Customer[]
+  products         Product[]
+  proposals        Proposal[]
+  users            User[]
 
   @@index([status])
   @@index([createdAt])
@@ -39,22 +39,20 @@ model Entitlement {
   enabled   Boolean  @default(true)
   value     String?
   createdAt DateTime @default(now())
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, key])
   @@index([tenantId])
 }
 
 model Plan {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  tier      PlanTier
-  features  Json?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id            String         @id @default(cuid())
+  name          String         @unique
+  tier          PlanTier
+  features      Json?
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   subscriptions Subscription[]
 }
 
@@ -68,9 +66,8 @@ model Subscription {
   validUntil           DateTime?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  plan   Plan   @relation(fields: [planId], references: [id])
+  plan                 Plan               @relation(fields: [planId], references: [id])
+  tenant               Tenant             @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([planId])
@@ -78,7 +75,6 @@ model Subscription {
 
 model User {
   id                       String                           @id @default(cuid())
-  tenantId                 String
   email                    String
   name                     String
   password                 String?
@@ -87,7 +83,9 @@ model User {
   createdAt                DateTime                         @default(now())
   updatedAt                DateTime                         @updatedAt
   lastLogin                DateTime?
+  tenantId                 String
   accessibilityConfig      AccessibilityConfiguration?
+  approvalDecisions        ApprovalDecision[]
   approvalWorkflows        ApprovalWorkflow[]
   communicationPrefs       CommunicationPreferences?
   createdContent           Content[]
@@ -110,7 +108,6 @@ model User {
   validationExecutions     ValidationExecution[]
   validationIssuesResolved ValidationIssue[]
   validationRules          ValidationRule[]
-  approvalDecisions        ApprovalDecision[]
   assignedProposals        Proposal[]                       @relation("ProposalAssignees")
 
   @@unique([tenantId, email])
@@ -122,8 +119,6 @@ model User {
   @@index([updatedAt])
   @@index([lastLogin])
   @@index([tenantId, email], map: "idx_users_tenant_email")
-  @@index([department], map: "idx_users_department")
-  @@index([status], map: "idx_users_status")
   @@index([createdAt], map: "idx_users_created_at")
   @@index([updatedAt], map: "idx_users_updated_at")
   @@map("users")
@@ -196,8 +191,6 @@ model UserRole {
   @@index([assignedAt])
   @@index([expiresAt])
   @@index([isActive])
-  @@index([userId], map: "idx_user_roles_user_id")
-  @@index([roleId], map: "idx_user_roles_role_id")
   @@index([assignedBy], map: "idx_user_roles_assigned_by")
   @@map("user_roles")
 }
@@ -582,7 +575,6 @@ model TestCase {
   @@index([userStory])
   @@index([hypothesis])
   @@index([status])
-  @@index([status], map: "idx_test_cases_status")
   @@map("test_cases")
 }
 
@@ -631,13 +623,11 @@ model BaselineMetrics {
 
 model Customer {
   id           String            @id @default(cuid())
-  tenantId     String
   name         String
   email        String
   phone        String?
   website      String?
   address      String?
-  country      String?
   industry     String?
   companySize  String?
   revenue      Decimal?
@@ -654,6 +644,9 @@ model Customer {
   cloudId      String?
   lastSyncedAt DateTime?
   syncStatus   String?           @default("PENDING")
+  tenantId     String
+  country      String?
+  customerType CustomerType?     @default(ENDUSER)
   contacts     CustomerContact[]
   tenant       Tenant            @relation(fields: [tenantId], references: [id])
   proposals    Proposal[]
@@ -671,7 +664,6 @@ model Customer {
   @@index([tier])
   @@index([status])
   @@index([tenantId, email], map: "idx_customers_tenant_email")
-  @@index([industry], map: "idx_customers_industry")
   @@index([createdAt], map: "idx_customers_created_at")
   @@index([updatedAt], map: "idx_customers_updated_at")
   @@index([lastContact], map: "idx_customers_last_contact")
@@ -706,7 +698,6 @@ model CustomerContact {
 
 model Proposal {
   id                String              @id @default(cuid())
-  tenantId          String
   title             String
   description       String?
   customerId        String
@@ -742,6 +733,7 @@ model Proposal {
   sectionCount      Int                 @default(0)
   statsUpdatedAt    DateTime?
   totalValue        Decimal?
+  tenantId          String
   approvals         ApprovalExecution[]
   products          ProposalProduct[]
   sections          ProposalSection[]
@@ -749,8 +741,8 @@ model Proposal {
   creator           User                @relation("ProposalCreator", fields: [createdBy], references: [id])
   customer          Customer            @relation(fields: [customerId], references: [id])
   tenant            Tenant              @relation(fields: [tenantId], references: [id])
-  assignedTo        User[]              @relation("ProposalAssignees")
   validationIssues  ValidationIssue[]
+  assignedTo        User[]              @relation("ProposalAssignees")
 
   @@index([status, dueDate])
   @@index([customerId, status])
@@ -770,8 +762,6 @@ model Proposal {
   @@index([priority])
   @@index([projectType])
   @@index([tenantId, customerId], map: "idx_proposals_tenant_customer")
-  @@index([createdBy], map: "idx_proposals_created_by")
-  @@index([customerId, status], map: "idx_proposals_customer_status")
   @@index([createdAt], map: "idx_proposals_created_at")
   @@index([updatedAt], map: "idx_proposals_updated_at")
   @@index([dueDate], map: "idx_proposals_due_date")
@@ -798,22 +788,21 @@ model ProposalVersion {
 }
 
 model ProposalSection {
-  id               String           @id @default(cuid())
+  id               String            @id @default(cuid())
   proposalId       String
   title            String
   content          String
   order            Int
-  type             SectionType      @default(TEXT)
-  validationStatus ValidationStatus @default(NOT_VALIDATED)
+  type             SectionType       @default(TEXT)
+  validationStatus ValidationStatus  @default(NOT_VALIDATED)
   analyticsData    Json?
   metadata         Json?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  proposal         Proposal         @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
   proposalProducts ProposalProduct[]
+  proposal         Proposal          @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
   @@index([proposalId, order])
-  @@index([proposalId, order], map: "idx_proposal_sections_order")
   @@map("proposal_sections")
 }
 
@@ -821,7 +810,6 @@ model ProposalProduct {
   id                 String            @id @default(cuid())
   proposalId         String
   productId          String
-  sectionId          String?
   quantity           Int               @default(1)
   unitPrice          Decimal
   discount           Decimal           @default(0)
@@ -830,6 +818,7 @@ model ProposalProduct {
   selectionAnalytics Json?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
+  sectionId          String?
   product            Product           @relation(fields: [productId], references: [id])
   proposal           Proposal          @relation(fields: [proposalId], references: [id], onDelete: Cascade)
   section            ProposalSection?  @relation(fields: [sectionId], references: [id])
@@ -838,14 +827,12 @@ model ProposalProduct {
   @@index([proposalId])
   @@index([productId])
   @@index([proposalId, sectionId])
-  @@index([productId], map: "idx_proposal_products_product_id")
   @@map("proposal_products")
 }
 
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model Product {
   id                String                    @id @default(cuid())
-  tenantId          String
   name              String
   description       String?
   sku               String
@@ -855,15 +842,16 @@ model Product {
   tags              String[]
   attributes        Json?
   images            String[]
-  datasheetPath     String?
-  stockQuantity     Int?                      @default(0)
-  status            String?                   @default("ACTIVE")
   isActive          Boolean                   @default(true)
   version           Int                       @default(1)
   usageAnalytics    Json?
   userStoryMappings String[]
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
+  status            String?                   @default("ACTIVE")
+  stockQuantity     Int?                      @default(0)
+  tenantId          String
+  datasheetPath     String?
   relationshipRules ProductRelationshipRule[]
   relationships     ProductRelationship[]     @relation("SourceProduct")
   relatedFrom       ProductRelationship[]     @relation("TargetProduct")
@@ -906,8 +894,6 @@ model ProductRelationship {
   @@index([sourceProductId])
   @@index([targetProductId])
   @@index([type])
-  @@index([targetProductId], map: "idx_product_relationships_target_id")
-  @@index([type], map: "idx_product_relationships_type")
   @@map("product_relationships")
 }
 
@@ -1002,7 +988,6 @@ model Content {
   @@index([createdBy], map: "idx_content_created_by")
   @@index([createdAt], map: "idx_content_created_at")
   @@index([updatedAt], map: "idx_content_updated_at")
-  @@index([category], map: "idx_content_category")
   @@map("content")
 }
 
@@ -1134,12 +1119,11 @@ model WorkflowStage {
   performanceTracking Json?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
-  executions          ApprovalExecution[]
   decisions           ApprovalDecision[]
+  executions          ApprovalExecution[]
   workflow            ApprovalWorkflow    @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([workflowId, order])
-  @@index([workflowId, order], map: "idx_workflow_stages_order")
   @@map("workflow_stages")
 }
 
@@ -1199,7 +1183,6 @@ model Outbox {
   @@index([type])
   @@index([status, createdAt])
 }
-
 
 enum PlanTier {
   FREE
@@ -1369,6 +1352,17 @@ enum CustomerTier {
   PREMIUM
   ENTERPRISE
   VIP
+}
+
+enum CustomerType {
+  MIDDLEMAN
+  ENDUSER
+  DISTRIBUTOR
+  VENDOR
+  CONTRACTOR
+  GOVERNMENTAL
+  NGO
+  SYSTEM_INTEGRATOR
 }
 
 enum ProposalStatus {

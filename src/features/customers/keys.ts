@@ -10,6 +10,15 @@ type CustomerSortBy = 'createdAt' | 'name' | 'status' | 'revenue';
 type CustomerSortOrder = 'asc' | 'desc';
 type CustomerStatus = 'ACTIVE' | 'INACTIVE' | 'PROSPECT';
 type CustomerTier = 'STANDARD' | 'PREMIUM' | 'ENTERPRISE';
+type CustomerType =
+  | 'MIDDLEMAN'
+  | 'ENDUSER'
+  | 'DISTRIBUTOR'
+  | 'VENDOR'
+  | 'CONTRACTOR'
+  | 'GOVERNMENTAL'
+  | 'NGO'
+  | 'SYSTEM_INTEGRATOR';
 
 export const qk = {
   customers: {

@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/forms/Button';
 import { Input } from '@/components/ui/forms/Input';
+import { Select } from '@/components/ui/forms/Select';
 import { SearchableCountrySelect } from '@/components/ui/SearchableCountrySelect';
 import { useCustomer, useUpdateCustomer } from '@/features/customers/hooks';
 import { CustomerUpdate, CustomerUpdateSchema } from '@/features/customers/schemas';
@@ -46,6 +47,7 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
       companySize: '',
       revenue: undefined,
       tier: 'STANDARD',
+      customerType: 'ENDUSER',
       tags: [],
     },
   });
@@ -65,6 +67,7 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
         revenue: customerData.revenue ?? undefined,
         status: customerData.status || 'ACTIVE',
         tier: customerData.tier || 'STANDARD',
+        customerType: customerData.customerType || 'ENDUSER',
         tags: customerData.tags || [],
       });
     }
@@ -207,6 +210,41 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                     type="url"
                     value={watch('website') || ''}
                     placeholder="https://example.com"
+                    className="min-h-[44px]"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="customerType" className="block text-sm font-medium text-gray-700">
+                    Customer Type
+                  </label>
+                  <Select
+                    value={watch('customerType') || 'ENDUSER'}
+                    onChange={value =>
+                      setValue(
+                        'customerType',
+                        value as
+                          | 'MIDDLEMAN'
+                          | 'ENDUSER'
+                          | 'DISTRIBUTOR'
+                          | 'VENDOR'
+                          | 'CONTRACTOR'
+                          | 'GOVERNMENTAL'
+                          | 'NGO'
+                          | 'SYSTEM_INTEGRATOR'
+                      )
+                    }
+                    options={[
+                      { value: 'MIDDLEMAN', label: 'Middle Man' },
+                      { value: 'ENDUSER', label: 'End User' },
+                      { value: 'DISTRIBUTOR', label: 'Distributor' },
+                      { value: 'VENDOR', label: 'Vendor' },
+                      { value: 'CONTRACTOR', label: 'Contractor' },
+                      { value: 'GOVERNMENTAL', label: 'Governmental' },
+                      { value: 'NGO', label: 'NGO' },
+                      { value: 'SYSTEM_INTEGRATOR', label: 'System Integrator' },
+                    ]}
+                    placeholder="Select customer type"
                     className="min-h-[44px]"
                   />
                 </div>

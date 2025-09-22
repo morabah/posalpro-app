@@ -2,6 +2,7 @@
 
 // Customer UI State Store - New Architecture
 import { CustomerIndustrySchema } from '@/features/customers/schemas';
+import { CustomerType } from '@/features/customers/schemas';
 import { z } from 'zod';
 import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
@@ -9,6 +10,9 @@ import { useShallow } from 'zustand/react/shallow';
 
 // UI State Types
 export type CustomerViewMode = 'table' | 'list' | 'grid';
+
+export type { CustomerType };
+
 export type CustomerSortBy = 'createdAt' | 'name' | 'status' | 'revenue';
 export type CustomerSortOrder = 'asc' | 'desc';
 export type CustomerStatus = 'ACTIVE' | 'INACTIVE' | 'PROSPECT';
@@ -20,6 +24,7 @@ export interface CustomerFilters {
   search: string;
   status?: CustomerStatus;
   tier?: CustomerTier;
+  customerType?: CustomerType;
   industry?: CustomerIndustry;
 }
 
@@ -76,6 +81,7 @@ const initialState = {
     search: '',
     status: undefined,
     tier: undefined,
+    customerType: undefined,
     industry: undefined,
   },
   sorting: {
@@ -214,6 +220,7 @@ export function useCustomerQueryParams() {
     sortOrder: sorting.sortOrder,
     status: filters.status,
     tier: filters.tier,
+    customerType: filters.customerType,
     industry: filters.industry,
   };
 }

@@ -1,21 +1,19 @@
 /**
  * Bulk Delete Proposals API Route - Modern Architecture
  * User Story: US-3.2 (Proposal Management)
- * Hypothesis: H4 (Cross-Departmeimport { customerQueries, productQueries, proposalQueries, userQueries, workflowQueries, executeQuery } from '@/lib/db/database';
-nt Coordination)
+ * Hypothesis: H4 (Cross-Department Coordination)
  */
 
 // Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = 'nodejs';
 
-
+import { ProposalBulkDeleteSchema } from '@/features/proposals/schemas';
 import { ok } from '@/lib/api/response';
 import { createRoute } from '@/lib/api/route';
+import { logError, logInfo } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { clearCache, deleteCache } from '@/lib/redis';
-import { logError, logInfo } from '@/lib/logger';
 import type { Prisma } from '@prisma/client';
-import { ProposalBulkDeleteSchema } from '@/features/proposals/schemas';
 
 export const dynamic = 'force-dynamic';
 

@@ -18,6 +18,17 @@ export enum CustomerTier {
   VIP = 'VIP',
 }
 
+export enum CustomerType {
+  MIDDLEMAN = 'MIDDLEMAN',
+  ENDUSER = 'ENDUSER',
+  DISTRIBUTOR = 'DISTRIBUTOR',
+  VENDOR = 'VENDOR',
+  CONTRACTOR = 'CONTRACTOR',
+  GOVERNMENTAL = 'GOVERNMENTAL',
+  NGO = 'NGO',
+  SYSTEM_INTEGRATOR = 'SYSTEM_INTEGRATOR',
+}
+
 // Core Customer Types (manually defined to match Prisma schema)
 export interface Customer {
   id: string;
@@ -32,6 +43,7 @@ export interface Customer {
   revenue?: number | null;
   status: CustomerStatus;
   tier: CustomerTier;
+  customerType?: CustomerType | null;
   tags: string[];
   metadata?: Record<string, unknown> | null;
   segmentation?: Record<string, unknown> | null;
@@ -119,6 +131,7 @@ export interface CreateCustomerData {
   companySize?: string;
   revenue?: number;
   tier?: CustomerTier;
+  customerType?: CustomerType;
   tags?: string[];
   metadata?: Record<string, unknown>;
 }
@@ -145,6 +158,7 @@ export interface UpdateCustomerContactData extends Partial<CreateCustomerContact
 export interface CustomerFilters {
   status?: CustomerStatus[];
   tier?: CustomerTier[];
+  customerType?: CustomerType[];
   industry?: string[];
   tags?: string[];
   revenueMin?: number;

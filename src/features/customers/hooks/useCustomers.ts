@@ -4,7 +4,6 @@ import {
   Customer,
   CustomerCreate,
   CustomerList,
-  CustomerQuery,
   customerService,
   CustomerUpdate,
 } from '@/services/customerService';
@@ -27,6 +26,7 @@ export function useInfiniteCustomers({
   sortOrder = 'desc',
   status,
   tier,
+  customerType,
   industry,
 }: {
   search?: string;
@@ -35,12 +35,22 @@ export function useInfiniteCustomers({
   sortOrder?: 'asc' | 'desc';
   status?: 'ACTIVE' | 'INACTIVE' | 'PROSPECT';
   tier?: 'STANDARD' | 'PREMIUM' | 'ENTERPRISE';
+  customerType?:
+    | 'MIDDLEMAN'
+    | 'ENDUSER'
+    | 'DISTRIBUTOR'
+    | 'VENDOR'
+    | 'CONTRACTOR'
+    | 'GOVERNMENTAL'
+    | 'NGO'
+    | 'SYSTEM_INTEGRATOR';
   industry?: string;
 }) {
   return useInfiniteQuery({
     queryKey: customerKeys.customers.list(search, limit, sortBy, sortOrder, undefined, {
       status,
       tier,
+      customerType,
       industry,
     }),
     queryFn: ({ pageParam }) =>
@@ -51,6 +61,7 @@ export function useInfiniteCustomers({
         sortOrder,
         status,
         tier,
+        customerType,
         industry: industry as any,
         cursor: (pageParam ?? null) as string | null,
       }),
@@ -62,7 +73,7 @@ export function useInfiniteCustomers({
     refetchOnReconnect: true, // Refetch when connection restored
     retry: 2, // Retry failed requests twice
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
-    placeholderData: (previousData) => previousData, // Keep previous data while loading
+    placeholderData: previousData => previousData, // Keep previous data while loading
     networkMode: 'online', // Only fetch when online
   });
 }
@@ -79,7 +90,7 @@ export function useCustomer(id: string) {
     refetchOnReconnect: true, // Refetch when connection restored
     retry: 2, // Retry failed requests twice
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
-    placeholderData: (previousData) => previousData, // Keep previous data while loading
+    placeholderData: previousData => previousData, // Keep previous data while loading
     networkMode: 'online', // Only fetch when online
   });
 }
@@ -96,7 +107,7 @@ export function useCustomerSearch(query: string, limit: number = 10) {
     refetchOnReconnect: true, // Refetch when connection restored
     retry: 2, // Retry failed requests twice
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
-    placeholderData: (previousData) => previousData, // Keep previous data while loading
+    placeholderData: previousData => previousData, // Keep previous data while loading
     networkMode: 'online', // Only fetch when online
   });
 }
@@ -318,18 +329,29 @@ export function useCustomerStats() {
     refetchInterval: 300000, // Auto-refresh every 5 minutes
     retry: 2, // Retry failed requests twice
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
-    placeholderData: (previousData) => previousData, // Keep previous data while loading
+    placeholderData: previousData => previousData, // Keep previous data while loading
     networkMode: 'online', // Only fetch when online
   });
 }
 
 // Unified hook for loading customers and stats in parallel
-export function useUnifiedCustomerData() {
+export function useUnifiedCustomerData(
+  customerType?:
+    | 'MIDDLEMAN'
+    | 'ENDUSER'
+    | 'DISTRIBUTOR'
+    | 'VENDOR'
+    | 'CONTRACTOR'
+    | 'GOVERNMENTAL'
+    | 'NGO'
+    | 'SYSTEM_INTEGRATOR'
+) {
   // 🚀 OPTIMIZATION: Load ALL customer data in parallel
   const customersResult = useInfiniteCustomers({
     limit: 50,
     sortBy: 'createdAt',
     sortOrder: 'desc',
+    customerType,
   });
 
   const statsResult = useCustomerStats();

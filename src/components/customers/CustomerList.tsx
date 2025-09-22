@@ -8,7 +8,11 @@ import { Select } from '@/components/ui/Select';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
 import type { Customer } from '@/features/customers';
-import { useDeleteCustomer, useDeleteCustomersBulk, useInfiniteCustomers } from '@/features/customers/hooks';
+import {
+  useDeleteCustomer,
+  useDeleteCustomersBulk,
+  useInfiniteCustomers,
+} from '@/features/customers/hooks';
 import { useUnifiedCustomerData } from '@/features/customers/hooks/useCustomers';
 import { analytics } from '@/lib/analytics';
 import { logError } from '@/lib/logger';
@@ -21,6 +25,7 @@ import {
   useCustomerSelection,
   useCustomerStore,
 } from '@/lib/store/customerStore';
+import { CustomerType } from '@/features/customers/schemas';
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -121,7 +126,15 @@ function CustomerFilters() {
     [setFilters]
   );
 
-  const hasActiveFilters = filters.status || filters.tier || filters.industry || filters.search;
+  const handleCustomerTypeChange = useCallback(
+    (value: unknown) => {
+      setFilters({ customerType: (value as CustomerType) || undefined });
+    },
+    [setFilters]
+  );
+
+  const hasActiveFilters =
+    filters.status || filters.tier || filters.customerType || filters.industry || filters.search;
 
   // Define options for Select components
   const statusOptions = [
@@ -138,9 +151,21 @@ function CustomerFilters() {
     { value: 'ENTERPRISE', label: 'Enterprise' },
   ];
 
+  const customerTypeOptions = [
+    { value: '', label: 'All Types' },
+    { value: 'MIDDLEMAN', label: 'Middle Man' },
+    { value: 'ENDUSER', label: 'End User' },
+    { value: 'DISTRIBUTOR', label: 'Distributor' },
+    { value: 'VENDOR', label: 'Vendor' },
+    { value: 'CONTRACTOR', label: 'Contractor' },
+    { value: 'GOVERNMENTAL', label: 'Governmental' },
+    { value: 'NGO', label: 'NGO' },
+    { value: 'SYSTEM_INTEGRATOR', label: 'System Integrator' },
+  ];
+
   return (
     <Card className="p-4 mb-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
           <Input
@@ -162,6 +187,15 @@ function CustomerFilters() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Tier</label>
           <Select value={filters.tier || ''} onChange={handleTierChange} options={tierOptions} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Customer Type</label>
+          <Select
+            value={filters.customerType || ''}
+            onChange={handleCustomerTypeChange}
+            options={customerTypeOptions}
+          />
         </div>
 
         <div className="flex items-end">
@@ -687,6 +721,7 @@ function CustomerTableOptimized({
               <th className="px-4 py-3 text-left">Email</th>
               <th className="px-4 py-3 text-left">Industry</th>
               <th className="px-4 py-3 text-left">Tier</th>
+              <th className="px-4 py-3 text-left">Customer Type</th>
               <th className="px-4 py-3 text-left">Actions</th>
             </tr>
           </thead>
@@ -713,6 +748,11 @@ function CustomerTableOptimized({
                 <td className="px-4 py-3 text-gray-600">{customer.industry || '-'}</td>
                 <td className="px-4 py-3">
                   {customer.tier && <Badge variant="secondary">{customer.tier}</Badge>}
+                </td>
+                <td className="px-4 py-3">
+                  {customer.customerType && (
+                    <Badge variant="outline">{customer.customerType}</Badge>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">

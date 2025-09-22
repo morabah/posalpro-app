@@ -6,11 +6,16 @@
 - [ ] Plan database indexing
 - [ ] Define validation rules
 - [ ] Check accessibility requirements
+- [ ] Backup database before changes
+- [ ] Ensure field in all pages (view, edit, create)
+- [ ] Include field in create/edit payloads
 
 ---
 
 ## 🗄️ **1. Database (5 min)**
 
+- [ ] CRITICAL: Backup database: `npm run db:backup`
+- [ ] Verify backup: `npm run db:backup:verify`
 - [ ] Add field to Prisma schema
 - [ ] Add index for searchable fields
 - [ ] Run migration: `npx prisma migrate dev --name add_field`
@@ -64,7 +69,10 @@
 - [ ] Update create form with validation
 - [ ] Update list to display field
 - [ ] Add field to search/filters
+- [ ] CRITICAL: Include field in view page display
 - [ ] Ensure accessibility compliance
+- [ ] Add field to form defaults & resets
+- [ ] Include field in create/edit payloads
 
 ---
 
@@ -80,6 +88,7 @@
 
 ## 🚀 **8. Deploy (5 min)**
 
+- [ ] Verify database backup integrity
 - [ ] Run: `npm run type-check`
 - [ ] Run: `npm run lint`
 - [ ] Run: `npm run test:unit`
@@ -91,8 +100,15 @@
 ## ⚡ **Commands**
 
 ```bash
+# CRITICAL: Backup first
+npm run db:backup
+npm run db:backup:verify
+
+# Database
 npx prisma migrate dev --name add_field
 npx prisma generate
+
+# Build & test
 npm run type-check
 npm run build
 ```
@@ -101,8 +117,10 @@ npm run build
 
 ## 🚨 **Must Do**
 
+- ✅ Always backup database before changes
 - ✅ Start with database schema
 - ✅ Include field in ALL layers
+- ✅ Include field in ALL pages (view, edit, create)
 - ✅ Add validation everywhere
 - ✅ Test before deployment
 
@@ -110,18 +128,25 @@ npm run build
 
 ## ❌ **Common Mistakes**
 
+- ❌ Skip database backup
 - ❌ Skip database migration
 - ❌ Forget service selects
 - ❌ Miss React Query hooks
 - ❌ Skip form validation
 - ❌ Forget CRUD operations
+- ❌ Miss field in view page display
+- ❌ Forget field in form payloads
+- ❌ Missing field in mapApiToCustomer (CustomerType Error - Resolved)
 
 ---
 
 ## 🎯 **Complete When**
 
+- [ ] Database backup verified
 - [ ] Migration applied
 - [ ] TypeScript passes
 - [ ] API returns correct data
 - [ ] UI renders properly
+- [ ] Field displays in all pages (view, edit, create)
+- [ ] Field saves correctly in create/edit forms
 - [ ] All tests pass
