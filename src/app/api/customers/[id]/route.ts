@@ -10,11 +10,11 @@
 // Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = 'nodejs';
 
-
 import { createRoute } from '@/lib/api/route';
-import { prisma } from '@/lib/prisma';
 import { ErrorCodes, StandardError } from '@/lib/errors';
 import { logError, logInfo } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
+import { toPrismaJson } from '@/lib/utils/prismaUtils';
 import { getErrorHandler, withAsyncErrorHandler } from '@/server/api/errorHandler';
 
 // Import consolidated schemas from feature folder
@@ -336,7 +336,24 @@ export const PUT = createRoute(
         () =>
           prisma.customer.findUnique({
             where: { id },
-            select: { id: true, name: true, email: true },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              metadata: true,
+              tenantId: true,
+              status: true,
+              tier: true,
+              // customerType: true, // Temporarily disabled due to Prisma sync issue
+              tags: true,
+              segmentation: true,
+              riskScore: true,
+              ltv: true,
+              lastContact: true,
+              cloudId: true,
+              lastSyncedAt: true,
+              syncStatus: true,
+            },
           }),
         'Failed to check if customer exists',
         { component: 'CustomerAPI', operation: 'PUT' }
@@ -404,21 +421,38 @@ export const PUT = createRoute(
             where: { id },
             data: {
               ...body!,
-              metadata: {
+              metadata: toPrismaJson({
+                ...(existingCustomer?.metadata as Record<string, unknown> | undefined),
                 lastUpdatedBy: user.id,
                 lastUpdatedAt: new Date().toISOString(),
-                updateHistory: {
-                  timestamp: new Date().toISOString(),
-                  updatedBy: user.id,
-                  updatedFields: Object.keys(body!),
-                },
-                hypothesis: ['H4', 'H6'],
-                userStories: ['US-4.1', 'US-4.2'],
-              },
+                updateHistory: [
+                  ...((existingCustomer?.metadata as any)?.updateHistory || []),
+                  {
+                    timestamp: new Date().toISOString(),
+                    updatedBy: user.id,
+                    updatedFields: Object.keys(body!),
+                  },
+                ],
+                hypothesis: [
+                  ...new Set([
+                    ...((existingCustomer?.metadata as any)?.hypothesis || []),
+                    'H4',
+                    'H6',
+                  ]),
+                ],
+                userStories: [
+                  ...new Set([
+                    ...((existingCustomer?.metadata as any)?.userStories || []),
+                    'US-4.1',
+                    'US-4.2',
+                  ]),
+                ],
+              }),
               lastContact: new Date(),
             },
             select: {
               id: true,
+              tenantId: true,
               name: true,
               email: true,
               phone: true,
@@ -430,13 +464,18 @@ export const PUT = createRoute(
               revenue: true,
               tier: true,
               status: true,
+              // customerType: true, // Temporarily disabled due to Prisma sync issue
               tags: true,
+              metadata: true,
               segmentation: true,
               riskScore: true,
               ltv: true,
               createdAt: true,
               updatedAt: true,
               lastContact: true,
+              cloudId: true,
+              lastSyncedAt: true,
+              syncStatus: true,
             },
           }),
         'Failed to update customer in database',

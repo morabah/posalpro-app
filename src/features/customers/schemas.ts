@@ -14,9 +14,20 @@ import { z } from 'zod';
 // Base Schemas (Reusable)
 // ====================
 
-export const CustomerStatusSchema = z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT']);
+export const CustomerStatusSchema = z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT', 'CHURNED']);
 
-export const CustomerTierSchema = z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE']);
+export const CustomerTierSchema = z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']);
+
+export const CustomerTypeSchema = z.enum([
+  'MIDDLEMAN',
+  'ENDUSER',
+  'DISTRIBUTOR',
+  'VENDOR',
+  'CONTRACTOR',
+  'GOVERNMENTAL',
+  'NGO',
+  'SYSTEM_INTEGRATOR',
+]);
 
 export const CustomerIndustrySchema = z.preprocess(
   val => {
@@ -59,6 +70,7 @@ export const CompanySizeSchema = z.enum(['STARTUP', 'SMALL', 'MEDIUM', 'LARGE', 
 
 export const CustomerSchema = z.object({
   id: z.string(),
+  tenantId: z.string(),
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email format'),
   phone: z.string().nullable().optional(),
@@ -67,17 +79,36 @@ export const CustomerSchema = z.object({
   country: z.string().nullable().optional(),
   industry: CustomerIndustrySchema.optional().nullable(),
   companySize: z.string().nullable().optional(),
-  revenue: z.number().nullable().optional(),
+  revenue: z
+    .union([z.number(), z.string()])
+    .transform(val => (typeof val === 'string' ? Number(val) : val))
+    .nullable()
+    .optional(),
   status: CustomerStatusSchema,
   tier: CustomerTierSchema.optional(),
+  customerType: CustomerTypeSchema.optional(),
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.unknown()).nullable().optional(),
   segmentation: z.record(z.unknown()).nullable().optional(),
-  riskScore: z.number().nullable().optional(),
-  ltv: z.number().nullable().optional(),
-  lastContact: z.string().nullable().optional(),
+  riskScore: z
+    .union([z.number(), z.string()])
+    .transform(val => (typeof val === 'string' ? Number(val) : val))
+    .nullable()
+    .optional(),
+  ltv: z
+    .union([z.number(), z.string()])
+    .transform(val => (typeof val === 'string' ? Number(val) : val))
+    .nullable()
+    .optional(),
+  lastContact: z
+    .union([z.string(), z.date(), z.null()])
+    .optional()
+    .transform(val => (val instanceof Date ? val.toISOString() : val || null)),
   cloudId: z.string().nullable().optional(),
-  lastSyncedAt: z.string().nullable().optional(),
+  lastSyncedAt: z
+    .union([z.string(), z.date(), z.null()])
+    .optional()
+    .transform(val => (val instanceof Date ? val.toISOString() : val || null)),
   syncStatus: z.string().nullable().optional(),
   createdAt: z
     .union([z.string(), z.date()])
@@ -90,8 +121,10 @@ export const CustomerSchema = z.object({
 export const CustomerCreateSchema = CustomerSchema.extend({
   // Override with more specific validation for create
   website: z.string().url('Invalid website URL').optional().or(z.literal('')),
+  customerType: CustomerTypeSchema.optional().default('ENDUSER'),
 }).omit({
   id: true,
+  tenantId: true, // tenantId should be set by the system, not by user input
   createdAt: true,
   updatedAt: true,
   // Remove fields that shouldn't be set during creation
@@ -114,19 +147,32 @@ export const EmailValidationSchema = z.object({
 export const CustomerUpdateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200).optional(),
   email: z.string().email('Invalid email format').optional(),
-  phone: z.string().optional(),
-  website: z.string().url('Invalid website URL').optional().or(z.literal('')),
-  address: z.string().optional(),
-  country: z.string().optional(),
+  phone: z.string().nullable().optional(),
+  website: z.string().url('Invalid website URL').nullable().optional().or(z.literal('')),
+  address: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
   industry: CustomerIndustrySchema.optional(),
   tier: CustomerTierSchema.optional(),
+  customerType: CustomerTypeSchema.optional(),
   status: CustomerStatusSchema.optional(),
   tags: z.array(z.string()).optional(),
   segmentation: z.any().optional(),
-  riskScore: z.number().min(0).max(100).optional().nullable(),
-  ltv: z.number().min(0).optional().nullable(),
-  companySize: z.string().optional(),
-  revenue: z.number().optional().nullable(),
+  riskScore: z
+    .union([z.number().min(0).max(100), z.string()])
+    .transform(val => (typeof val === 'string' ? Number(val) : val))
+    .optional()
+    .nullable(),
+  ltv: z
+    .union([z.number().min(0), z.string()])
+    .transform(val => (typeof val === 'string' ? Number(val) : val))
+    .optional()
+    .nullable(),
+  companySize: z.string().nullable().optional(),
+  revenue: z
+    .union([z.number(), z.string()])
+    .transform(val => (typeof val === 'string' ? Number(val) : val))
+    .optional()
+    .nullable(),
 });
 
 // ====================
@@ -297,6 +343,7 @@ export const CustomerQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   status: CustomerStatusSchema.optional(),
   tier: CustomerTierSchema.optional(),
+  customerType: CustomerTypeSchema.optional(),
   industry: CustomerIndustrySchema.optional(),
   companySize: z.string().optional(),
 });
@@ -308,6 +355,7 @@ export const CustomerSearchSchema = z.object({
     .object({
       status: CustomerStatusSchema.optional(),
       tier: CustomerTierSchema.optional(),
+      customerType: CustomerTypeSchema.optional(),
       industry: CustomerIndustrySchema.optional(),
       tags: z.array(z.string()).optional(),
     })
@@ -373,6 +421,18 @@ export const CustomerSearchApiSchema = z.object({
   limit: z.coerce.number().min(1).max(50).default(20),
   industry: z.string().optional(),
   tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).optional(),
+  customerType: z
+    .enum([
+      'MIDDLEMAN',
+      'ENDUSER',
+      'DISTRIBUTOR',
+      'VENDOR',
+      'CONTRACTOR',
+      'GOVERNMENTAL',
+      'NGO',
+      'SYSTEM_INTEGRATOR',
+    ])
+    .optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT', 'CHURNED']).optional(),
 });
 
@@ -435,6 +495,7 @@ export type CustomerBulkUpdate = z.infer<typeof CustomerBulkUpdateSchema>;
 export type CustomerCoordination = z.infer<typeof CustomerCoordinationSchema>;
 export type CustomerStatus = z.infer<typeof CustomerStatusSchema>;
 export type CustomerTier = z.infer<typeof CustomerTierSchema>;
+export type CustomerType = z.infer<typeof CustomerTypeSchema>;
 export type CustomerIndustry = z.infer<typeof CustomerIndustrySchema>;
 export type CompanySize = z.infer<typeof CompanySizeSchema>;
 export type CustomerSearchApi = z.infer<typeof CustomerSearchApiSchema>;

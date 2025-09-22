@@ -673,6 +673,7 @@ model Customer {
   cloudId      String?
   lastSyncedAt DateTime?
   syncStatus   String?           @default("PENDING")
+  customerType CustomerType?     @default(ENDUSER)
   contacts     CustomerContact[]
   proposals    Proposal[]
   tenant       Tenant            @relation(fields: [tenantId], references: [id])
@@ -1360,6 +1361,17 @@ enum CustomerTier {
   PREMIUM
   ENTERPRISE
   VIP
+}
+
+enum CustomerType {
+  MIDDLEMAN
+  ENDUSER
+  DISTRIBUTOR
+  VENDOR
+  CONTRACTOR
+  GOVERNMENTAL
+  NGO
+  SYSTEM_INTEGRATOR
 }
 
 enum ProposalStatus {
