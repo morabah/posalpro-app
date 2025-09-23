@@ -42,72 +42,100 @@ import { z } from 'zod';
 type CustomerFormData = CreateCustomerData;
 
 // Simplified customer creation schema for the form
-const customerCreationSchema = z.object({
-  name: z
-    .string()
-    .min(1, 'Company name is required')
-    .max(200, 'Company name must be less than 200 characters'),
-  // Email is required to align with API POST /api/customers
-  email: z.string().email('Please enter a valid email address'),
-  // Phone is optional in API; allow empty string in form
-  phone: z
-    .string()
-    .refine(val => val === '' || val.length >= 1, {
-      message: 'Phone number is required',
-    })
-    .optional(),
-  website: z
-    .string()
-    .refine(val => val === '' || z.string().url().safeParse(val).success, {
-      message: 'Please enter a valid website URL',
-    })
-    .optional(),
-  address: z.string().max(200, 'Address must be less than 200 characters').optional(),
-  country: z.string().max(100, 'Country must be less than 100 characters').optional(),
-  industry: z
-    .enum([
-      'technology',
-      'healthcare',
-      'finance',
-      'manufacturing',
-      'retail',
-      'education',
-      'government',
-      'nonprofit',
-      'real_estate',
-      'transportation',
-      'energy',
-      'telecommunications',
-      'media',
-      'consulting',
-      'agriculture',
-      'automotive',
-      'aerospace',
-      'construction',
-      'other',
-    ])
-    .default('technology'),
-  // Treat empty string as undefined so untouched field doesn't fail validation
-  revenue: z.preprocess(
-    val => (val === '' || val === null ? undefined : val),
-    z.number().min(0, 'Revenue must be a positive number').optional()
-  ),
-  companySize: z.enum(['startup', 'small', 'medium', 'large', 'enterprise']).default('small'),
-  tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).default('STANDARD'),
-  customerType: z
-    .enum([
-      'MIDDLEMAN',
-      'ENDUSER',
-      'DISTRIBUTOR',
-      'VENDOR',
-      'CONTRACTOR',
-      'GOVERNMENTAL',
-      'NGO',
-      'SYSTEM_INTEGRATOR',
-    ])
-    .default('ENDUSER'),
-  tags: z.array(z.string()).default([]),
-});
+const customerCreationSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, 'Company name is required')
+      .max(200, 'Company name must be less than 200 characters'),
+    // Email is required to align with API POST /api/customers
+    email: z.string().email('Please enter a valid email address'),
+    // Phone is optional in API; allow empty string in form
+    phone: z
+      .string()
+      .refine(val => val === '' || val.length >= 1, {
+        message: 'Phone number is required',
+      })
+      .optional(),
+    website: z
+      .string()
+      .refine(val => val === '' || z.string().url().safeParse(val).success, {
+        message: 'Please enter a valid website URL',
+      })
+      .optional(),
+    address: z.string().max(200, 'Address must be less than 200 characters').optional(),
+    country: z.string().max(100, 'Country must be less than 100 characters').optional(),
+    industry: z
+      .enum([
+        'technology',
+        'healthcare',
+        'finance',
+        'manufacturing',
+        'retail',
+        'education',
+        'government',
+        'nonprofit',
+        'real_estate',
+        'transportation',
+        'energy',
+        'telecommunications',
+        'media',
+        'consulting',
+        'agriculture',
+        'automotive',
+        'aerospace',
+        'construction',
+        'other',
+      ])
+      .default('technology'),
+    // Treat empty string as undefined so untouched field doesn't fail validation
+    revenue: z.preprocess(
+      val => (val === '' || val === null ? undefined : val),
+      z.number().min(0, 'Revenue must be a positive number').optional()
+    ),
+    companySize: z.enum(['startup', 'small', 'medium', 'large', 'enterprise']).default('small'),
+    tier: z.enum(['STANDARD', 'PREMIUM', 'ENTERPRISE', 'VIP']).default('STANDARD'),
+    customerType: z
+      .enum([
+        'MIDDLEMAN',
+        'ENDUSER',
+        'DISTRIBUTOR',
+        'VENDOR',
+        'CONTRACTOR',
+        'GOVERNMENTAL',
+        'NGO',
+        'SYSTEM_INTEGRATOR',
+        'BRAND',
+      ])
+      .default('ENDUSER'),
+    brandName: z
+      .string()
+      .trim()
+      .max(120, 'Brand name must be less than 120 characters')
+      .optional()
+      .or(z.literal('')),
+    tags: z.array(z.string()).default([]),
+  })
+  .superRefine((data, ctx) => {
+    if (data.customerType === 'BRAND') {
+      const brand = (data.brandName ?? '').trim();
+      if (brand.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Brand name is required when customer type is BRAND',
+          path: ['brandName'],
+        });
+      } else {
+        data.brandName = brand;
+      }
+    } else if (data.brandName && data.brandName.trim().length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Remove brand name unless the customer type is BRAND',
+        path: ['brandName'],
+      });
+    }
+  });
 
 const DEFAULT_INDUSTRY = 'technology';
 const DEFAULT_COMPANY_SIZE = 'small';
@@ -152,6 +180,7 @@ const CUSTOMER_TYPE_OPTIONS: SelectOption[] = [
   { value: 'GOVERNMENTAL', label: 'Governmental' },
   { value: 'NGO', label: 'NGO' },
   { value: 'SYSTEM_INTEGRATOR', label: 'System Integrator' },
+  { value: 'BRAND', label: 'Brand' },
 ];
 
 // ✅ SEO METADATA: Page metadata component
@@ -272,6 +301,7 @@ function CustomerCreationPageComponent() {
       tier: 'STANDARD',
       customerType: DEFAULT_CUSTOMER_TYPE,
       tags: [],
+      brandName: '',
     },
   });
 
@@ -316,6 +346,7 @@ function CustomerCreationPageComponent() {
 
   // ✅ Robust validity computation (guards against custom input integration quirks)
   const watchedValues = watch();
+  const selectedCustomerType = watchedValues.customerType;
   const canSubmit = customerCreationSchema.safeParse(watchedValues).success;
 
   // ✅ DEBUG: Log form validation state
@@ -330,6 +361,12 @@ function CustomerCreationPageComponent() {
       operation: 'form_validation_debug',
     });
   }, [isValid, errors, touchedFields, watch]);
+
+  useEffect(() => {
+    if (selectedCustomerType !== 'BRAND') {
+      setValue('brandName', '');
+    }
+  }, [selectedCustomerType, setValue]);
 
   // ✅ Handle form submission with React Hook Form
   const onSubmit = async (data: z.infer<typeof customerCreationSchema>) => {
@@ -347,8 +384,14 @@ function CustomerCreationPageComponent() {
         formData: { name: data.name, email: data.email },
       });
 
+      const isBrandCustomer = data.customerType === 'BRAND';
+      const payloadData = {
+        ...data,
+        brandName: isBrandCustomer ? data.brandName?.trim() : undefined,
+      };
+
       // Accept both ApiResponse { success, data } and minimal { ok, data } shapes
-      const response: any = await apiClient.post('/api/customers', data);
+      const response: any = await apiClient.post('/api/customers', payloadData);
       const isSuccess = response?.success === true || response?.ok === true;
       const payload = response?.data ?? response;
 
@@ -669,6 +712,18 @@ function CustomerCreationPageComponent() {
                           );
                         }}
                       />
+
+                      {selectedCustomerType === 'BRAND' && (
+                        <FormField
+                          {...register('brandName')}
+                          name="brandName"
+                          label="Brand Name"
+                          error={errors.brandName?.message}
+                          touched={!!touchedFields.brandName}
+                          placeholder="Enter brand name"
+                          className="min-h-[44px]"
+                        />
+                      )}
                     </div>
 
                     {/* Form Actions */}

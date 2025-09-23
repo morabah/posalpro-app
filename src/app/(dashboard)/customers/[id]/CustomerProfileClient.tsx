@@ -93,6 +93,7 @@ interface CustomerApiResponse {
   createdAt?: string;
   updatedAt?: string;
   country?: string | null;
+  brandName?: string | null;
   [key: string]: unknown;
 }
 
@@ -131,8 +132,18 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       companySize: '',
       tier: 'STANDARD',
       tags: [],
+      customerType: 'ENDUSER',
+      brandName: '',
     },
   });
+
+  const formCustomerType = watch('customerType');
+
+  React.useEffect(() => {
+    if (formCustomerType !== 'BRAND') {
+      setValue('brandName', '');
+    }
+  }, [formCustomerType, setValue]);
 
   // ✅ REACT QUERY: Query Keys
   const CUSTOMER_QUERY_KEYS = useMemo(
@@ -159,6 +170,12 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       status: raw.status ?? previous?.status ?? 'ACTIVE',
       tier: raw.tier ?? previous?.tier ?? undefined,
       customerType: (raw.customerType as CustomerType) ?? previous?.customerType ?? 'ENDUSER',
+      brandName:
+        typeof raw.brandName === 'string'
+          ? raw.brandName
+          : raw.brandName === null
+            ? null
+            : (previous?.brandName ?? null),
       tags: Array.isArray(raw.tags) ? raw.tags : (previous?.tags ?? []),
       tenantId: String(raw.tenantId ?? previous?.tenantId ?? 'tenant_default'),
       metadata: raw.metadata ?? previous?.metadata ?? null,
@@ -202,6 +219,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         tier: customer.tier ?? 'STANDARD',
         customerType: customer.customerType ?? 'ENDUSER',
         tags: customer.tags ?? [],
+        brandName: customer.brandName ?? '',
       });
     }
   }, [customer, reset]);
@@ -222,6 +240,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         revenue: customer.revenue ?? undefined,
         companySize: customer.companySize ?? '',
         tags: customer.tags ? [...customer.tags] : [],
+        brandName: customer.brandName ?? '',
       };
       reset(initialData);
       setIsEditing(true);
@@ -240,6 +259,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
         tier: 'STANDARD',
         customerType: 'ENDUSER',
         tags: [],
+        brandName: '',
       });
     }
   }, [isEditing, customer, reset]);
@@ -435,6 +455,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
       GOVERNMENTAL: { label: 'Governmental', color: 'text-red-600', bg: 'bg-red-100' },
       NGO: { label: 'NGO', color: 'text-pink-600', bg: 'bg-pink-100' },
       SYSTEM_INTEGRATOR: { label: 'System Integrator', color: 'text-teal-600', bg: 'bg-teal-100' },
+      BRAND: { label: 'Brand', color: 'text-blue-700', bg: 'bg-blue-100' },
     };
     return (
       displays[customerType] || { label: 'Unknown', color: 'text-gray-600', bg: 'bg-gray-100' }
@@ -518,7 +539,7 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                     placeholder="Company name"
                   />
                 </div>
-                <div className="flex items-center space-x-4 text-sm">
+                <div className="flex items-center space-x-4 text-sm flex-wrap">
                   <div className="space-y-1">
                     <FormField
                       {...register('industry')}
@@ -532,11 +553,14 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                     />
                   </div>
                   <span>•</span>
-                  <div className="space-y-1">
+                  <div className="space-y-1 relative">
                     <select
                       {...register('customerType')}
-                      className="border-b bg-transparent focus:outline-none text-sm text-gray-600"
-                      style={{ border: 'none', background: 'transparent' }}
+                      className="border-b bg-transparent focus:outline-none text-sm text-gray-600 min-w-[140px] cursor-pointer"
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                      }}
                     >
                       <option value="MIDDLEMAN">Middle Man</option>
                       <option value="ENDUSER">End User</option>
@@ -546,8 +570,26 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                       <option value="GOVERNMENTAL">Governmental</option>
                       <option value="NGO">NGO</option>
                       <option value="SYSTEM_INTEGRATOR">System Integrator</option>
+                      <option value="BRAND">Brand</option>
                     </select>
                   </div>
+                  {formCustomerType === 'BRAND' && (
+                    <>
+                      <span>•</span>
+                      <div className="space-y-1">
+                        <FormField
+                          {...register('brandName')}
+                          name="brandName"
+                          label=""
+                          error={errors.brandName?.message}
+                          touched={!!touchedFields.brandName}
+                          className="w-32"
+                          inputClassName="w-32 border-b bg-transparent focus:outline-none"
+                          placeholder="Brand name"
+                        />
+                      </div>
+                    </>
+                  )}
                   <span>•</span>
                   <div className="space-y-1">
                     <FormField
@@ -806,6 +848,9 @@ export function CustomerProfileClient({ customerId }: { customerId: string }) {
                         {customerTypeDisplay?.label || 'Unknown Type'}
                       </span>
                     </div>
+                    {customer.customerType === 'BRAND' && customer.brandName && (
+                      <div className="mt-2 text-sm text-gray-700">Brand: {customer.brandName}</div>
+                    )}
                     <span className="text-sm text-gray-600">{customer.industry}</span>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-4">

@@ -29,6 +29,8 @@ interface Customer {
   industry?: string;
   tier?: string;
   status?: string;
+  customerType?: string;
+  brandName?: string | null;
 }
 
 // Priority options
@@ -75,18 +77,21 @@ export const BasicInformationStep = React.memo(function BasicInformationStep({
   const { setStepData } = useProposalActions();
 
   // 🔧 SAFEGUARD: Stabilize data prop to prevent infinite loops from parent
-  const stableData = useMemo(() => data, [
-    data?.title,
-    data?.description,
-    data?.customerId,
-    data?.dueDate,
-    data?.priority,
-    data?.value,
-    data?.currency,
-    data?.projectType,
-    data?.tags,
-    data?.customer
-  ]);
+  const stableData = useMemo(
+    () => data,
+    [
+      data?.title,
+      data?.description,
+      data?.customerId,
+      data?.dueDate,
+      data?.priority,
+      data?.value,
+      data?.currency,
+      data?.projectType,
+      data?.tags,
+      data?.customer,
+    ]
+  );
 
   // 🔧 CRITICAL: Stable query function for customers
   // This MUST be memoized with useCallback to prevent infinite loops.
@@ -169,7 +174,7 @@ export const BasicInformationStep = React.memo(function BasicInformationStep({
       stableData?.currency,
       stableData?.projectType,
       stableData?.tags,
-      stableData?.customer
+      stableData?.customer,
     ]
   );
 
@@ -196,13 +201,17 @@ export const BasicInformationStep = React.memo(function BasicInformationStep({
 
         // Update customer data when customer changes
         if (field === 'customerId') {
-          const customer = customersData?.find((c: Customer) => c.id === value as string);
-          updates.customer = customer ? {
-            id: customer.id,
-            name: customer.name,
-            email: customer.email,
-            industry: customer.industry,
-          } : undefined;
+          const customer = customersData?.find((c: Customer) => c.id === (value as string));
+          updates.customer = customer
+            ? {
+                id: customer.id,
+                name: customer.name,
+                email: customer.email,
+                industry: customer.industry,
+                customerType: customer.customerType,
+                brandName: customer.brandName ?? null,
+              }
+            : undefined;
         }
 
         return {
@@ -245,12 +254,16 @@ export const BasicInformationStep = React.memo(function BasicInformationStep({
         return {
           ...currentData,
           customerId,
-          customer: customer ? {
-            id: customer.id,
-            name: customer.name,
-            email: customer.email,
-            industry: customer.industry,
-          } : undefined,
+          customer: customer
+            ? {
+                id: customer.id,
+                name: customer.name,
+                email: customer.email,
+                industry: customer.industry,
+                customerType: customer.customerType,
+                brandName: customer.brandName ?? null,
+              }
+            : undefined,
         } as ProposalStepData;
       });
 

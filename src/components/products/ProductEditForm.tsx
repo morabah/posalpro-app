@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/forms/Button';
 import { SearchableDropdown } from '@/components/ui/SearchableDropdown';
 import type { ProductUpdate } from '@/features/products';
 import {
+  useProductBrandOptions,
   useProductCategories,
   useProductMigrated,
   useProductTags,
@@ -37,6 +38,7 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
   // ✅ Fetch categories and tags from database
   const { data: categoriesData, isLoading: categoriesLoading } = useProductCategories();
   const { data: tagsData, isLoading: tagsLoading } = useProductTags();
+  const { data: brandOptionsData, isLoading: brandsLoading } = useProductBrandOptions();
 
   // ✅ REACT HOOK FORM SETUP
   const {
@@ -59,6 +61,7 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
       currency: 'USD',
       category: [],
       tags: [],
+      brandNames: [],
       isActive: true,
       images: [],
       datasheetPath: '',
@@ -80,6 +83,7 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
         currency: product.currency || 'USD',
         category: product.category || [],
         tags: product.tags || [],
+        brandNames: product.brandNames || [],
         isActive: product.isActive ?? true,
         images: productImagesArray,
         datasheetPath: product.datasheetPath || '',
@@ -418,11 +422,11 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
               {/* Image Upload */}
               <ImageUpload
                 productId={productId}
-                onUploadSuccess={(imageUrl) => {
+                onUploadSuccess={imageUrl => {
                   setProductImages(prev => [...prev, imageUrl]);
                   setValue('images', [...productImages, imageUrl]);
                 }}
-                onUploadError={(error) => {
+                onUploadError={error => {
                   toast.error(`Image upload failed: ${error}`);
                 }}
                 disabled={productImages.length >= 10}
@@ -433,9 +437,12 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
                 <ImageGallery
                   productId={productId}
                   images={productImages}
-                  onImageDelete={(imageUrl) => {
+                  onImageDelete={imageUrl => {
                     setProductImages(prev => prev.filter(img => img !== imageUrl));
-                    setValue('images', productImages.filter(img => img !== imageUrl));
+                    setValue(
+                      'images',
+                      productImages.filter(img => img !== imageUrl)
+                    );
                   }}
                   onImageDeleteError={(error: string) => {
                     toast.error(`Image operation failed: ${error}`);
@@ -474,6 +481,23 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
                   options={tagsData?.tags || []}
                   isLoading={tagsLoading}
                   error={errors.tags?.message}
+                />
+              )}
+            />
+
+            {/* Brand Names */}
+            <Controller
+              name="brandNames"
+              control={control}
+              render={({ field }) => (
+                <SearchableDropdown
+                  label="Brand Names"
+                  placeholder="Select relevant brands"
+                  value={field.value || []}
+                  onChange={field.onChange}
+                  options={brandOptionsData || []}
+                  isLoading={brandsLoading}
+                  error={errors.brandNames?.message}
                 />
               )}
             />

@@ -25,4 +25,5 @@ export {
   useRelationshipTypeOptionsMigrated,
   useUnifiedProductSelectionData,
   useUpdateProduct,
+  useProductBrandOptions,
 } from './useProducts';

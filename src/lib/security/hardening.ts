@@ -203,7 +203,7 @@ export class SecurityHeaders {
         isProd
           ? "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com"
           : "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "style-src-attr 'none'",
+        "style-src-attr 'unsafe-inline'",
         "font-src 'self' https://fonts.gstatic.com data:",
         "img-src 'self' data: https:",
         // Allow API connections and CDN used by PDF.js worker

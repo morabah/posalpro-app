@@ -7,7 +7,6 @@
 // Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = 'nodejs';
 
-
 import { createRoute } from '@/lib/api/route';
 import { authOptions } from '@/lib/auth';
 import { validateApiPermission } from '@/lib/auth/apiAuthorization';
@@ -90,6 +89,7 @@ interface ProductWithAnalytics {
   description?: string | null;
   price?: Decimal | null;
   category?: string | string[] | null;
+  brandNames?: string[] | null;
   stockQuantity?: number | null;
   status?: string | null;
   attributes?: Prisma.InputJsonValue | null;
@@ -108,6 +108,7 @@ interface TransformedProduct {
   description: string;
   price: number;
   category: string[];
+  brandNames: string[];
   stockQuantity: number;
   status: string;
   attributes?: Prisma.InputJsonValue;
@@ -258,6 +259,7 @@ export const GET = createRoute(
           : product.category
             ? [product.category]
             : [],
+        brandNames: Array.isArray((product as any).brandNames) ? (product as any).brandNames : [],
         stockQuantity: product.stockQuantity || 0,
         status: product.status || 'ACTIVE',
         attributes: product.attributes || undefined,
@@ -461,6 +463,7 @@ export const PUT = createRoute(
               currency: true,
               category: true,
               tags: true,
+              brandNames: true,
               attributes: true,
               images: true,
               datasheetPath: true, // Include datasheet path
@@ -491,6 +494,9 @@ export const PUT = createRoute(
           : updatedProduct.category
             ? [updatedProduct.category]
             : [],
+        brandNames: Array.isArray((updatedProduct as any).brandNames)
+          ? (updatedProduct as any).brandNames
+          : [],
         stockQuantity: updatedProduct.stockQuantity || 0,
         status: updatedProduct.status || 'ACTIVE',
         attributes: updatedProduct.attributes || undefined,
@@ -620,7 +626,7 @@ export const DELETE = createRoute(
                   archivedReason: 'Product archived due to being in use',
                 },
               },
-              select: { id: true, name: true, isActive: true, updatedAt: true },
+              select: { id: true, name: true, isActive: true, updatedAt: true, brandNames: true },
             }),
           'Failed to archive product',
           { component: 'ProductAPI', operation: 'DELETE' }
@@ -641,6 +647,9 @@ export const DELETE = createRoute(
             : (archivedProduct as any).category
               ? [(archivedProduct as any).category]
               : [],
+          brandNames: Array.isArray((archivedProduct as any).brandNames)
+            ? (archivedProduct as any).brandNames
+            : [],
           stockQuantity: (archivedProduct as any).stockQuantity || 0,
           status: (archivedProduct as any).status || 'ACTIVE',
           attributes: (archivedProduct as any).attributes || undefined,

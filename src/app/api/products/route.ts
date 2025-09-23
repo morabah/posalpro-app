@@ -52,6 +52,7 @@ export const GET = createRoute(
       const filters = {
         search: query!.search,
         category: query!.category ? [query!.category] : undefined,
+        brandNames: query!.brand ? [query!.brand] : undefined,
         isActive: query!.isActive,
         sortBy: query!.sortBy,
         sortOrder: query!.sortOrder,

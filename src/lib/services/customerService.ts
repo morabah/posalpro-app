@@ -3,7 +3,14 @@
  * Data access layer for Customer entities
  */
 
-import { Customer, CustomerContact, CustomerStatus, CustomerTier, Prisma } from '@prisma/client';
+import {
+  Customer,
+  CustomerContact,
+  CustomerStatus,
+  CustomerTier,
+  CustomerType as PrismaCustomerType,
+  Prisma,
+} from '@prisma/client';
 import {
   CreateCustomerContactData,
   CreateCustomerData,
@@ -22,6 +29,7 @@ interface CustomerWhereClause {
   tenantId: string;
   status?: { in: CustomerStatus[] };
   tier?: { in: CustomerTier[] };
+  customerType?: { in: PrismaCustomerType[] };
   revenue?: {
     gte?: number;
     lte?: number;
@@ -96,6 +104,10 @@ export class CustomerService {
   async createCustomer(data: CreateCustomerData): Promise<Customer> {
     try {
       const tenant = getCurrentTenant();
+      const requestedType = data.customerType as PrismaCustomerType | undefined;
+      const customerType = requestedType ?? PrismaCustomerType.ENDUSER;
+      const brandName =
+        customerType === PrismaCustomerType.BRAND ? (data.brandName?.trim() ?? null) : null;
 
       return await prisma.customer.create({
         data: {
@@ -111,6 +123,8 @@ export class CustomerService {
           revenue: data.revenue,
           status: CustomerStatus.ACTIVE,
           tier: data.tier || CustomerTier.STANDARD,
+          customerType,
+          brandName,
           tags: data.tags || [],
           metadata: data.metadata ? toPrismaJson(data.metadata) : undefined,
         },
@@ -148,14 +162,26 @@ export class CustomerService {
 
   async updateCustomer(data: UpdateCustomerData): Promise<Customer> {
     try {
-      const { id, ...updateData } = data;
+      const { id, brandName, customerType: incomingCustomerType, ...rawUpdate } = data;
       const tenant = getCurrentTenant();
 
       // Handle JSON fields with proper type conversion
-      const prismaData = {
-        ...updateData,
-        metadata: updateData.metadata ? toPrismaJson(updateData.metadata) : undefined,
+      const prismaData: Prisma.CustomerUpdateInput = {
+        ...rawUpdate,
+        metadata: rawUpdate.metadata ? toPrismaJson(rawUpdate.metadata) : undefined,
       };
+
+      if (brandName !== undefined) {
+        prismaData.brandName = brandName ? brandName.trim() : null;
+      }
+
+      if (incomingCustomerType !== undefined) {
+        const nextType = incomingCustomerType as PrismaCustomerType;
+        prismaData.customerType = nextType;
+        if (nextType !== PrismaCustomerType.BRAND) {
+          prismaData.brandName = null;
+        }
+      }
 
       return await prisma.customer.update({
         where: {
@@ -359,6 +385,11 @@ export class CustomerService {
       if (filters) {
         if (filters.status) where.status = { in: filters.status };
         if (filters.tier) where.tier = { in: filters.tier };
+        if (filters.customerType) {
+          where.customerType = {
+            in: filters.customerType.map(type => type as PrismaCustomerType),
+          };
+        }
         if (filters.industry) where.industry = { in: filters.industry };
         if (filters.tags && filters.tags.length > 0) {
           where.tags = { hasSome: filters.tags };
@@ -887,6 +918,8 @@ export class CustomerService {
           industry: true,
           status: true,
           tier: true,
+          customerType: true,
+          brandName: true,
           tags: true,
           createdAt: true,
           updatedAt: true,
@@ -930,6 +963,10 @@ export class CustomerService {
   async createCustomerWithValidation(data: CreateCustomerData, userId: string): Promise<Customer> {
     try {
       const tenant = getCurrentTenant();
+      const requestedType = data.customerType as PrismaCustomerType | undefined;
+      const customerType = requestedType ?? PrismaCustomerType.ENDUSER;
+      const brandName =
+        customerType === PrismaCustomerType.BRAND ? (data.brandName?.trim() ?? null) : null;
 
       // Check for duplicate email within tenant (business logic belongs in service)
       const existingCustomer = await prisma.customer.findFirst({
@@ -962,6 +999,8 @@ export class CustomerService {
           industry: data.industry,
           status: CustomerStatus.ACTIVE,
           tier: data.tier || CustomerTier.STANDARD,
+          customerType,
+          brandName,
           tags: data.tags || [],
           revenue: data.revenue,
           website: data.website,
@@ -977,6 +1016,8 @@ export class CustomerService {
           industry: true,
           status: true,
           tier: true,
+          customerType: true,
+          brandName: true,
           tags: true,
           createdAt: true,
           updatedAt: true,
@@ -1040,6 +1081,12 @@ export class CustomerService {
       where.tier = { in: filters.tier };
     }
 
+    if (filters.customerType && filters.customerType.length > 0) {
+      where.customerType = {
+        in: filters.customerType.map(type => type as PrismaCustomerType),
+      };
+    }
+
     if (filters.industry && filters.industry.length > 0) {
       where.industry = { in: filters.industry };
     }
@@ -1101,6 +1148,8 @@ export class CustomerService {
       attributes: customer.attributes || {},
       userStoryMappings: customer.userStoryMappings || [],
       hypothesisMappings: customer.hypothesisMappings || [],
+      customerType: customer.customerType ?? null,
+      brandName: customer.brandName ?? null,
       createdAt: customer.createdAt || new Date(),
       updatedAt: customer.updatedAt || new Date(),
     };

@@ -39,6 +39,7 @@ export const qk = {
     stats: () => [...qk.products.all, 'stats'] as const,
     categories: () => [...qk.products.all, 'categories'] as const,
     tags: () => [...qk.products.all, 'tags'] as const,
+    brands: () => [...qk.products.all, 'brands'] as const,
     relationships: (productId: string) => [...qk.products.all, 'relationships', productId] as const,
     images: (productId: string) => [...qk.products.all, 'images', productId] as const,
   },

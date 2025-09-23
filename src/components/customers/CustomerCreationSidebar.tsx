@@ -8,7 +8,7 @@ import { ErrorCodes } from '@/lib/errors/ErrorCodes';
 import { ErrorHandlingService } from '@/lib/errors/ErrorHandlingService';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Building, DollarSign, Globe, Loader2, Mail, MapPin, Save, Tag, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -57,6 +57,18 @@ const TIER_OPTIONS = [
   { value: 'VIP', label: 'VIP' },
 ];
 
+const CUSTOMER_TYPE_OPTIONS = [
+  { value: 'ENDUSER', label: 'End User' },
+  { value: 'MIDDLEMAN', label: 'Middleman' },
+  { value: 'DISTRIBUTOR', label: 'Distributor' },
+  { value: 'VENDOR', label: 'Vendor' },
+  { value: 'CONTRACTOR', label: 'Contractor' },
+  { value: 'GOVERNMENTAL', label: 'Governmental' },
+  { value: 'NGO', label: 'NGO' },
+  { value: 'SYSTEM_INTEGRATOR', label: 'System Integrator' },
+  { value: 'BRAND', label: 'Brand' },
+];
+
 export function CustomerCreationSidebar({
   isOpen,
   onClose,
@@ -88,10 +100,19 @@ export function CustomerCreationSidebar({
       status: 'ACTIVE',
       tier: 'STANDARD',
       tags: [],
+      customerType: 'ENDUSER',
+      brandName: '',
     },
   });
 
   const watchedTags = watch('tags') || [];
+  const selectedCustomerType = watch('customerType');
+
+  useEffect(() => {
+    if (selectedCustomerType !== 'BRAND') {
+      setValue('brandName', '');
+    }
+  }, [selectedCustomerType, setValue]);
 
   const addTag = () => {
     if (tagInput.trim() && !watchedTags.includes(tagInput.trim())) {
@@ -115,6 +136,9 @@ export function CustomerCreationSidebar({
       await logDebug('[CustomerCreationSidebar] Submitting customer data', { data });
 
       // Clean up empty strings and ensure proper data types
+      const isBrandCustomer = data.customerType === 'BRAND';
+      const normalizedBrandName = isBrandCustomer ? data.brandName?.trim() : undefined;
+
       const cleanData = {
         ...data,
         email: data.email || undefined,
@@ -132,6 +156,8 @@ export function CustomerCreationSidebar({
         cloudId: data.cloudId || undefined,
         lastSyncedAt: data.lastSyncedAt || undefined,
         syncStatus: data.syncStatus || undefined,
+        customerType: data.customerType,
+        brandName: normalizedBrandName,
       };
 
       const response = await apiClient.post('/customers', cleanData);
@@ -143,7 +169,22 @@ export function CustomerCreationSidebar({
         });
 
         // Reset form
-        reset();
+        reset({
+          name: '',
+          email: '',
+          phone: '',
+          website: '',
+          address: '',
+          country: '',
+          industry: undefined,
+          companySize: '',
+          revenue: undefined,
+          status: 'ACTIVE',
+          tier: 'STANDARD',
+          tags: [],
+          customerType: 'ENDUSER',
+          brandName: '',
+        });
         setTagInput('');
 
         // Call success callback with customer data
@@ -309,6 +350,49 @@ export function CustomerCreationSidebar({
                   <Building className="h-4 w-4 mr-2" />
                   Business Information
                 </h3>
+
+                <div>
+                  <label
+                    htmlFor="customerType"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Customer Type
+                  </label>
+                  <select
+                    id="customerType"
+                    {...register('customerType')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {CUSTOMER_TYPE_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.customerType && (
+                    <p className="mt-1 text-sm text-red-600">{errors.customerType.message}</p>
+                  )}
+                </div>
+
+                {selectedCustomerType === 'BRAND' && (
+                  <div>
+                    <label
+                      htmlFor="brandName"
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
+                      Brand Name
+                    </label>
+                    <input
+                      id="brandName"
+                      {...register('brandName')}
+                      placeholder="Enter brand name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    {errors.brandName && (
+                      <p className="mt-1 text-sm text-red-600">{errors.brandName.message}</p>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label

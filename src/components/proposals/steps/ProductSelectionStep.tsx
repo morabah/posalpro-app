@@ -20,11 +20,16 @@ import {
 } from '@/features/proposal-sections/hooks';
 import { CreateBomSectionSchema } from '@/features/proposal-sections/schemas';
 import { useSectionAssignmentStore } from '@/features/proposal-sections/store';
-import { useUpdateProposal, type WizardProposalUpdateData } from '@/features/proposals';
+import { useUpdateProposal } from '@/features/proposals';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { http } from '@/lib/http';
 import { logDebug, logError, logInfo } from '@/lib/logger';
-import { useProposalSetStepData, type ProposalProductData } from '@/lib/store/proposalStore';
+import {
+  useProposalSetStepData,
+  useProposalStepData,
+  type ProposalBasicInfo,
+  type ProposalProductData,
+} from '@/lib/store/proposalStore';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from 'lucide-react';
 import * as React from 'react';
@@ -47,6 +52,7 @@ const filterSchema = z.object({
   sortBy: z.string().optional(),
   sortOrder: z.string().optional(),
   showSelectedOnly: z.boolean().optional(),
+  brand: z.string().optional(),
 });
 
 type FilterFormData = z.infer<typeof filterSchema>;
@@ -243,6 +249,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
       sortBy: 'name',
       sortOrder: 'asc',
       showSelectedOnly: false,
+      brand: '',
     },
   });
 
@@ -252,6 +259,11 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   const sortBy = (watch('sortBy') as 'createdAt' | 'name' | 'price' | 'isActive') || 'name';
   const sortOrder = (watch('sortOrder') as 'asc' | 'desc') || 'asc';
   const showSelectedOnly = watch('showSelectedOnly') || false;
+  const brand = watch('brand') || '';
+
+  const basicInfo = useProposalStepData(1) as ProposalBasicInfo | undefined;
+  const customerType = basicInfo?.customer?.customerType;
+  const customerBrandName = basicInfo?.customer?.brandName || '';
 
   useEffect(() => {
     try {
@@ -265,6 +277,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         if (saved.category !== undefined) setValue('category', saved.category);
         if (saved.showSelectedOnly !== undefined)
           setValue('showSelectedOnly', saved.showSelectedOnly);
+        if (saved.brand !== undefined) setValue('brand', saved.brand);
       }
     } catch {
       // Ignore localStorage read failures - will use default values
@@ -288,6 +301,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
       setValue('sortOrder', 'asc');
       setValue('category', '');
       setValue('showSelectedOnly', false);
+      setValue('brand', '');
     }
   }, [proposalId, setValue]);
 
@@ -296,12 +310,34 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
       if (typeof window === 'undefined') return;
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ search, sortBy, sortOrder, category, showSelectedOnly })
+        JSON.stringify({ search, sortBy, sortOrder, category, showSelectedOnly, brand })
       );
     } catch {
       // Ignore localStorage write failures - non-critical
     }
-  }, [STORAGE_KEY, search, sortBy, sortOrder, category, showSelectedOnly]);
+  }, [STORAGE_KEY, search, sortBy, sortOrder, category, showSelectedOnly, brand]);
+
+  const autoBrandRef = useRef(false);
+
+  useEffect(() => {
+    if (customerType === 'BRAND' && customerBrandName) {
+      if (!brand) {
+        autoBrandRef.current = true;
+        setValue('brand', customerBrandName, {
+          shouldDirty: false,
+          shouldTouch: false,
+          shouldValidate: false,
+        });
+      }
+    } else if (autoBrandRef.current) {
+      autoBrandRef.current = false;
+      setValue('brand', '', {
+        shouldDirty: false,
+        shouldTouch: false,
+        shouldValidate: false,
+      });
+    }
+  }, [customerType, customerBrandName, brand, setValue]);
 
   // Debounced search for API fetch
   // const [debouncedSearch, setDebouncedSearch] = useState(search);
@@ -331,10 +367,32 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   const { data: categoryData, isLoading: categoriesLoading } = categories;
 
   // Flatten the paginated data for compatibility - memoized for performance
-  const flattenedProductsData: Product[] = useMemo(
+  const allProducts: Product[] = useMemo(
     () => productsData?.pages?.flatMap((page: any) => page.items) || [],
     [productsData?.pages]
   );
+
+  const brandOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const product of allProducts) {
+      if (Array.isArray(product.brandNames)) {
+        for (const name of product.brandNames) {
+          if (typeof name === 'string' && name.trim().length > 0) {
+            names.add(name.trim());
+          }
+        }
+      }
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [allProducts]);
+
+  const filteredProducts: Product[] = useMemo(() => {
+    if (!brand) return allProducts;
+    const normalizedBrand = brand.toLowerCase();
+    return allProducts.filter(product =>
+      (product.brandNames || []).some(name => name.toLowerCase() === normalizedBrand)
+    );
+  }, [allProducts, brand]);
 
   // Quick lookup sets
   const selectedSet = useMemo(
@@ -348,12 +406,12 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
 
   // Displayed list supports "selected only"
   const productsMap = useMemo(
-    () => new Map((flattenedProductsData || []).map(p => [p.id, p] as const)),
-    [flattenedProductsData]
+    () => new Map((filteredProducts || []).map(p => [p.id, p] as const)),
+    [filteredProducts]
   );
   const displayedItems: Product[] = useMemo(() => {
     if (!showSelectedOnly) {
-      const items = flattenedProductsData || [];
+      const items = filteredProducts || [];
       if (!items.length) return items;
       const pinned = items.filter(p => selectedSet.has(p.id));
       const rest = items.filter(p => !selectedSet.has(p.id));
@@ -381,7 +439,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
           updatedAt: new Date(),
         } as unknown as Product)
     );
-  }, [showSelectedOnly, selectedProducts, productsMap, flattenedProductsData, selectedSet]);
+  }, [showSelectedOnly, selectedProducts, productsMap, filteredProducts, selectedSet]);
 
   // Compute current assignment per selected product (consider pending changes)
   const currentAssignmentByRow = useMemo(() => {
@@ -472,9 +530,9 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   // Handle product addition
   const handleAddProduct = useCallback(
     (productId: string) => {
-      if (!flattenedProductsData || productsError) return;
+      if (productsError) return;
 
-      const product = flattenedProductsData.find(p => p.id === productId);
+      const product = allProducts.find(p => p.id === productId);
       if (product && !selectedProducts.find(p => p.productId === productId)) {
         const newProduct: ProposalProductData['products'][0] = {
           id: `temp-${Date.now()}`, // Temporary ID for UI
@@ -521,7 +579,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
         );
       }
     },
-    [flattenedProductsData, selectedProducts, analytics, productsError]
+    [allProducts, selectedProducts, analytics, productsError]
   );
 
   // Handle quantity change
@@ -922,7 +980,7 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
 
       {/* Search & Sort */}
       <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">Search Products</label>
             <Input
@@ -948,6 +1006,24 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
               ))}
             </select>
           </div>
+          {brandOptions.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
+              <select
+                {...register('brand')}
+                className="border rounded px-3 py-2 text-sm w-full"
+                value={brand}
+                onChange={e => setValue('brand', e.target.value)}
+              >
+                <option value="">All brands</option>
+                {brandOptions.map(option => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
             <Controller
@@ -1065,7 +1141,170 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                       </div>
 
                       {/* Product rows */}
-                      {products.map(sp => (
+                      {products.map(sp => {
+                        const baseProduct = productsMap.get(sp.productId);
+                        return (
+                          <div
+                            key={sp.id}
+                            className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50"
+                          >
+                            <div className="col-span-4 min-w-0">
+                              <div className="font-medium text-gray-900 truncate">{sp.name}</div>
+                              <div className="text-xs text-gray-500 truncate">
+                                {sp.category || 'General'}
+                              </div>
+                              {baseProduct?.brandNames && baseProduct.brandNames.length > 0 && (
+                                <div className="text-xs text-gray-500 truncate">
+                                  Brands: {baseProduct.brandNames.join(', ')}
+                                </div>
+                              )}
+                            </div>
+                            <div className="col-span-2 flex items-center justify-center">
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() =>
+                                    handleQuantityChange(sp.productId, sp.quantity - 1)
+                                  }
+                                >
+                                  -
+                                </Button>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={sp.quantity}
+                                  onChange={e =>
+                                    handleQuantityChange(
+                                      sp.productId,
+                                      parseInt(e.target.value) || 1
+                                    )
+                                  }
+                                  className="w-12 h-6 text-center text-sm"
+                                />
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() =>
+                                    handleQuantityChange(sp.productId, sp.quantity + 1)
+                                  }
+                                >
+                                  +
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="col-span-2 flex items-center justify-center">
+                              <span className="text-sm font-medium text-gray-900">
+                                ${(sp.unitPrice || 0).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="col-span-2 flex items-center justify-center">
+                              <span className="text-sm font-semibold text-gray-900">
+                                ${(sp.total || 0).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="col-span-1 flex items-center justify-center">
+                              <select
+                                aria-label={`Assign section for ${sp.name}`}
+                                className="border rounded px-2 py-1 text-sm w-full"
+                                disabled={!proposalId}
+                                value={currentAssignmentByRow[sp.id] ?? ''}
+                                onChange={e => setAssignment(sp.id, e.target.value || null)}
+                              >
+                                <option value="">Unassigned</option>
+                                {(sectionsData || [])
+                                  .slice()
+                                  .sort((a, b) => a.order - b.order)
+                                  .map(s => (
+                                    <option key={s.id} value={s.id}>
+                                      {s.title}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                            <div className="col-span-1 flex items-center justify-center">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => handleRemoveProduct(sp.productId)}
+                                aria-label={`Remove ${sp.name}`}
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Show unassigned products */}
+            {groupedProductsBySection.unassignedProducts.length > 0 && (
+              <div
+                className={`border border-gray-200 rounded-lg p-4 transition-all duration-200 ${
+                  draggedSectionId === 'unassigned' ? 'opacity-50 scale-95' : ''
+                } ${dragOverSectionId === 'unassigned' ? 'border-blue-400 bg-blue-50' : ''}`}
+                draggable
+                onDragStart={e => handleDragStart(e, 'unassigned')}
+                onDragOver={e => handleDragOver(e, 'unassigned')}
+                onDragLeave={handleDragLeave}
+                onDrop={e => handleDrop(e, 'unassigned')}
+              >
+                <div
+                  className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200 cursor-pointer hover:bg-gray-50 -m-4 p-4 rounded-t-lg transition-colors"
+                  onClick={() => toggleSectionCollapse('unassigned')}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="cursor-grab hover:cursor-grabbing p-1 hover:bg-gray-200 rounded transition-colors"
+                      onClick={e => e.stopPropagation()}
+                      title="Drag to reorder"
+                    >
+                      <GripVertical className="w-4 h-4 text-gray-400" />
+                    </div>
+                    {collapsedSections.has('unassigned') ? (
+                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                    )}
+                    <h4 className="text-lg font-semibold text-gray-900">Unassigned Products</h4>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-500">
+                      {groupedProductsBySection.unassignedProducts.length} product
+                      {groupedProductsBySection.unassignedProducts.length !== 1 ? 's' : ''}
+                    </div>
+                    <div className="text-lg font-bold text-gray-900">
+                      $
+                      {groupedProductsBySection.unassignedProducts
+                        .reduce((sum, p) => sum + (p.total || 0), 0)
+                        .toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                {!collapsedSections.has('unassigned') && (
+                  <div className="space-y-2">
+                    {/* Header row */}
+                    <div className="grid grid-cols-12 gap-4 py-2 px-3 bg-gray-50 rounded text-sm font-medium text-gray-700">
+                      <div className="col-span-4">Product</div>
+                      <div className="col-span-2 text-center">Quantity</div>
+                      <div className="col-span-2 text-center">Unit Price</div>
+                      <div className="col-span-2 text-center">Total Price</div>
+                      <div className="col-span-1 text-center">Section</div>
+                      <div className="col-span-1 text-center">Action</div>
+                    </div>
+
+                    {/* Unassigned product rows */}
+                    {groupedProductsBySection.unassignedProducts.map(sp => {
+                      const baseProduct = productsMap.get(sp.productId);
+                      return (
                         <div
                           key={sp.id}
                           className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50"
@@ -1075,6 +1314,11 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                             <div className="text-xs text-gray-500 truncate">
                               {sp.category || 'General'}
                             </div>
+                            {baseProduct?.brandNames && baseProduct.brandNames.length > 0 && (
+                              <div className="text-xs text-gray-500 truncate">
+                                Brands: {baseProduct.brandNames.join(', ')}
+                              </div>
+                            )}
                           </div>
                           <div className="col-span-2 flex items-center justify-center">
                             <div className="flex items-center gap-1">
@@ -1146,153 +1390,8 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                             </Button>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Show unassigned products */}
-            {groupedProductsBySection.unassignedProducts.length > 0 && (
-              <div
-                className={`border border-gray-200 rounded-lg p-4 transition-all duration-200 ${
-                  draggedSectionId === 'unassigned' ? 'opacity-50 scale-95' : ''
-                } ${dragOverSectionId === 'unassigned' ? 'border-blue-400 bg-blue-50' : ''}`}
-                draggable
-                onDragStart={e => handleDragStart(e, 'unassigned')}
-                onDragOver={e => handleDragOver(e, 'unassigned')}
-                onDragLeave={handleDragLeave}
-                onDrop={e => handleDrop(e, 'unassigned')}
-              >
-                <div
-                  className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200 cursor-pointer hover:bg-gray-50 -m-4 p-4 rounded-t-lg transition-colors"
-                  onClick={() => toggleSectionCollapse('unassigned')}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="cursor-grab hover:cursor-grabbing p-1 hover:bg-gray-200 rounded transition-colors"
-                      onClick={e => e.stopPropagation()}
-                      title="Drag to reorder"
-                    >
-                      <GripVertical className="w-4 h-4 text-gray-400" />
-                    </div>
-                    {collapsedSections.has('unassigned') ? (
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-gray-400" />
-                    )}
-                    <h4 className="text-lg font-semibold text-gray-900">Unassigned Products</h4>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-500">
-                      {groupedProductsBySection.unassignedProducts.length} product
-                      {groupedProductsBySection.unassignedProducts.length !== 1 ? 's' : ''}
-                    </div>
-                    <div className="text-lg font-bold text-gray-900">
-                      $
-                      {groupedProductsBySection.unassignedProducts
-                        .reduce((sum, p) => sum + (p.total || 0), 0)
-                        .toFixed(2)}
-                    </div>
-                  </div>
-                </div>
-
-                {!collapsedSections.has('unassigned') && (
-                  <div className="space-y-2">
-                    {/* Header row */}
-                    <div className="grid grid-cols-12 gap-4 py-2 px-3 bg-gray-50 rounded text-sm font-medium text-gray-700">
-                      <div className="col-span-4">Product</div>
-                      <div className="col-span-2 text-center">Quantity</div>
-                      <div className="col-span-2 text-center">Unit Price</div>
-                      <div className="col-span-2 text-center">Total Price</div>
-                      <div className="col-span-1 text-center">Section</div>
-                      <div className="col-span-1 text-center">Action</div>
-                    </div>
-
-                    {/* Unassigned product rows */}
-                    {groupedProductsBySection.unassignedProducts.map(sp => (
-                      <div
-                        key={sp.id}
-                        className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50"
-                      >
-                        <div className="col-span-4 min-w-0">
-                          <div className="font-medium text-gray-900 truncate">{sp.name}</div>
-                          <div className="text-xs text-gray-500 truncate">
-                            {sp.category || 'General'}
-                          </div>
-                        </div>
-                        <div className="col-span-2 flex items-center justify-center">
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => handleQuantityChange(sp.productId, sp.quantity - 1)}
-                            >
-                              -
-                            </Button>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={sp.quantity}
-                              onChange={e =>
-                                handleQuantityChange(sp.productId, parseInt(e.target.value) || 1)
-                              }
-                              className="w-12 h-6 text-center text-sm"
-                            />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={() => handleQuantityChange(sp.productId, sp.quantity + 1)}
-                            >
-                              +
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="col-span-2 flex items-center justify-center">
-                          <span className="text-sm font-medium text-gray-900">
-                            ${(sp.unitPrice || 0).toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="col-span-2 flex items-center justify-center">
-                          <span className="text-sm font-semibold text-gray-900">
-                            ${(sp.total || 0).toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="col-span-1 flex items-center justify-center">
-                          <select
-                            aria-label={`Assign section for ${sp.name}`}
-                            className="border rounded px-2 py-1 text-sm w-full"
-                            disabled={!proposalId}
-                            value={currentAssignmentByRow[sp.id] ?? ''}
-                            onChange={e => setAssignment(sp.id, e.target.value || null)}
-                          >
-                            <option value="">Unassigned</option>
-                            {(sectionsData || [])
-                              .slice()
-                              .sort((a, b) => a.order - b.order)
-                              .map(s => (
-                                <option key={s.id} value={s.id}>
-                                  {s.title}
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-                        <div className="col-span-1 flex items-center justify-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => handleRemoveProduct(sp.productId)}
-                            aria-label={`Remove ${sp.name}`}
-                          >
-                            ×
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1361,6 +1460,11 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                     <div className="text-sm text-gray-600 mt-0.5">
                       {(p.category || []).join(', ')}
                     </div>
+                    {p.brandNames && p.brandNames.length > 0 && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Brands: {p.brandNames.join(', ')}
+                      </div>
+                    )}
                     <div className="text-sm text-gray-900 mt-1">
                       ${(p.price ?? 0).toFixed(2)} per unit
                     </div>

@@ -674,6 +674,7 @@ model Customer {
   lastSyncedAt DateTime?
   syncStatus   String?           @default("PENDING")
   customerType CustomerType?     @default(ENDUSER)
+  brandName    String?
   contacts     CustomerContact[]
   proposals    Proposal[]
   tenant       Tenant            @relation(fields: [tenantId], references: [id])
@@ -690,6 +691,7 @@ model Customer {
   @@index([lastSyncedAt])
   @@index([tier])
   @@index([status])
+  @@index([brandName])
   @@index([tenantId, email], map: "idx_customers_tenant_email")
   @@index([industry], map: "idx_customers_industry")
   @@index([createdAt], map: "idx_customers_created_at")
@@ -874,6 +876,7 @@ model Product {
   currency          String                    @default("USD")
   category          String[]
   tags              String[]
+  brandNames        String[]          @default([])
   attributes        Json?
   images            String[]
   datasheetPath     String? // Optional path to product datasheet (network or local)
@@ -898,6 +901,7 @@ model Product {
   @@index([tenantId])
   @@index([category], type: Gin)
   @@index([tags], type: Gin)
+  @@index([brandNames], type: Gin)
   @@index([createdAt])
   @@index([updatedAt])
   @@index([status])
@@ -1372,6 +1376,7 @@ enum CustomerType {
   GOVERNMENTAL
   NGO
   SYSTEM_INTEGRATOR
+  BRAND
 }
 
 enum ProposalStatus {

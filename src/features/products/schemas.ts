@@ -86,13 +86,10 @@ export const ImageUploadSchema = z.object({
       file => file.size <= 5 * 1024 * 1024, // 5MB max
       'File size must be less than 5MB'
     )
-    .refine(
-      file => {
-        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-        return allowedTypes.includes(file.type);
-      },
-      'File must be an image (JPEG, PNG, WebP, or GIF)'
-    ),
+    .refine(file => {
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+      return allowedTypes.includes(file.type);
+    }, 'File must be an image (JPEG, PNG, WebP, or GIF)'),
   alt: z.string().max(200, 'Alt text must be 200 characters or less').optional(),
 });
 
@@ -115,6 +112,9 @@ export const ProductSchema = z.object({
   sku: z.string().min(1, 'SKU is required'),
   category: z.union([z.array(z.string()), z.undefined()]).transform(val => val || []),
   tags: z.union([z.array(z.string()), z.undefined()]).transform(val => val || []),
+  brandNames: z
+    .union([z.array(z.string()), z.undefined()])
+    .transform(val => (val || []).map(name => name.trim()).filter(name => name.length > 0)),
   attributes: z.record(z.unknown()).optional(),
   images: ProductImagesSchema,
   datasheetPath: z.string().nullable().optional(), // Optional path to product datasheet (network or local)
@@ -270,6 +270,7 @@ export const ProductQuerySchema = z.object({
   sortBy: z.enum(['createdAt', 'name', 'price', 'isActive', 'datasheetPath']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   category: z.string().optional(),
+  brand: z.string().optional(),
   isActive: z.preprocess(val => {
     if (typeof val === 'string') {
       return val.toLowerCase() === 'true';
@@ -288,6 +289,7 @@ export const ProductSearchSchema = z.object({
   query: z.string().min(1, 'Search query is required'),
   limit: z.number().min(1).max(100).default(20),
   category: z.string().optional(),
+  brand: z.string().optional(),
   tags: z.array(z.string()).optional(),
   priceRange: z
     .object({

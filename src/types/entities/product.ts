@@ -22,6 +22,7 @@ export interface Product {
   currency: string;
   category: string[];
   tags: string[];
+  brandNames: string[];
   attributes?: Record<string, unknown> | null;
   images: string[];
   datasheetPath?: string | null; // Optional path to product datasheet (network or local)
@@ -119,6 +120,7 @@ export interface CreateProductData {
   currency?: string;
   category?: string[];
   tags?: string[];
+  brandNames?: string[];
   attributes?: Record<string, unknown>;
   images?: string[];
   datasheetPath?: string; // Optional path to product datasheet (network or local)
@@ -143,6 +145,7 @@ export interface ProductFilters {
   isActive?: boolean;
   category?: string[];
   tags?: string[];
+  brandNames?: string[];
   priceMin?: number;
   priceMax?: number;
   sku?: string;
@@ -193,6 +196,7 @@ export interface ProductData {
   currency: string;
   category: string;
   tags: string[];
+  brandNames: string[];
   attributes: Record<string, unknown>;
   isActive: boolean;
   version: number;
@@ -215,6 +219,7 @@ export interface ProductQuery extends BaseQueryOptions {
   sortBy?: ProductSortBy;
   category?: string;
   tags?: string[];
+  brandNames?: string[];
   priceRange?: [number, number];
   isActive?: boolean;
 }

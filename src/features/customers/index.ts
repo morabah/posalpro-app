@@ -66,6 +66,7 @@ export {
   CustomerInteractionCreateSchema,
   CustomerInteractionSchema,
   CustomerListSchema,
+  BrandNameSchema,
   CustomerOpportunityCreateSchema,
   CustomerOpportunitySchema,
   CustomerProposalsQuerySchema,

@@ -27,6 +27,7 @@ export const CustomerTypeSchema = z.enum([
   'GOVERNMENTAL',
   'NGO',
   'SYSTEM_INTEGRATOR',
+  'BRAND',
 ]);
 
 export const CustomerIndustrySchema = z.preprocess(
@@ -64,6 +65,11 @@ export const CustomerIndustrySchema = z.preprocess(
 
 export const CompanySizeSchema = z.enum(['STARTUP', 'SMALL', 'MEDIUM', 'LARGE', 'ENTERPRISE']);
 
+export const BrandNameSchema = z
+  .string()
+  .trim()
+  .max(120, 'Brand name must be 120 characters or less');
+
 // ====================
 // Core Customer Schemas
 // ====================
@@ -100,6 +106,7 @@ export const CustomerSchema = z.object({
     .transform(val => (typeof val === 'string' ? Number(val) : val))
     .nullable()
     .optional(),
+  brandName: BrandNameSchema.optional().nullable(),
   lastContact: z
     .union([z.string(), z.date(), z.null()])
     .optional()
@@ -122,21 +129,44 @@ export const CustomerCreateSchema = CustomerSchema.extend({
   // Override with more specific validation for create
   website: z.string().url('Invalid website URL').optional().or(z.literal('')),
   customerType: CustomerTypeSchema.optional().default('ENDUSER'),
-}).omit({
-  id: true,
-  tenantId: true, // tenantId should be set by the system, not by user input
-  createdAt: true,
-  updatedAt: true,
-  // Remove fields that shouldn't be set during creation
-  metadata: true,
-  segmentation: true,
-  riskScore: true,
-  ltv: true,
-  lastContact: true,
-  cloudId: true,
-  lastSyncedAt: true,
-  syncStatus: true,
-});
+  brandName: BrandNameSchema.optional().nullable(),
+})
+  .omit({
+    id: true,
+    tenantId: true, // tenantId should be set by the system, not by user input
+    createdAt: true,
+    updatedAt: true,
+    // Remove fields that shouldn't be set during creation
+    metadata: true,
+    segmentation: true,
+    riskScore: true,
+    ltv: true,
+    lastContact: true,
+    cloudId: true,
+    lastSyncedAt: true,
+    syncStatus: true,
+  })
+  .superRefine((data, ctx) => {
+    const typeValue = typeof data.customerType === 'string' ? data.customerType : undefined;
+    if ((typeValue as string | undefined) === 'BRAND') {
+      const brand = (data.brandName ?? '').trim();
+      if (brand.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Brand name is required when customer type is BRAND',
+          path: ['brandName'],
+        });
+      } else {
+        data.brandName = brand;
+      }
+    } else if (data.brandName && data.brandName.trim().length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Remove brand name unless the customer type is BRAND',
+        path: ['brandName'],
+      });
+    }
+  });
 
 // Email validation schema for uniqueness checking
 export const EmailValidationSchema = z.object({
@@ -144,36 +174,59 @@ export const EmailValidationSchema = z.object({
   excludeId: z.string().optional(),
 });
 
-export const CustomerUpdateSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(200).optional(),
-  email: z.string().email('Invalid email format').optional(),
-  phone: z.string().nullable().optional(),
-  website: z.string().url('Invalid website URL').nullable().optional().or(z.literal('')),
-  address: z.string().nullable().optional(),
-  country: z.string().nullable().optional(),
-  industry: CustomerIndustrySchema.optional(),
-  tier: CustomerTierSchema.optional(),
-  customerType: CustomerTypeSchema.optional(),
-  status: CustomerStatusSchema.optional(),
-  tags: z.array(z.string()).optional(),
-  segmentation: z.any().optional(),
-  riskScore: z
-    .union([z.number().min(0).max(100), z.string()])
-    .transform(val => (typeof val === 'string' ? Number(val) : val))
-    .optional()
-    .nullable(),
-  ltv: z
-    .union([z.number().min(0), z.string()])
-    .transform(val => (typeof val === 'string' ? Number(val) : val))
-    .optional()
-    .nullable(),
-  companySize: z.string().nullable().optional(),
-  revenue: z
-    .union([z.number(), z.string()])
-    .transform(val => (typeof val === 'string' ? Number(val) : val))
-    .optional()
-    .nullable(),
-});
+export const CustomerUpdateSchema = z
+  .object({
+    name: z.string().min(1, 'Name is required').max(200).optional(),
+    email: z.string().email('Invalid email format').optional(),
+    phone: z.string().nullable().optional(),
+    website: z.string().url('Invalid website URL').nullable().optional().or(z.literal('')),
+    address: z.string().nullable().optional(),
+    country: z.string().nullable().optional(),
+    industry: CustomerIndustrySchema.optional(),
+    tier: CustomerTierSchema.optional(),
+    customerType: CustomerTypeSchema.optional(),
+    brandName: BrandNameSchema.optional().nullable(),
+    status: CustomerStatusSchema.optional(),
+    tags: z.array(z.string()).optional(),
+    segmentation: z.any().optional(),
+    riskScore: z
+      .union([z.number().min(0).max(100), z.string()])
+      .transform(val => (typeof val === 'string' ? Number(val) : val))
+      .optional()
+      .nullable(),
+    ltv: z
+      .union([z.number().min(0), z.string()])
+      .transform(val => (typeof val === 'string' ? Number(val) : val))
+      .optional()
+      .nullable(),
+    companySize: z.string().nullable().optional(),
+    revenue: z
+      .union([z.number(), z.string()])
+      .transform(val => (typeof val === 'string' ? Number(val) : val))
+      .optional()
+      .nullable(),
+  })
+  .superRefine((data, ctx) => {
+    const typeValue = typeof data.customerType === 'string' ? data.customerType : undefined;
+    if ((typeValue as string | undefined) === 'BRAND') {
+      const brand = (data.brandName ?? '').trim();
+      if (brand.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Brand name is required when customer type is BRAND',
+          path: ['brandName'],
+        });
+      } else {
+        data.brandName = brand;
+      }
+    } else if (typeValue && (typeValue as string) !== 'BRAND' && data.brandName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Remove brand name unless the customer type is BRAND',
+        path: ['brandName'],
+      });
+    }
+  });
 
 // ====================
 // Customer Contact Schemas

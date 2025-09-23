@@ -161,6 +161,7 @@ function CustomerFilters() {
     { value: 'GOVERNMENTAL', label: 'Governmental' },
     { value: 'NGO', label: 'NGO' },
     { value: 'SYSTEM_INTEGRATOR', label: 'System Integrator' },
+    { value: 'BRAND', label: 'Brand' },
   ];
 
   return (
@@ -749,9 +750,12 @@ function CustomerTableOptimized({
                 <td className="px-4 py-3">
                   {customer.tier && <Badge variant="secondary">{customer.tier}</Badge>}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 space-y-1">
                   {customer.customerType && (
                     <Badge variant="outline">{customer.customerType}</Badge>
+                  )}
+                  {customer.customerType === 'BRAND' && customer.brandName && (
+                    <div className="text-sm text-gray-600">{customer.brandName}</div>
                   )}
                 </td>
                 <td className="px-4 py-3">

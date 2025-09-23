@@ -131,6 +131,7 @@ export class ProductService {
           currency: data.currency || 'USD',
           category: data.category || [],
           tags: data.tags || [],
+          brandNames: data.brandNames ? { set: data.brandNames } : undefined,
           attributes: data.attributes ? toPrismaJson(data.attributes) : undefined,
           images: data.images || [],
           datasheetPath: data.datasheetPath, // Include datasheet path
@@ -168,7 +169,7 @@ export class ProductService {
 
   async updateProduct(data: UpdateProductData): Promise<Product> {
     try {
-      const { id, ...updateData } = data;
+      const { id, brandNames, ...updateData } = data;
       const tenant = getCurrentTenant();
 
       // Handle JSON fields with proper type conversion
@@ -176,6 +177,10 @@ export class ProductService {
         ...updateData,
         attributes: updateData.attributes ? toPrismaJson(updateData.attributes) : undefined,
       };
+
+      if (brandNames !== undefined) {
+        prismaData.brandNames = { set: brandNames }; // Replace existing brand associations
+      }
 
       return await prisma.product.update({
         where: {
@@ -976,6 +981,7 @@ export class ProductService {
           sku: true,
           category: true,
           tags: true,
+          brandNames: true,
           datasheetPath: true, // Include datasheet path
           isActive: true,
           createdAt: true,
@@ -1058,6 +1064,7 @@ export class ProductService {
               ? [data.category]
               : [],
           tags: data.tags || [],
+          brandNames: data.brandNames ? { set: data.brandNames } : undefined,
           attributes: data.attributes ? toPrismaJson(data.attributes) : undefined,
           images: data.images || [],
           datasheetPath: data.datasheetPath, // Include datasheet path
@@ -1076,6 +1083,7 @@ export class ProductService {
           sku: true,
           category: true,
           tags: true,
+          brandNames: true,
           datasheetPath: true, // Include datasheet path
           isActive: true,
           createdAt: true,
@@ -1138,6 +1146,10 @@ export class ProductService {
 
     if (filters.tags && filters.tags.length > 0) {
       where.tags = { hasSome: filters.tags };
+    }
+
+    if (filters.brandNames && filters.brandNames.length > 0) {
+      where.brandNames = { hasSome: filters.brandNames };
     }
 
     if (filters.isActive !== undefined) {
@@ -1423,6 +1435,7 @@ export class ProductService {
           ? [product.category]
           : [],
       tags: product.tags || [],
+      brandNames: product.brandNames || [],
       images: product.images || [],
       datasheetPath: product.datasheetPath, // Include datasheet path
       status: product.status || 'ACTIVE',

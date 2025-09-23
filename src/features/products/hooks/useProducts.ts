@@ -760,6 +760,37 @@ export function useRelationshipTypeOptionsMigrated() {
   };
 }
 
+export function useProductBrandOptions() {
+  const { get } = useHttpClient();
+
+  return useQuery({
+    queryKey: productKeys.products.brands(),
+    queryFn: async () => {
+      const response = await get<{ items: Array<{ brandName?: string | null }> }>(
+        '/api/customers?customerType=BRAND&limit=100&sortBy=name&sortOrder=asc'
+      );
+
+      const rawCustomers = Array.isArray(response.items) ? response.items : [];
+      const uniqueBrandNames = new Set<string>();
+
+      for (const customer of rawCustomers) {
+        if (customer && typeof customer.brandName === 'string') {
+          const trimmed = customer.brandName.trim();
+          if (trimmed.length > 0) {
+            uniqueBrandNames.add(trimmed);
+          }
+        }
+      }
+
+      return Array.from(uniqueBrandNames)
+        .sort((a, b) => a.localeCompare(b))
+        .map(name => ({ name }));
+    },
+    staleTime: 60000,
+    gcTime: 300000,
+  });
+}
+
 // ====================
 // Exports
 // ====================
@@ -771,12 +802,21 @@ export function useRelationshipTypeOptionsMigrated() {
 // ====================
 
 // Unified hook for loading products and categories in parallel
-export function useUnifiedProductSelectionData() {
+export function useUnifiedProductSelectionData(
+  params: {
+    search?: string;
+    category?: string;
+    filters?: Record<string, unknown>;
+  } = {}
+) {
   // 🚀 OPTIMIZATION: Load ALL product data in parallel
   const productsResult = useInfiniteProductsMigrated({
+    search: params.search,
+    category: params.category,
     limit: 50,
     sortBy: 'name',
     sortOrder: 'asc',
+    filters: params.filters,
   });
 
   const categoriesResult = useProductCategories();

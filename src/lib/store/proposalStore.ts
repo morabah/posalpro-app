@@ -64,6 +64,8 @@ export interface ProposalBasicInfo {
     name: string;
     email?: string;
     industry?: string;
+    customerType?: string;
+    brandName?: string | null;
   };
   dueDate?: string;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
@@ -184,7 +186,10 @@ interface ProposalWizardState {
   // Actions
   setCurrentStep: (step: number) => void;
   setPlanType: (plan: 'BASIC' | 'PROFESSIONAL' | 'ENTERPRISE') => void;
-  setStepData: (step: number, data: ProposalStepData | ((prevData: ProposalStepData) => ProposalStepData)) => void;
+  setStepData: (
+    step: number,
+    data: ProposalStepData | ((prevData: ProposalStepData) => ProposalStepData)
+  ) => void;
   setValidationErrors: (step: number, errors: string[]) => void;
   nextStep: () => Promise<void>;
   previousStep: () => void;
@@ -356,7 +361,10 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
     });
   },
 
-  setStepData: (step: number, data: ProposalStepData | ((prevData: ProposalStepData) => ProposalStepData)) => {
+  setStepData: (
+    step: number,
+    data: ProposalStepData | ((prevData: ProposalStepData) => ProposalStepData)
+  ) => {
     set(state => {
       const currentStepData = state.stepData[step] as any;
       const newData = typeof data === 'function' ? data(currentStepData as any) : data;
@@ -369,8 +377,8 @@ export const useProposalStore = create<ProposalWizardState>((set, get) => ({
           step,
           currentDataKeys: currentStepData ? Object.keys(currentStepData) : null,
           newDataKeys: newData ? Object.keys(newData) : null,
-          productCount: (newData && 'products' in newData) ? newData.products?.length || 0 : 0,
-          totalValue: (newData && 'totalValue' in newData) ? newData.totalValue || 0 : 0,
+          productCount: newData && 'products' in newData ? newData.products?.length || 0 : 0,
+          totalValue: newData && 'totalValue' in newData ? newData.totalValue || 0 : 0,
         });
       }
 
@@ -843,7 +851,10 @@ export const useProposalNavigation = (): {
 export const useProposalSetCurrentStep = () => useProposalStore(state => state.setCurrentStep);
 
 export const useProposalActions = (): {
-  setStepData: (step: number, data: ProposalStepData | ((prevData: ProposalStepData) => ProposalStepData)) => void;
+  setStepData: (
+    step: number,
+    data: ProposalStepData | ((prevData: ProposalStepData) => ProposalStepData)
+  ) => void;
   setCurrentStep: (step: number) => void;
   nextStep: () => Promise<void>;
   previousStep: () => void;

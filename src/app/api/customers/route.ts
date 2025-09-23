@@ -34,22 +34,46 @@ export const dynamic = 'force-dynamic';
 export const POST = createRoute(
   {
     roles: ['admin', 'sales', 'System Administrator', 'Administrator'],
-    body: z.object({
-      name: z.string().min(1, 'Customer name is required'),
-      email: z.string().email(),
-      industry: z.string().optional(),
-      status: z.nativeEnum(CustomerStatus).optional().default(CustomerStatus.ACTIVE),
-      tier: z.nativeEnum(CustomerTier).optional().default(CustomerTier.STANDARD),
-      customerType: z.nativeEnum(CustomerType).optional().default(CustomerType.ENDUSER),
-      tags: z.array(z.string()).optional(),
-      revenue: z.number().optional(),
-      website: z.string().optional(),
-      phone: z.string().optional(),
-      address: z.string().optional(),
-      country: z.string().optional(),
-      preferences: z.record(z.any()).optional(),
-      notes: z.string().optional(),
-    }),
+    body: z
+      .object({
+        name: z.string().min(1, 'Customer name is required'),
+        email: z.string().email(),
+        industry: z.string().optional(),
+        status: z.nativeEnum(CustomerStatus).optional().default(CustomerStatus.ACTIVE),
+        tier: z.nativeEnum(CustomerTier).optional().default(CustomerTier.STANDARD),
+        customerType: z.nativeEnum(CustomerType).optional().default(CustomerType.ENDUSER),
+        brandName: z
+          .string()
+          .trim()
+          .min(1, 'Brand name is required')
+          .max(120, 'Brand name must be 120 characters or less')
+          .optional(),
+        tags: z.array(z.string()).optional(),
+        revenue: z.number().optional(),
+        website: z.string().optional(),
+        phone: z.string().optional(),
+        address: z.string().optional(),
+        country: z.string().optional(),
+        preferences: z.record(z.any()).optional(),
+        notes: z.string().optional(),
+      })
+      .superRefine((data, ctx) => {
+        if (data.customerType === CustomerType.BRAND) {
+          if (!data.brandName || data.brandName.trim().length === 0) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: 'Brand name is required when customer type is BRAND',
+              path: ['brandName'],
+            });
+          }
+        } else if (data.brandName) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Remove brand name unless the customer type is BRAND',
+            path: ['brandName'],
+          });
+        }
+      }),
     entitlements: ['feature.customers.create'],
   },
   async ({ body, user, requestId }) => {

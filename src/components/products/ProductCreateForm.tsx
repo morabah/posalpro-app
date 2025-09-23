@@ -7,7 +7,12 @@ import { FormActions, FormErrorSummary, FormField } from '@/components/ui/FormFi
 import { Button } from '@/components/ui/forms/Button';
 import { SearchableDropdown } from '@/components/ui/SearchableDropdown';
 import type { ProductCreate } from '@/features/products';
-import { useCreateProduct, useProductCategories, useProductTags } from '@/features/products';
+import {
+  useCreateProduct,
+  useProductBrandOptions,
+  useProductCategories,
+  useProductTags,
+} from '@/features/products';
 import { ProductCreateSchema } from '@/features/products/schemas';
 import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { analytics } from '@/lib/analytics';
@@ -28,6 +33,7 @@ export function ProductCreateForm() {
   // ✅ Fetch categories and tags from database
   const { data: categoriesData, isLoading: categoriesLoading } = useProductCategories();
   const { data: tagsData, isLoading: tagsLoading } = useProductTags();
+  const { data: brandOptionsData, isLoading: brandsLoading } = useProductBrandOptions();
 
   // ✅ REACT HOOK FORM SETUP
   const {
@@ -49,6 +55,7 @@ export function ProductCreateForm() {
       currency: 'USD',
       category: [],
       tags: [],
+      brandNames: [],
       stockQuantity: 0,
       status: 'ACTIVE' as const,
       isActive: true,
@@ -318,11 +325,11 @@ export function ProductCreateForm() {
             {/* Image Upload */}
             <ImageUpload
               productId="new" // Placeholder for new products
-              onUploadSuccess={(imageUrl) => {
+              onUploadSuccess={imageUrl => {
                 setProductImages(prev => [...prev, imageUrl]);
                 setValue('images', [...productImages, imageUrl]);
               }}
-              onUploadError={(error) => {
+              onUploadError={error => {
                 toast.error(`Image upload failed: ${error}`);
               }}
               maxFiles={10}
@@ -334,11 +341,14 @@ export function ProductCreateForm() {
               <ImageGallery
                 productId="new" // Placeholder for new products
                 images={productImages}
-                onImageDelete={(imageUrl) => {
+                onImageDelete={imageUrl => {
                   setProductImages(prev => prev.filter(img => img !== imageUrl));
-                  setValue('images', productImages.filter(img => img !== imageUrl));
+                  setValue(
+                    'images',
+                    productImages.filter(img => img !== imageUrl)
+                  );
                 }}
-                onImageDeleteError={(error) => {
+                onImageDeleteError={error => {
                   toast.error(`Image deletion failed: ${error}`);
                 }}
                 maxImages={10}
@@ -387,6 +397,25 @@ export function ProductCreateForm() {
               )}
             />
             <p className="text-sm text-gray-500">Select from existing tags or type new ones</p>
+
+            <Controller
+              name="brandNames"
+              control={control}
+              render={({ field }) => (
+                <SearchableDropdown
+                  label="Brand Names"
+                  placeholder="Select relevant brands"
+                  value={field.value || []}
+                  onChange={field.onChange}
+                  options={brandOptionsData || []}
+                  isLoading={brandsLoading}
+                  error={errors.brandNames?.message}
+                />
+              )}
+            />
+            <p className="text-sm text-gray-500">
+              Link this product to customer brands for proposal filtering
+            </p>
           </div>
 
           {/* Status */}

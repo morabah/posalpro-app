@@ -27,6 +27,7 @@ export enum CustomerType {
   GOVERNMENTAL = 'GOVERNMENTAL',
   NGO = 'NGO',
   SYSTEM_INTEGRATOR = 'SYSTEM_INTEGRATOR',
+  BRAND = 'BRAND',
 }
 
 // Core Customer Types (manually defined to match Prisma schema)
@@ -49,6 +50,7 @@ export interface Customer {
   segmentation?: Record<string, unknown> | null;
   riskScore?: number | null;
   ltv?: number | null;
+  brandName?: string | null;
   createdAt: Date;
   updatedAt: Date;
   lastContact?: Date | null;
@@ -132,6 +134,7 @@ export interface CreateCustomerData {
   revenue?: number;
   tier?: CustomerTier;
   customerType?: CustomerType;
+  brandName?: string;
   tags?: string[];
   metadata?: Record<string, unknown>;
 }

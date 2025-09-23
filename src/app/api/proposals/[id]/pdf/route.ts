@@ -10,7 +10,6 @@
 // Force Node.js runtime to avoid Edge Function conflicts with Prisma
 export const runtime = 'nodejs';
 
-
 import { proposalService } from '@/lib/services/proposalService';
 import { buildStrictHtml, escapeHtml } from '@/server/pdf/strictTemplate';
 import {
@@ -18,8 +17,9 @@ import {
   isTemplateAvailable,
   TEMPLATE_REGISTRY,
 } from '@/server/pdf/templateRegistry';
-import { NextRequest, NextResponse } from 'next/server';
 import { handleCorsPreflight, withCors } from '@/server/api/cors';
+import { renderPdf, PdfRequestPayload } from '@/server/pdf/pdfFunction';
+import { NextRequest, NextResponse } from 'next/server';
 
 function getIdFromPath(req: NextRequest): string | null {
   const parts = new URL(req.url).pathname.split('/').filter(Boolean);
@@ -85,17 +85,49 @@ export async function GET(req: NextRequest) {
 
     // Helper to call the Netlify PDF function
     async function renderPdfViaFunction(payload: Record<string, any>): Promise<Uint8Array> {
-      const url = `${origin}/.netlify/functions/pdf`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`PDF function failed: ${res.status} ${text}`);
+      const cookieHeaderValue = typeof payload.cookies === 'string' ? payload.cookies : undefined;
+      // Prefer local invocation during development to avoid missing Netlify runtime
+      const isLocalOrigin = origin.includes('localhost') || origin.includes('127.0.0.1');
+
+      async function invokeHttp(): Promise<Uint8Array> {
+        const url = `${origin}/.netlify/functions/pdf`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...(cookieHeaderValue ? { cookie: cookieHeaderValue } : {}),
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          const snippet = text.length > 800 ? `${text.slice(0, 800)}…` : text;
+          throw new Error(`PDF function failed (${res.status}): ${snippet}`);
+        }
+        return new Uint8Array(await res.arrayBuffer());
       }
-      return new Uint8Array(await res.arrayBuffer());
+
+      async function invokeLocally(): Promise<Uint8Array> {
+        return await renderPdf(payload);
+      }
+
+      if (!isLocalOrigin && process.env.NETLIFY !== 'false') {
+        try {
+          return await invokeHttp();
+        } catch (error) {
+          // Fallback to local invocation if HTTP endpoint is unavailable
+          return await invokeLocally();
+        }
+      }
+
+      // Local development fallback
+      try {
+        return await invokeLocally();
+      } catch (localError) {
+        console.warn('Local PDF render failed, attempting Netlify function fallback', localError);
+        // Last resort: try HTTP if local invocation failed for some reason
+        return await invokeHttp();
+      }
     }
 
     if (isStrict) {

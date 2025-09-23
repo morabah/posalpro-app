@@ -85,6 +85,7 @@ export {
   useProductWithRelationshipsMigrated,
   useRelationshipTypeOptionsMigrated,
   useUpdateProduct,
+  useProductBrandOptions,
 } from './hooks';
 
 // Advanced caching and enhanced hooks

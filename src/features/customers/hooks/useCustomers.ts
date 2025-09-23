@@ -43,7 +43,8 @@ export function useInfiniteCustomers({
     | 'CONTRACTOR'
     | 'GOVERNMENTAL'
     | 'NGO'
-    | 'SYSTEM_INTEGRATOR';
+    | 'SYSTEM_INTEGRATOR'
+    | 'BRAND';
   industry?: string;
 }) {
   return useInfiniteQuery({
@@ -345,6 +346,7 @@ export function useUnifiedCustomerData(
     | 'GOVERNMENTAL'
     | 'NGO'
     | 'SYSTEM_INTEGRATOR'
+    | 'BRAND'
 ) {
   // 🚀 OPTIMIZATION: Load ALL customer data in parallel
   const customersResult = useInfiniteCustomers({

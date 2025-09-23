@@ -109,6 +109,28 @@ useEffect(() => {
 This pattern keeps useEffect count low, each effect obvious, and prevents
 classic re-render loops and hydration issues.
 
+## Local PDF Generation 404 - September 2025
+
+**Category**: PDF / Dev Environments • **Impact**: High
+
+### Issue
+
+Local PDF exports were falling back to `/.netlify/functions/pdf`, returning
+Netlify's 404 HTML because puppeteer tried to launch the Linux-only bundled
+Chromium that ships with `@sparticuz/chromium`.
+
+### Fix
+
+Updated `src/server/pdf/pdfFunction.ts` to prefer the bundled binary only on
+Linux/serverless deployments and resolve installed Chrome/Edge paths on macOS
+and Windows. Added a warning before hitting the Netlify fallback so local launch
+issues surface immediately.
+
+### Guardrail
+
+Set `CHROME_PATH` or `PUPPETEER_EXECUTABLE_PATH` if Chrome lives in a custom
+location, and watch the console warning if the fallback ever triggers again.
+
 ## Critical RBAC Role Extraction Issue - January 2025
 
 ### **🚨 CRITICAL LESSON: Frontend Session Role Structure vs Backend Role Mapping**

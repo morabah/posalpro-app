@@ -18,7 +18,8 @@ type CustomerType =
   | 'CONTRACTOR'
   | 'GOVERNMENTAL'
   | 'NGO'
-  | 'SYSTEM_INTEGRATOR';
+  | 'SYSTEM_INTEGRATOR'
+  | 'BRAND';
 
 export const qk = {
   customers: {

@@ -49,8 +49,17 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
       tier: 'STANDARD',
       customerType: 'ENDUSER',
       tags: [],
+      brandName: '',
     },
   });
+
+  const selectedCustomerType = watch('customerType');
+
+  React.useEffect(() => {
+    if (selectedCustomerType !== 'BRAND') {
+      setValue('brandName', '');
+    }
+  }, [selectedCustomerType, setValue]);
 
   // ✅ RESET FORM WHEN CUSTOMER DATA LOADS
   React.useEffect(() => {
@@ -69,6 +78,7 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
         tier: customerData.tier || 'STANDARD',
         customerType: customerData.customerType || 'ENDUSER',
         tags: customerData.tags || [],
+        brandName: customerData.brandName || '',
       });
     }
   }, [customerData, reset]);
@@ -78,9 +88,15 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
     if (!customerId) return;
 
     try {
+      const isBrandCustomer = data.customerType === 'BRAND';
+      const payload = {
+        ...data,
+        brandName: isBrandCustomer ? data.brandName?.trim() : undefined,
+      } as CustomerUpdate;
+
       await updateCustomer.mutateAsync({
         id: customerId,
-        data,
+        data: payload,
       });
 
       // Navigate to customer detail page after successful update
@@ -219,7 +235,7 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                     Customer Type
                   </label>
                   <Select
-                    value={watch('customerType') || 'ENDUSER'}
+                    value={selectedCustomerType || 'ENDUSER'}
                     onChange={value =>
                       setValue(
                         'customerType',
@@ -232,6 +248,7 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                           | 'GOVERNMENTAL'
                           | 'NGO'
                           | 'SYSTEM_INTEGRATOR'
+                          | 'BRAND'
                       )
                     }
                     options={[
@@ -243,11 +260,31 @@ export function CustomerEditForm({ customerId }: CustomerEditFormProps) {
                       { value: 'GOVERNMENTAL', label: 'Governmental' },
                       { value: 'NGO', label: 'NGO' },
                       { value: 'SYSTEM_INTEGRATOR', label: 'System Integrator' },
+                      { value: 'BRAND', label: 'Brand' },
                     ]}
                     placeholder="Select customer type"
                     className="min-h-[44px]"
                   />
                 </div>
+
+                {selectedCustomerType === 'BRAND' && (
+                  <div>
+                    <label htmlFor="brandName" className="block text-sm font-medium text-gray-700">
+                      Brand Name
+                    </label>
+                    <Input
+                      {...register('brandName')}
+                      id="brandName"
+                      type="text"
+                      value={watch('brandName') || ''}
+                      placeholder="Enter brand name"
+                      className="min-h-[44px]"
+                    />
+                    {errors.brandName && (
+                      <p className="mt-1 text-sm text-red-600">{errors.brandName.message}</p>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label htmlFor="industry" className="block text-sm font-medium text-gray-700">
