@@ -17,7 +17,7 @@ interface ProductFilters {
   search: string;
   category?: string;
   isActive?: boolean;
-  sortBy: 'createdAt' | 'name' | 'price' | 'isActive';
+  sortBy: 'createdAt' | 'updatedAt' | 'name' | 'price' | 'isActive';
   sortOrder: 'asc' | 'desc';
 }
 

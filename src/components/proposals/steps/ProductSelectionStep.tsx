@@ -31,7 +31,7 @@ import {
   type ProposalProductData,
 } from '@/lib/store/proposalStore';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronDown, ChevronRight, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, GripVertical, Plus, Trash2 } from 'lucide-react';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -256,7 +256,8 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
   // Watch form values for easier access
   const search = watch('search') || '';
   const category = watch('category') || '';
-  const sortBy = (watch('sortBy') as 'createdAt' | 'name' | 'price' | 'isActive') || 'name';
+  const sortBy =
+    (watch('sortBy') as 'createdAt' | 'updatedAt' | 'name' | 'price' | 'isActive') || 'name';
   const sortOrder = (watch('sortOrder') as 'asc' | 'desc') || 'asc';
   const showSelectedOnly = watch('showSelectedOnly') || false;
   const brand = watch('brand') || '';
@@ -1149,7 +1150,14 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                             className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50"
                           >
                             <div className="col-span-4 min-w-0">
-                              <div className="font-medium text-gray-900 truncate">{sp.name}</div>
+                              <div className="font-medium text-gray-900 truncate flex items-center gap-2">
+                                {sp.name}
+                                {baseProduct?.datasheetPath && (
+                                  <Tooltip content="Product has datasheet available">
+                                    <FileText className="h-4 w-4 text-blue-600 hover:text-blue-800 cursor-pointer" />
+                                  </Tooltip>
+                                )}
+                              </div>
                               <div className="text-xs text-gray-500 truncate">
                                 {sp.category || 'General'}
                               </div>
@@ -1310,7 +1318,14 @@ export const ProductSelectionStep = React.memo(function ProductSelectionStep({
                           className="grid grid-cols-12 gap-4 py-3 px-3 border border-gray-200 rounded hover:bg-gray-50"
                         >
                           <div className="col-span-4 min-w-0">
-                            <div className="font-medium text-gray-900 truncate">{sp.name}</div>
+                            <div className="font-medium text-gray-900 truncate flex items-center gap-2">
+                              {sp.name}
+                              {baseProduct?.datasheetPath && (
+                                <Tooltip content="Product has datasheet available">
+                                  <FileText className="h-4 w-4 text-blue-600 hover:text-blue-800 cursor-pointer" />
+                                </Tooltip>
+                              )}
+                            </div>
                             <div className="text-xs text-gray-500 truncate">
                               {sp.category || 'General'}
                             </div>

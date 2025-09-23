@@ -89,6 +89,7 @@ interface ProductWhereInput {
 interface ProductOrderByInput {
   name?: Prisma.SortOrder;
   createdAt?: Prisma.SortOrder;
+  updatedAt?: Prisma.SortOrder;
   price?: Prisma.SortOrder;
   sku?: Prisma.SortOrder;
   category?: Prisma.SortOrder;

@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/feedback/LoadingSpinner';
 import { Button } from '@/components/ui/forms/Button';
 import { analytics } from '@/lib/analytics';
-import { logDebug, logError, logInfo } from '@/lib/logger';
+import { logDebug, logError, logInfo, logWarn } from '@/lib/logger';
 import { AlertCircle, Download, Eye, FileText, Maximize2 } from 'lucide-react';
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -14,48 +14,48 @@ import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } fr
 const reactPdfModulePromise: Promise<typeof import('react-pdf')> | null =
   typeof window !== 'undefined'
     ? import('react-pdf').then(async module => {
-      // Wait for worker init done by QueryProvider, if available
-      const globalWorkerPromise = (
-        typeof window !== 'undefined' ? (window as any).pdfWorkerPromise : null
-      ) as Promise<any> | null;
-      if (globalWorkerPromise) {
-      try {
-        await globalWorkerPromise;
-        logDebug('DocumentPreview: PDF worker initialized via global promise', {
+        // Wait for worker init done by QueryProvider, if available
+        const globalWorkerPromise = (
+          typeof window !== 'undefined' ? (window as any).pdfWorkerPromise : null
+        ) as Promise<any> | null;
+        if (globalWorkerPromise) {
+          try {
+            await globalWorkerPromise;
+            logDebug('DocumentPreview: PDF worker initialized via global promise', {
+              component: 'DocumentPreview',
+              operation: 'worker_initialization',
+            });
+          } catch (error) {
+            logError('DocumentPreview: Global worker initialization failed', {
+              errorMessage: error instanceof Error ? error.message : 'Unknown error',
+              component: 'DocumentPreview',
+              operation: 'worker_initialization_error',
+            });
+          }
+        }
+
+        // Fallback worker configuration if none set yet
+        if (!module.pdfjs.GlobalWorkerOptions.workerSrc) {
+          const cacheBuster = Date.now();
+          const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
+          module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+          logDebug('DocumentPreview: PDF worker configured as fallback', {
+            workerUrl,
+            cacheBuster,
+            component: 'DocumentPreview',
+            operation: 'worker_fallback_config',
+          });
+        }
+
+        logDebug('DocumentPreview: PDF worker status', {
+          workerSrc: module.pdfjs.GlobalWorkerOptions.workerSrc,
+          configured: !!module.pdfjs.GlobalWorkerOptions.workerSrc,
           component: 'DocumentPreview',
-          operation: 'worker_initialization',
+          operation: 'worker_status_check',
         });
-      } catch (error) {
-        logError('DocumentPreview: Global worker initialization failed', {
-          errorMessage: error instanceof Error ? error.message : 'Unknown error',
-          component: 'DocumentPreview',
-          operation: 'worker_initialization_error',
-        });
-      }
-    }
 
-    // Fallback worker configuration if none set yet
-    if (!module.pdfjs.GlobalWorkerOptions.workerSrc) {
-      const cacheBuster = Date.now();
-      const workerUrl = `https://unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs?v=${cacheBuster}`;
-      module.pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-      logDebug('DocumentPreview: PDF worker configured as fallback', {
-        workerUrl,
-        cacheBuster,
-        component: 'DocumentPreview',
-        operation: 'worker_fallback_config',
-      });
-    }
-
-    logDebug('DocumentPreview: PDF worker status', {
-      workerSrc: module.pdfjs.GlobalWorkerOptions.workerSrc,
-      configured: !!module.pdfjs.GlobalWorkerOptions.workerSrc,
-      component: 'DocumentPreview',
-      operation: 'worker_status_check',
-    });
-
-      return module;
-    })
+        return module;
+      })
     : null;
 
 const PDFViewer = React.lazy(() =>
@@ -316,6 +316,12 @@ export function DocumentPreview({
       const isMessageHandlerError =
         error.message.includes('messageHandler') || error.message.includes('sendWithPromise');
 
+      // Check if this is a 404 error (file not found)
+      const is404Error =
+        error.message.includes('404') ||
+        error.message.includes('Unexpected server response (404)') ||
+        error.message.includes('File not found');
+
       if (isMessageHandlerError) {
         logDebug('DocumentPreview: MessageHandler error detected - attempting recovery', {
           productId,
@@ -340,6 +346,23 @@ export function DocumentPreview({
         }, 1000);
 
         setPdfError('PDF worker communication error. Retrying...');
+      } else if (is404Error) {
+        // Handle 404 errors with specific user guidance
+        const isLocalhostUrl = datasheetPath.includes('localhost:8080');
+        const errorMessage = isLocalhostUrl
+          ? 'File not found on local server. Please ensure the file is uploaded to localhost:8080 or use a network URL.'
+          : 'Document not found. Please check the URL or contact support.';
+
+        setPdfError(errorMessage);
+
+        logWarn('DocumentPreview: 404 error - file not found', {
+          productId,
+          productName,
+          datasheetPath,
+          isLocalhostUrl,
+          component: 'DocumentPreview',
+          operation: 'pdf_404_error',
+        });
       } else {
         setPdfError(error.message);
       }

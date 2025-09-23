@@ -7,7 +7,8 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import React, { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface SelectOption {
   /**
@@ -153,20 +154,18 @@ export const Select = forwardRef<HTMLDivElement, SelectProps>(function Select(
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const [overlayStyle, setOverlayStyle] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
 
   // Generate unique ID if not provided
   const selectId = id || `select-${Math.random().toString(36).substr(2, 9)}`;
-
-  // Auto-focus search input when dropdown opens
-  useEffect(() => {
-    if (isOpen && searchable && searchInputRef.current) {
-      // Use setTimeout to ensure the dropdown is rendered before focusing
-      const timer = setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 0);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, searchable]);
 
   // Filter options based on search query
   const filteredOptions = useMemo(() => {
@@ -180,6 +179,103 @@ export const Select = forwardRef<HTMLDivElement, SelectProps>(function Select(
     const values = Array.isArray(value) ? value : [value];
     return options.filter(option => values.includes(option.value));
   }, [value, options]);
+
+  // Auto-focus search input when dropdown opens
+  useEffect(() => {
+    if (isOpen && searchable && searchInputRef.current) {
+      // Use setTimeout to ensure the dropdown is rendered before focusing
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, searchable]);
+
+  // Compute and update overlay position relative to the trigger
+  const updateOverlayPosition = () => {
+    if (!isOpen) return;
+    const el = triggerRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const gap = 4;
+    const maxHeight = 240; // matches tailwind max-h-60 (~15rem)
+
+    // Estimate height, refine after dropdownRef mounts
+    let measuredHeight = maxHeight;
+    if (dropdownRef.current) {
+      const contentHeight = dropdownRef.current.scrollHeight;
+      measuredHeight = Math.min(contentHeight, maxHeight);
+    }
+
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    let direction: 'down' | 'up' = 'down';
+    if (spaceBelow < measuredHeight + gap && spaceAbove > spaceBelow) {
+      direction = 'up';
+    }
+
+    let top = direction === 'down' ? rect.bottom + gap : rect.top - measuredHeight - gap;
+    // Clamp within viewport
+    if (direction === 'down' && top + measuredHeight > viewportHeight - gap) {
+      top = Math.max(gap, viewportHeight - measuredHeight - gap);
+    }
+    if (direction === 'up' && top < gap) {
+      top = gap;
+    }
+
+    let left = rect.left;
+    if (left + rect.width > viewportWidth - gap) {
+      left = Math.max(gap, viewportWidth - rect.width - gap);
+    }
+
+    setOverlayStyle({ left, top, width: rect.width, maxHeight });
+  };
+
+  // Reposition on open, resize, scroll, and when options/filter changes
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    updateOverlayPosition();
+    const handle = () => updateOverlayPosition();
+    window.addEventListener('resize', handle, { passive: true } as AddEventListenerOptions);
+    // Capture scroll on ancestors as well
+    window.addEventListener('scroll', handle, {
+      passive: true,
+      capture: true,
+    } as AddEventListenerOptions);
+    // Orientation change for mobile
+    window.addEventListener('orientationchange', handle);
+    // Re-run after next paint to measure actual dropdown height
+    const raf = requestAnimationFrame(() => updateOverlayPosition());
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', handle as EventListener);
+      window.removeEventListener('scroll', handle as EventListener, true);
+      window.removeEventListener('orientationchange', handle as EventListener);
+    };
+  }, [isOpen, filteredOptions.length]);
+
+  // Close when clicking outside trigger or dropdown
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(target)
+      ) {
+        setIsOpen(false);
+        setFocusedIndex(-1);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside, true);
+    return () => document.removeEventListener('mousedown', handleClickOutside, true);
+  }, [isOpen]);
 
   // Size styles
   const sizeStyles = {
@@ -243,6 +339,8 @@ export const Select = forwardRef<HTMLDivElement, SelectProps>(function Select(
       case 'Escape':
         setIsOpen(false);
         setFocusedIndex(-1);
+        // Return focus to trigger
+        triggerRef.current?.focus();
         break;
       case 'ArrowDown':
         e.preventDefault();
@@ -258,6 +356,15 @@ export const Select = forwardRef<HTMLDivElement, SelectProps>(function Select(
           setFocusedIndex(prev => (prev > 0 ? prev - 1 : filteredOptions.length - 1));
         }
         break;
+    }
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsOpen(false);
+      setFocusedIndex(-1);
+      triggerRef.current?.focus();
     }
   };
 
@@ -307,6 +414,7 @@ export const Select = forwardRef<HTMLDivElement, SelectProps>(function Select(
       {/* Label */}
       {label && (
         <label
+          id={`${selectId}-label`}
           htmlFor={selectId}
           className={cn(
             'block text-sm font-medium text-neutral-900 mb-2',
@@ -323,6 +431,7 @@ export const Select = forwardRef<HTMLDivElement, SelectProps>(function Select(
       <div ref={ref} className={cn('relative cursor-pointer', selectClassName)}>
         {/* Trigger */}
         <div
+          ref={triggerRef}
           role="combobox"
           aria-expanded={isOpen}
           aria-haspopup="listbox"
@@ -407,81 +516,100 @@ export const Select = forwardRef<HTMLDivElement, SelectProps>(function Select(
         </div>
 
         {/* Dropdown */}
-        {isOpen && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-neutral-200 rounded-md shadow-lg max-h-60 overflow-auto">
-            {/* Search */}
-            {searchable && (
-              <div className="p-2 border-b border-neutral-200">
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Search options..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-            )}
+        {isOpen &&
+          overlayStyle &&
+          createPortal(
+            <div
+              role="presentation"
+              style={{
+                position: 'fixed',
+                left: overlayStyle.left,
+                top: overlayStyle.top,
+                width: overlayStyle.width,
+                zIndex: 9999,
+              }}
+            >
+              <div
+                ref={dropdownRef}
+                className="bg-white border border-neutral-200 rounded-md shadow-lg overflow-auto"
+                style={{ maxHeight: overlayStyle.maxHeight }}
+              >
+                {/* Search */}
+                {searchable && (
+                  <div className="p-2 border-b border-neutral-200">
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      placeholder="Search options..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      onKeyDown={handleSearchKeyDown}
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    />
+                  </div>
+                )}
 
-            {/* Options */}
-            <div role="listbox" className="py-1">
-              {filteredOptions.length === 0 ? (
-                <div className="px-3 py-2 text-sm text-neutral-500">No options found</div>
-              ) : (
-                filteredOptions.map((option, index) => {
-                  const isSelected = selectedOptions.some(
-                    selected => selected.value === option.value
-                  );
-                  const isFocused = index === focusedIndex;
+                {/* Options */}
+                <div role="listbox" className="py-1">
+                  {filteredOptions.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-neutral-500">No options found</div>
+                  ) : (
+                    filteredOptions.map((option, index) => {
+                      const isSelected = selectedOptions.some(
+                        selected => selected.value === option.value
+                      );
+                      const isFocused = index === focusedIndex;
 
-                  return (
-                    <div
-                      key={option.value}
-                      role="option"
-                      aria-selected={isSelected}
-                      onClick={() => handleOptionSelect(option)}
-                      className={cn(
-                        'flex items-center gap-3 px-3 py-2 cursor-pointer text-sm',
-                        'hover:bg-neutral-50',
-                        isFocused && 'bg-primary-50',
-                        isSelected && 'bg-primary-100 text-primary-900',
-                        option.disabled && 'opacity-50 cursor-not-allowed'
-                      )}
-                    >
-                      {/* Icon */}
-                      {option.icon && <span className="flex-shrink-0">{option.icon}</span>}
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate">{option.label}</div>
-                        {option.description && (
-                          <div className="text-xs text-neutral-500 truncate">
-                            {option.description}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Selected indicator */}
-                      {isSelected && (
-                        <svg
-                          className="w-4 h-4 text-primary-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
+                      return (
+                        <div
+                          key={option.value}
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => handleOptionSelect(option)}
+                          className={cn(
+                            'flex items-center gap-3 px-3 py-2 cursor-pointer text-sm',
+                            'hover:bg-neutral-50',
+                            isFocused && 'bg-primary-50',
+                            isSelected && 'bg-primary-100 text-primary-900',
+                            option.disabled && 'opacity-50 cursor-not-allowed'
+                          )}
                         >
-                          <path
-                            fillRule="evenodd"
-                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
+                          {/* Icon */}
+                          {option.icon && <span className="flex-shrink-0">{option.icon}</span>}
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="truncate">{option.label}</div>
+                            {option.description && (
+                              <div className="text-xs text-neutral-500 truncate">
+                                {option.description}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Selected indicator */}
+                          {isSelected && (
+                            <svg
+                              className="w-4 h-4 text-primary-600"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
       </div>
 
       {/* Helper Text */}

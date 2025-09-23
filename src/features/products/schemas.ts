@@ -267,7 +267,9 @@ export const ProductQuerySchema = z.object({
   search: z.string().trim().default(''),
   limit: z.coerce.number().min(1).max(100).default(20),
   cursor: z.string().nullable().optional(),
-  sortBy: z.enum(['createdAt', 'name', 'price', 'isActive', 'datasheetPath']).default('createdAt'),
+  sortBy: z
+    .enum(['createdAt', 'updatedAt', 'name', 'price', 'isActive', 'datasheetPath'])
+    .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   category: z.string().optional(),
   brand: z.string().optional(),

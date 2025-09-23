@@ -12,6 +12,7 @@ import {
   ShoppingCartIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline';
+import { FileText } from 'lucide-react';
 import React, { ReactNode, useEffect, useState } from 'react';
 
 interface WizardStep1 {
@@ -84,8 +85,6 @@ interface WizardSummaryProps {
   assignedTo?: Array<{ id: string; name: string; email: string }>;
 }
 
-
-
 export const WizardSummary: React.FC<WizardSummaryProps> = ({
   wizardData = null,
   teamAssignments = null,
@@ -107,15 +106,16 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
     assignedTo?: string;
   }
 
-  const rawSelections: ContentItem[] = (wizardData?.step3?.selectedContent?.length
-    ? wizardData.step3.selectedContent
-    : contentSelections ?? [])
-    .map((c: RawContent) => ({
-      id: c?.item?.id || c?.contentId || c?.id,
-      title: c?.item?.title || c?.title || c?.section,
-      section: c?.section,
-      assignedTo: c?.assignedTo,
-    }));
+  const rawSelections: ContentItem[] = (
+    wizardData?.step3?.selectedContent?.length
+      ? wizardData.step3.selectedContent
+      : (contentSelections ?? [])
+  ).map((c: RawContent) => ({
+    id: c?.item?.id || c?.contentId || c?.id,
+    title: c?.item?.title || c?.title || c?.section,
+    section: c?.section,
+    assignedTo: c?.assignedTo,
+  }));
 
   const dedupedSelections = (() => {
     const map = new Map<string, { item: ContentItem; count: number; assignees: Set<string> }>();
@@ -123,7 +123,10 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
       // Prefer grouping by title+section when available to avoid visual duplicates with different IDs
       const titleKey = (c.title ?? '').trim();
       const sectionKey = (c.section ?? '').trim();
-      const key = (titleKey && sectionKey) ? `${titleKey}::${sectionKey}` : (c.id || `${titleKey}::${sectionKey}`);
+      const key =
+        titleKey && sectionKey
+          ? `${titleKey}::${sectionKey}`
+          : c.id || `${titleKey}::${sectionKey}`;
       const existing = map.get(key);
       if (existing) {
         existing.count += 1;
@@ -172,7 +175,7 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
         nameMap[user.id] = user.name;
       });
 
-      const unresolved = userIds.filter((id) => !nameMap[id]);
+      const unresolved = userIds.filter(id => !nameMap[id]);
 
       // Fallback: fetch unresolved user names in one request if possible
       if (unresolved.length > 0) {
@@ -183,10 +186,16 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
             if (res && typeof res === 'object') {
               const dataVal = (res as { data?: unknown }).data;
               if (Array.isArray((res as { users?: unknown }).users)) {
-                return (res as { users: Array<{ id: string; name?: string; email?: string }> }).users;
+                return (res as { users: Array<{ id: string; name?: string; email?: string }> })
+                  .users;
               }
-              if (dataVal && typeof dataVal === 'object' && Array.isArray((dataVal as { users?: unknown }).users)) {
-                return (dataVal as { users: Array<{ id: string; name?: string; email?: string }> }).users;
+              if (
+                dataVal &&
+                typeof dataVal === 'object' &&
+                Array.isArray((dataVal as { users?: unknown }).users)
+              ) {
+                return (dataVal as { users: Array<{ id: string; name?: string; email?: string }> })
+                  .users;
               }
             }
             return [];
@@ -196,8 +205,9 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
           });
         } catch {
           // Graceful fallback to truncated IDs
-          unresolved.forEach((userId) => {
-            nameMap[userId] = userId.length > 20 ? `User ${userId.substring(0, 8)}...` : `User ${userId}`;
+          unresolved.forEach(userId => {
+            nameMap[userId] =
+              userId.length > 20 ? `User ${userId.substring(0, 8)}...` : `User ${userId}`;
           });
         }
       }
@@ -326,38 +336,48 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
               Content Selections
             </h3>
             <div className="space-y-2 text-sm">
-              {dedupedSelections.map((c: { title?: string; section?: string; id?: string; count?: number; assignees?: string[] }, index: number) => {
-                const title = c.title || 'Selected Content';
-                const section = c.section || undefined;
-                const id = c.id;
-                const count = c.count ?? 0;
-                const assignees: string[] = c.assignees ?? [];
-                return (
-                  <div key={`csel-${index}`} className="flex items-start justify-between">
-                    <div>
-                      <div className="font-medium flex items-center gap-2">
-                        <span>{title}</span>
-                        {count > 1 && (
-                          <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-[11px] leading-5 text-gray-700">
-                            x{count}
-                          </span>
-                        )}
-                      </div>
-                      {section && (
-                        <div className="text-xs text-gray-600">{section}</div>
-                      )}
-                      {assignees.length > 0 && (
-                        <div className="text-[11px] text-gray-500">
-                          Assigned: {assignees.map((uid) => (loading ? 'Loading…' : getUserDisplayName(uid))).join(', ')}
+              {dedupedSelections.map(
+                (
+                  c: {
+                    title?: string;
+                    section?: string;
+                    id?: string;
+                    count?: number;
+                    assignees?: string[];
+                  },
+                  index: number
+                ) => {
+                  const title = c.title || 'Selected Content';
+                  const section = c.section || undefined;
+                  const id = c.id;
+                  const count = c.count ?? 0;
+                  const assignees: string[] = c.assignees ?? [];
+                  return (
+                    <div key={`csel-${index}`} className="flex items-start justify-between">
+                      <div>
+                        <div className="font-medium flex items-center gap-2">
+                          <span>{title}</span>
+                          {count > 1 && (
+                            <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-[11px] leading-5 text-gray-700">
+                              x{count}
+                            </span>
+                          )}
                         </div>
-                      )}
-                      {id && (
-                        <div className="text-[11px] text-gray-500">ID: {id}</div>
-                      )}
+                        {section && <div className="text-xs text-gray-600">{section}</div>}
+                        {assignees.length > 0 && (
+                          <div className="text-[11px] text-gray-500">
+                            Assigned:{' '}
+                            {assignees
+                              .map(uid => (loading ? 'Loading…' : getUserDisplayName(uid)))
+                              .join(', ')}
+                          </div>
+                        )}
+                        {id && <div className="text-[11px] text-gray-500">ID: {id}</div>}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                }
+              )}
             </div>
           </div>
         )}
@@ -370,29 +390,45 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
               Sections & Assignments
             </h3>
             <div className="space-y-2 text-sm">
-              {wizardData!.step5!.sections!.map((s: { title?: string; hours?: number; priority?: unknown; status?: unknown; assignedTo?: string | string[] }, index: number) => {
-                const assignee = s?.assignedTo;
-                const assignees: string[] = Array.isArray(assignee)
-                  ? assignee.filter(Boolean)
-                  : (assignee ? [assignee] : []);
-                return (
-                  <div key={`sec-${index}`} className="flex items-start justify-between">
-                    <div>
-                      <div className="font-medium">{s?.title || 'Untitled Section'}</div>
-                      {assignees.length > 0 && (
-                        <div className="text-[11px] text-gray-500">
-                          Assigned: {assignees.map((uid) => (loading ? 'Loading…' : getUserDisplayName(uid))).join(', ')}
+              {wizardData!.step5!.sections!.map(
+                (
+                  s: {
+                    title?: string;
+                    hours?: number;
+                    priority?: unknown;
+                    status?: unknown;
+                    assignedTo?: string | string[];
+                  },
+                  index: number
+                ) => {
+                  const assignee = s?.assignedTo;
+                  const assignees: string[] = Array.isArray(assignee)
+                    ? assignee.filter(Boolean)
+                    : assignee
+                      ? [assignee]
+                      : [];
+                  return (
+                    <div key={`sec-${index}`} className="flex items-start justify-between">
+                      <div>
+                        <div className="font-medium">{s?.title || 'Untitled Section'}</div>
+                        {assignees.length > 0 && (
+                          <div className="text-[11px] text-gray-500">
+                            Assigned:{' '}
+                            {assignees
+                              .map(uid => (loading ? 'Loading…' : getUserDisplayName(uid)))
+                              .join(', ')}
+                          </div>
+                        )}
+                        <div className="flex gap-3 text-[11px] text-gray-500">
+                          {typeof s?.hours === 'number' && <span>Hours: {s.hours}</span>}
+                          {s?.priority !== undefined && <span>Priority: {String(s.priority)}</span>}
+                          {s?.status !== undefined && <span>Status: {String(s.status)}</span>}
                         </div>
-                      )}
-                      <div className="flex gap-3 text-[11px] text-gray-500">
-                        {typeof s?.hours === 'number' && <span>Hours: {s.hours}</span>}
-                        {s?.priority !== undefined && <span>Priority: {String(s.priority)}</span>}
-                        {s?.status !== undefined && <span>Status: {String(s.status)}</span>}
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                }
+              )}
             </div>
           </div>
         )}
@@ -410,33 +446,44 @@ export const WizardSummary: React.FC<WizardSummaryProps> = ({
               {wizardData.step4.products
                 .filter(product => product.included !== false) // Only show included products
                 .map((product, index) => (
-                <div key={product.id || index} className="flex justify-between items-center">
-                  <div>
-                    <span className="font-medium">{product.name || `Product ${index + 1}`}</span>
-                    {product.category && (
-                      <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                        {product.category}
+                  <div key={product.id || index} className="flex justify-between items-center">
+                    <div>
+                      <span className="font-medium flex items-center gap-2">
+                        {product.name || `Product ${index + 1}`}
+                        {(product as any).datasheetPath && (
+                          <span title="Product has datasheet available">
+                            <FileText className="h-4 w-4 text-blue-600 hover:text-blue-800 cursor-pointer" />
+                          </span>
+                        )}
                       </span>
-                    )}
-                    <div className="text-xs text-gray-600 mt-1">
-                      Qty: {product.quantity || 1} x ${(product.unitPrice || 0).toLocaleString()}
+                      {product.category && (
+                        <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                          {product.category}
+                        </span>
+                      )}
+                      <div className="text-xs text-gray-600 mt-1">
+                        Qty: {product.quantity || 1} x ${(product.unitPrice || 0).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-medium text-gray-900">
+                        $
+                        {(
+                          product.totalPrice || (product.quantity || 1) * (product.unitPrice || 0)
+                        ).toLocaleString()}
+                      </span>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-900">
-                      ${(product.totalPrice || (product.quantity || 1) * (product.unitPrice || 0)).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
         )}
 
         {/* Proposal Value Display Logic */}
         {(() => {
-          const hasProducts = wizardData?.step4?.products?.some(p => p.included !== false) &&
-                             wizardData.step4.products.length > 0;
+          const hasProducts =
+            wizardData?.step4?.products?.some(p => p.included !== false) &&
+            wizardData.step4.products.length > 0;
           const step4Total = wizardData?.step4?.totalValue || 0;
           const step1EstimatedValue = wizardData?.step1?.value || 0;
 

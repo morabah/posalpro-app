@@ -253,15 +253,21 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     name: 'Admin',
     href: '/admin',
     icon: CogIcon,
-    roles: ['admin'],
+    roles: ['admin', 'administrator', 'system administrator'],
     children: [
-      { id: 'admin-system', name: 'System', href: '/admin', icon: CogIcon, roles: ['admin'] },
+      {
+        id: 'admin-system',
+        name: 'System',
+        href: '/admin',
+        icon: CogIcon,
+        roles: ['admin', 'administrator', 'system administrator'],
+      },
       {
         id: 'admin-billing',
         name: 'Billing',
         href: '/admin/billing',
         icon: CreditCardIcon,
-        roles: ['admin'],
+        roles: ['admin', 'administrator', 'system administrator'],
       },
     ],
   },
@@ -388,16 +394,37 @@ export function AppSidebar({
       filteredItems = NAVIGATION_ITEMS.filter(item => {
         // If no roles specified, show to everyone
         if (!item.roles) return true;
-        // Show admin items only to admin users
-        if (item.roles.includes('admin') && !isAdminRole(user.role)) return false;
-        // For other role restrictions, be more permissive
-        return true;
+        // Check if user's role matches any of the required roles for this item
+        const userRoleLower = user.role.toLowerCase();
+        const hasRequiredRole = item.roles.some(requiredRole => {
+          const requiredRoleLower = requiredRole.toLowerCase();
+          // Special handling for admin roles
+          if (requiredRoleLower.includes('admin') || requiredRoleLower.includes('administrator')) {
+            return isAdminRole(user.role);
+          }
+          // Exact match for other roles
+          return userRoleLower === requiredRoleLower;
+        });
+        return hasRequiredRole;
       }).map(item => ({
         ...item,
         children: item.children?.filter(child => {
           if (!child.roles) return true;
-          if (child.roles.includes('admin') && !isAdminRole(user.role)) return false;
-          return true;
+          // Check if user's role matches any of the required roles for this child item
+          const userRoleLower = user.role.toLowerCase();
+          const hasRequiredRole = child.roles.some(requiredRole => {
+            const requiredRoleLower = requiredRole.toLowerCase();
+            // Special handling for admin roles
+            if (
+              requiredRoleLower.includes('admin') ||
+              requiredRoleLower.includes('administrator')
+            ) {
+              return isAdminRole(user.role);
+            }
+            // Exact match for other roles
+            return userRoleLower === requiredRoleLower;
+          });
+          return hasRequiredRole;
         }),
       }));
     }

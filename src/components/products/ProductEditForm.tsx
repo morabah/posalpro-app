@@ -15,6 +15,7 @@ import {
   useUpdateProduct,
 } from '@/features/products/hooks/useProducts';
 import { ProductUpdateSchema } from '@/features/products/schemas';
+import { useDatasheetUpload } from '@/hooks/useDatasheetUpload';
 import { useSkuValidation } from '@/hooks/useSkuValidation';
 import { logError, logInfo } from '@/lib/logger';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,8 +23,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { ImageUpload } from './ImageUpload';
 import { ImageGallery } from './ImageGallery';
+import { ImageUpload } from './ImageUpload';
 
 interface ProductEditFormProps {
   productId: string;
@@ -34,6 +35,7 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
   const { data: product, isLoading, isError, error } = useProductMigrated(productId);
   const updateProduct = useUpdateProduct();
   const [productImages, setProductImages] = useState<string[]>([]);
+  const { uploadFile, isUploading, uploadProgress, error: uploadError } = useDatasheetUpload();
 
   // ✅ Fetch categories and tags from database
   const { data: categoriesData, isLoading: categoriesLoading } = useProductCategories();
@@ -369,48 +371,85 @@ export function ProductEditForm({ productId }: ProductEditFormProps) {
               {/* File Upload Alternative */}
               <div className="border-t pt-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Or Upload File (Development Only)
+                  Or Upload File
                 </label>
                 <div className="flex items-center space-x-2">
                   <Button
                     type="button"
                     variant="outline"
+                    disabled={isUploading}
                     onClick={() => {
                       const input = document.createElement('input');
                       input.type = 'file';
                       input.accept = '.pdf,.doc,.docx,.xls,.xlsx,.txt';
-                      input.onchange = e => {
+                      input.onchange = async e => {
                         const file = (e.target as HTMLInputElement).files?.[0];
                         if (file) {
-                          // For uploaded files, we'll create a local server URL
-                          // In development, you can serve files from a local directory
-                          const localUrl = `http://localhost:8080/${file.name}`;
-                          setValue('datasheetPath', localUrl);
-                          trigger('datasheetPath');
+                          try {
+                            logInfo('Starting file upload', {
+                              component: 'ProductEditForm',
+                              operation: 'fileUpload',
+                              filename: file.name,
+                              size: file.size,
+                              type: file.type,
+                              userStory: 'US-4.1',
+                              hypothesis: 'H5',
+                            });
 
-                          logInfo('File selected for upload', {
-                            component: 'ProductEditForm',
-                            operation: 'fileSelection',
-                            filename: file.name,
-                            size: file.size,
-                            type: file.type,
-                            userStory: 'US-4.1',
-                            hypothesis: 'H5',
-                          });
+                            // Upload file to local server
+                            const result = await uploadFile(file);
+
+                            // Set the uploaded file URL
+                            setValue('datasheetPath', result.url);
+                            trigger('datasheetPath');
+
+                            logInfo('File uploaded successfully', {
+                              component: 'ProductEditForm',
+                              operation: 'fileUpload',
+                              filename: file.name,
+                              uploadedFilename: result.filename,
+                              url: result.url,
+                              size: result.size,
+                              userStory: 'US-4.1',
+                              hypothesis: 'H5',
+                            });
+
+                            toast.success(`File "${result.originalName}" uploaded successfully!`);
+                          } catch (error) {
+                            const errorMessage =
+                              error instanceof Error ? error.message : 'Upload failed';
+
+                            logError('File upload failed', {
+                              component: 'ProductEditForm',
+                              operation: 'fileUpload',
+                              filename: file.name,
+                              error: errorMessage,
+                              userStory: 'US-4.1',
+                              hypothesis: 'H5',
+                            });
+
+                            toast.error(`Upload failed: ${errorMessage}`);
+                          }
                         }
                       };
                       input.click();
                     }}
                     className="px-4 py-2"
                   >
-                    Choose File...
+                    {isUploading ? `Uploading... ${Math.round(uploadProgress)}%` : 'Upload File'}
                   </Button>
                   <span className="text-sm text-gray-500">
-                    Select a file to generate preview URL
+                    {isUploading ? 'Uploading file...' : 'Select a file to upload'}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-amber-600">
-                  ⚠️ File uploads require a local file server. Use network URLs for production.
+                {uploadError && (
+                  <p className="mt-1 text-sm text-red-600">
+                    ❌ Upload failed: {uploadError.error || 'Unknown error'}
+                  </p>
+                )}
+                <p className="mt-1 text-sm text-blue-600">
+                  📁 Files are uploaded securely and validated for type and size. Supported formats:
+                  PDF, DOC, DOCX, XLS, XLSX, TXT, RTF (max 10MB).
                 </p>
               </div>
             </div>

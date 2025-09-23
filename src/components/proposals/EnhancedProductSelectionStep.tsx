@@ -24,6 +24,7 @@ import { usePersistProposalWizard } from '@/features/proposals/hooks';
 import { useProposal } from '@/hooks/useProposal';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { FileText } from 'lucide-react';
 
 interface EnhancedProductSelectionStepProps {
   proposalId: string;
@@ -143,6 +144,7 @@ export function EnhancedProductSelectionStep({
         category: Array.isArray(product.category) ? product.category.join(', ') : product.category,
         configuration: {},
         included: true,
+        datasheetPath: product.datasheetPath,
       };
 
       const updatedProducts = [...selectedProducts, newProduct];
@@ -426,7 +428,14 @@ export function EnhancedProductSelectionStep({
               <Card key={product.id} className="p-4">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">{product.name}</h4>
+                    <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                      {product.name}
+                      {(product as any).datasheetPath && (
+                        <span title="Product has datasheet available">
+                          <FileText className="h-4 w-4 text-blue-600 hover:text-blue-800 cursor-pointer" />
+                        </span>
+                      )}
+                    </h4>
                     <p className="text-sm text-gray-500 mt-1">{product.category}</p>
                     <p className="text-sm text-gray-600 mt-1">
                       ${product.unitPrice.toFixed(2)} per unit

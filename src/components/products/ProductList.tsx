@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/forms/Button';
 import SuggestionCombobox from '@/components/ui/forms/SuggestionCombobox';
 import { SkeletonLoader } from '@/components/ui/LoadingStates';
 import type { Product } from '@/features/products';
+import { useBulkDeleteProducts, useDeleteProduct } from '@/features/products/hooks';
 import {
   useInfiniteProductsMigrated,
   useProductCategories,
@@ -16,9 +17,9 @@ import { useSuggestions } from '@/features/search/hooks/useSuggestions';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import { logError, logInfo } from '@/lib/logger';
 import useProductStore from '@/lib/store/productStore';
+import { FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useBulkDeleteProducts, useDeleteProduct } from '@/features/products/hooks';
 import { toast } from 'sonner';
 
 // Product List Header Component
@@ -700,7 +701,14 @@ function ProductTableOptimized({
                         )}
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                        <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                          {product.name}
+                          {product.datasheetPath && (
+                            <span title="Product has datasheet available">
+                              <FileText className="h-4 w-4 text-blue-600 hover:text-blue-800 cursor-pointer" />
+                            </span>
+                          )}
+                        </div>
                         <div className="text-sm text-gray-500">{product.description}</div>
                       </div>
                     </div>
@@ -722,7 +730,10 @@ function ProductTableOptimized({
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(product.createdAt).toLocaleDateString()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right" onClick={e => e.stopPropagation()}>
+                  <td
+                    className="px-6 py-4 whitespace-nowrap text-right"
+                    onClick={e => e.stopPropagation()}
+                  >
                     <Button
                       variant="danger"
                       size="sm"

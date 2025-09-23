@@ -7,6 +7,7 @@ import type { HybridProduct } from '@/hooks/useHybridProducts';
 import { useOptimizedAnalytics } from '@/hooks/useOptimizedAnalytics';
 import Link from 'next/link';
 import { useCallback, useState } from 'react';
+import { FileText } from 'lucide-react';
 
 // Sustainable materials icons
 const SUSTAINABLE_BADGES = {
@@ -110,8 +111,13 @@ export default function AdvancedProductCard({ product }: AdvancedProductCardProp
                   🌱
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 group-hover:text-emerald-700 transition-colors duration-200">
+                  <h2 className="text-xl font-bold text-gray-900 group-hover:text-emerald-700 transition-colors duration-200 flex items-center gap-2">
                     {product.name}
+                    {(product as any).datasheetPath && (
+                      <span title="Product has datasheet available">
+                        <FileText className="h-4 w-4 text-blue-600 hover:text-blue-800 cursor-pointer" />
+                      </span>
+                    )}
                   </h2>
                   {product.productId && (
                     <p className="text-sm text-gray-600 font-medium">{product.productId}</p>

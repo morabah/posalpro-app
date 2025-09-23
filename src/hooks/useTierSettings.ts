@@ -19,8 +19,16 @@ interface UseTierSettingsReturn {
 
 // Define which sidebar items are available for each tier
 const TIER_SIDEBAR_CONFIG: Record<ApplicationTier, string[]> = {
-  basic: ['dashboard', 'proposals', 'products', 'customers'],
-  advanced: ['dashboard', 'proposals', 'products', 'customers', 'coordination', 'validation'],
+  basic: ['dashboard', 'proposals', 'products', 'customers', 'admin'],
+  advanced: [
+    'dashboard',
+    'proposals',
+    'products',
+    'customers',
+    'coordination',
+    'validation',
+    'admin',
+  ],
   enterprise: ['all'], // Special value indicating all items should be shown
 };
 
